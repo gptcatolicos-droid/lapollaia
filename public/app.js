@@ -570,10 +570,18 @@ function AvatarsPage(){
           <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>🎉</div>
           <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.5rem'}}>¡Avatar creado!</h2>
           <p className="text-muted text-sm mb2">Nickname: <strong className="text-gold">{payInfo.avatar.nickname}</strong></p>
-          <div className="card-gold" style={{textAlign:'left',marginBottom:'1rem'}}>
-            <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',marginBottom:'.5rem'}}>💳 Inscripción · U${payInfo.settings?.inscription_fee||20}</div>
-            <p className="text-sm text-muted">El administrador te contactará con las instrucciones de pago para activar tu avatar. Pronto estarás en la competencia 🏆</p>
-          </div>
+          {payInfo.settings?.isDemo?(
+            <div style={{background:'rgba(246,201,14,.1)',border:'1px solid rgba(246,201,14,.3)',borderRadius:'var(--r)',padding:'1rem',marginBottom:'1rem'}}>
+              <div style={{fontSize:'1.5rem',marginBottom:'.4rem'}}>⚽</div>
+              <div style={{fontWeight:700,color:'var(--gold)',marginBottom:'.3rem'}}>¡Estás en modo Demo!</div>
+              <p className="text-sm text-muted">Puedes ingresar pronósticos, hablar con Pelé IA y explorar todo sin ningún costo. ¡Disfrútalo!</p>
+            </div>
+          ):(
+            <div className="card-gold" style={{textAlign:'left',marginBottom:'1rem'}}>
+              <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',marginBottom:'.5rem'}}>✅ Avatar listo</div>
+              <p className="text-sm text-muted">El administrador de la polla te aprobará para participar. Pronto estarás en la competencia 🏆</p>
+            </div>
+          )}
           <button className="btn btn-gold btn-full mb1" onClick={()=>setView('chat')}>⚽ Ingresar marcadores</button>
           {avatars&&avatars.length<3?(
             <button className="btn btn-outline btn-full mb1" onClick={()=>{setPayInfo(null);setShowCreate(true)}}>
@@ -852,7 +860,7 @@ function DashboardPage(){
             {activeAvatar&&(
               <div style={{display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
                 <span className={`chip ${activeAvatar.is_paid?'chip-g':'chip-o'}`}>
-                  {activeAvatar.is_paid?'✓ Activo':'⏳ Pago pendiente'}
+                  {activeAvatar.is_paid?(tournament?.is_demo?'✓ Demo activo':'✓ Activo'):'⏳ Pendiente aprobación'}
                 </span>
                 <span className="text-muted text-xs">{activeAvatar.nickname}</span>
               </div>

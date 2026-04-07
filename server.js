@@ -72,6 +72,7 @@ async function initDb() {
         nequi_info TEXT,
         predictions_open BOOLEAN DEFAULT TRUE,
         is_active BOOLEAN DEFAULT FALSE,
+        is_demo BOOLEAN DEFAULT FALSE,
         mp_payment_id TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -164,6 +165,26 @@ async function initDb() {
 
     const {rows:[{count}]} = await c.query('SELECT COUNT(*) FROM matches')
     if(+count===0) await seedMatches(c)
+
+    // Auto-create demo tournament if not exists
+    const {rows:[demo]}=await c.query("SELECT id FROM tournaments WHERE slug='demo'")
+    if(!demo){
+      const demoId='t-demo-'+crypto.randomBytes(6).toString('hex')
+      await c.query(`
+        INSERT INTO tournaments(id,slug,name,owner_name,owner_email,primary_color,inscription_fee,currency,is_active,is_demo,predictions_open)
+        VALUES($1,'demo','Demo — La Polla IA','La Polla IA','demo@lapollaia.com','#F6C90E',0,'USD',TRUE,TRUE,TRUE)
+        ON CONFLICT(slug) DO NOTHING`,[demoId])
+      const phases=['group','round32','round16','quarters','semis','third','final']
+      for(const ph of phases)
+        await c.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[demoId,ph])
+      console.log('✅ Demo tournament created')
+    }
+
+    // Add is_demo column if missing (migration for existing DBs)
+    await c.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE")
+    // Make sure demo is always active
+    await c.query("UPDATE tournaments SET is_active=TRUE WHERE slug='demo'")
+
     console.log('✅ DB multi-tenant lista')
   } finally { c.release() }
 }
@@ -402,7 +423,7 @@ app.get('/api/tournaments/check/:slug', async(req,res)=>{
 app.get('/api/tournaments/:slug', async(req,res)=>{
   try{
     const {rows:[t]}=await pool.query(
-      'SELECT id,slug,name,logo_url,primary_color,inscription_fee,currency,paypal_info,nequi_info,is_active,predictions_open FROM tournaments WHERE slug=$1',
+      'SELECT id,slug,name,logo_url,primary_color,inscription_fee,currency,paypal_info,nequi_info,is_active,is_demo,predictions_open FROM tournaments WHERE slug=$1',
       [req.params.slug]
     )
     if(!t) return res.status(404).json({error:'Polla no encontrada'})
@@ -508,11 +529,13 @@ app.post('/api/avatars', auth, async(req,res)=>{
     const {rows:mine}=await pool.query('SELECT id FROM avatars WHERE user_id=$1',[req.user.id])
     if(mine.length>=3) return res.status(400).json({error:'Máximo 3 avatares por usuario'})
     const id='av-'+crypto.randomBytes(12).toString('hex')
+    // Demo tournaments auto-approve avatars
+    const {rows:[tinfo]}=await pool.query('SELECT inscription_fee,currency,paypal_info,nequi_info,is_demo FROM tournaments WHERE id=$1',[tid])
+    const isDemo=tinfo?.is_demo||false
     const {rows:[av]}=await pool.query(
-      'INSERT INTO avatars(id,user_id,tournament_id,nickname,photo_url) VALUES($1,$2,$3,$4,$5) RETURNING *',
-      [id,req.user.id,tid,nickname.trim(),photoUrl||null])
-    const {rows:[t]}=await pool.query('SELECT inscription_fee,currency,paypal_info,nequi_info FROM tournaments WHERE id=$1',[tid])
-    res.json({avatar:av,paymentInfo:{inscription_fee:t?.inscription_fee||0,currency:t?.currency||'USD',paypal:t?.paypal_info||'',nequi:t?.nequi_info||''}})
+      'INSERT INTO avatars(id,user_id,tournament_id,nickname,photo_url,is_paid) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',
+      [id,req.user.id,tid,nickname.trim(),photoUrl||null,isDemo])
+    res.json({avatar:av,paymentInfo:{inscription_fee:tinfo?.inscription_fee||0,currency:tinfo?.currency||'USD',paypal:tinfo?.paypal_info||'',nequi:tinfo?.nequi_info||'',isDemo}})
   }catch(e){ console.error(e); res.status(500).json({error:'Error del servidor'}) }
 })
 

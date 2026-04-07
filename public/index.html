@@ -50,6 +50,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--ink);color:var(--white);o
 .btn-main:disabled{opacity:.6;cursor:not-allowed;transform:none}
 .btn-sec{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:var(--r);padding:.9rem 2rem;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
 .btn-sec:hover{background:rgba(255,255,255,.1)}
+.btn-demo{background:transparent;color:#F6C90E;border:2px solid #F6C90E;border-radius:var(--r);padding:.75rem 1.75rem;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-demo:hover{background:rgba(246,201,14,.1);transform:translateY(-2px)}
 .btn-full{width:100%}
 /* SECTIONS */
 .wrap{padding:0 1.5rem}
@@ -167,8 +169,9 @@ footer p{color:rgba(255,255,255,.2);font-size:11px}
   <div class="hero-badge" id="h-badge">⚡ Oferta de lanzamiento — Solo $3.99 USD pago único</div>
   <div class="hcd-wrap" id="cd"></div>
   <div class="hero-ctas">
-    <button class="btn-main" id="h-cta1" onclick="showCreate();document.getElementById('crear').scrollIntoView({behavior:'smooth'})">🏆 Crear mi Polla ahora</button>
-    <button class="btn-sec" id="h-cta2" onclick="document.getElementById('entrar').scrollIntoView({behavior:'smooth'})">Ya tengo una →</button>
+    <button class="btn-main" id="h-cta1" onclick="showCreate();document.getElementById('crear').scrollIntoView({behavior:'smooth'})">🏆 Crear mi Polla — $3.99</button>
+    <button class="btn-demo" onclick="window.location.href='/t/demo'" id="h-demo">⚡ Prueba la Demo GRATIS</button>
+    <button class="btn-sec" id="h-cta2" onclick="document.getElementById('entrar').scrollIntoView({behavior:'smooth'})" style="font-size:12px;padding:.6rem 1.25rem">Ya tengo una →</button>
   </div>
 </section>
 
@@ -309,7 +312,7 @@ const T={
     eyebrow:'⚽ La gran cita del fútbol internacional 2026 · USA · CAN · MEX',
     sub:'Crea tu torneo de pronósticos privado en minutos. Con Inteligencia Artificial que analiza cada partido. Para tu familia y amigos.',
     badge:'⚡ Precio normal $9.99 · Oferta: Solo $3.99 USD · Tiempo limitado',
-    cta1:'🏆 Crear mi Polla ahora',cta2:'Ya tengo una →',
+    cta1:'🏆 Crear mi Polla — $3.99',demo:'⚡ Prueba la Demo GRATIS',cta2:'Ya tengo una →',
     s1:'Así de fácil',s1s:'Sin configuraciones complicadas · Sin soporte · Autogestionado',
     s2:'Todo incluido',s2s:'Una plataforma completa · Nada que instalar',
     s3:'Un precio. Todo incluido.',s3s:'Sin mensualidades · Sin límite de jugadores · Activo hasta el 19 Jul 2026',
@@ -351,7 +354,7 @@ const T={
     eyebrow:'⚽ La gran cita del fútbol internacional 2026 · USA · CAN · MEX',
     sub:'Create your private prediction tournament in minutes. With Artificial Intelligence that analyzes every match. For your family and friends.',
     badge:'⚡ Regular $9.99 · Limited offer: Only $3.99 USD',
-    cta1:'🏆 Create my Pool now',cta2:'I already have one →',
+    cta1:'🏆 Create my Pool — $3.99',demo:'⚡ Try the Demo FREE',cta2:'I already have one →',
     s1:'That simple',s1s:'No complex setup · No support needed · Self-managed',
     s2:'Everything included',s2s:'A complete platform · Nothing to install',
     s3:'One price. Everything included.',s3s:'No subscriptions · Unlimited players · Active until Jul 19, 2026',
@@ -428,6 +431,7 @@ function applyLang(){
   document.getElementById('h-sub').textContent=t.sub
   document.getElementById('h-badge').innerHTML='<span style="width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:pulse 2s infinite;display:inline-block"></span>'+t.badge
   document.getElementById('h-cta1').textContent=t.cta1
+  document.getElementById('h-demo').textContent=t.demo||'⚡ Prueba la Demo GRATIS'
   document.getElementById('h-cta2').textContent=t.cta2
   // Sections
   document.getElementById('s1-title').textContent=t.s1
