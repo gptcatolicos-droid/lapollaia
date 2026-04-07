@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>La Polla IA — Crea tu Torneo del Mundial 2026</title>
+<meta name="description" content="La Polla IA — Plataforma SaaS de pronósticos deportivos con Inteligencia Artificial. Crea tu polla privada para el gran torneo de fútbol 2026. Pago único $3.99."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--gold:#F6C90E;--gold2:#d4aa00;--ink:#0d1117;--ink2:#1a1f2e;--white:#fff;--r:12px;--r-lg:20px}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--ink);color:var(--white);overflow-x:hidden}
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:.9rem 1.5rem;display:flex;align-items:center;justify-content:space-between;background:rgba(13,17,23,.88);backdrop-filter:blur(20px);border-bottom:1px solid rgba(246,201,14,.1)}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo{width:36px;height:36px;object-fit:contain}
+.nav-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;line-height:1}
+.nav-sub{font-size:9px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase}
+.nav-right{display:flex;align-items:center;gap:.5rem}
+.nav-enter{display:flex;align-items:center;gap:6px;background:rgba(246,201,14,.08);border:1px solid rgba(246,201,14,.2);border-radius:8px;padding:5px 5px 5px 12px}
+.nav-enter input{background:none;border:none;outline:none;color:#fff;font-size:12px;width:130px;font-family:'DM Sans',sans-serif}
+.nav-enter input::placeholder{color:rgba(255,255,255,.3)}
+.nav-enter button,.nav-cta{background:var(--gold);color:var(--ink);border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.nav-cta{border-radius:8px;padding:8px 14px}
+.lang-btn{background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;transition:.2s}
+.lang-btn:hover{background:rgba(255,255,255,.15)}
+/* HERO */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:7rem 1.5rem 4rem;position:relative;overflow:hidden}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(246,201,14,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(246,201,14,.04) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 40%,transparent 100%)}
+.hero-glow{position:absolute;top:20%;left:50%;transform:translateX(-50%);width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(246,201,14,.12) 0%,transparent 70%);pointer-events:none}
+.hero-logo{width:180px;height:180px;object-fit:contain;filter:drop-shadow(0 0 40px rgba(246,201,14,.4));animation:float 4s ease-in-out infinite;margin-bottom:1.5rem;position:relative;z-index:1}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.hero-eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);margin-bottom:.75rem;position:relative;z-index:1}
+.hero-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.5rem,10vw,7rem);line-height:.9;letter-spacing:3px;margin-bottom:1rem;position:relative;z-index:1}
+.hero-title .y{color:var(--gold)}
+.hero-sub{font-size:clamp(.95rem,2.5vw,1.1rem);color:rgba(255,255,255,.55);max-width:540px;line-height:1.65;margin-bottom:2rem;position:relative;z-index:1}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(246,201,14,.15),rgba(246,201,14,.05));border:1px solid rgba(246,201,14,.3);border-radius:100px;padding:.5rem 1.25rem;font-size:13px;font-weight:600;color:var(--gold);margin-bottom:2rem;position:relative;z-index:1}
+.hero-badge::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hcd-wrap{display:flex;gap:12px;margin-bottom:2.5rem;position:relative;z-index:1}
+.hcd{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:var(--r);padding:.9rem 1.2rem;text-align:center;min-width:70px}
+.hcd-n{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;color:var(--gold);line-height:1}
+.hcd-l{font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1.5px;margin-top:3px}
+.hero-ctas{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;position:relative;z-index:1}
+/* BUTTONS */
+.btn-main{background:var(--gold);color:var(--ink);border:none;border-radius:var(--r);padding:.9rem 2rem;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.3px;transition:all .2s;font-family:'Syne',sans-serif}
+.btn-main:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(246,201,14,.4)}
+.btn-main:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.btn-sec{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:var(--r);padding:.9rem 2rem;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-sec:hover{background:rgba(255,255,255,.1)}
+.btn-full{width:100%}
+/* SECTIONS */
+.wrap{padding:0 1.5rem}
+.sec{padding:6rem 0;max-width:1100px;margin:0 auto}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(1.8rem,4vw,3rem);letter-spacing:2px;text-align:center;margin-bottom:.5rem}
+.sec-sub{text-align:center;color:rgba(255,255,255,.45);margin-bottom:3rem;font-size:15px}
+/* STEPS */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem}
+.step{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:var(--r-lg);padding:1.75rem;position:relative;overflow:hidden;transition:border-color .2s}
+.step:hover{border-color:rgba(246,201,14,.3)}
+.step::before{content:attr(data-n);position:absolute;top:-15px;right:15px;font-family:'Bebas Neue',sans-serif;font-size:6rem;color:rgba(246,201,14,.04);line-height:1}
+.step-icon{font-size:2rem;margin-bottom:.75rem}
+.step h3{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:.4rem}
+.step p{color:rgba(255,255,255,.45);font-size:13px;line-height:1.7}
+/* FEATURES */
+.feat-sec{background:rgba(255,255,255,.02);border-top:1px solid rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.05);padding:5rem 1.5rem}
+.feats{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1.25rem}
+.feat{display:flex;gap:.9rem;padding:1.25rem;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:var(--r);transition:all .2s}
+.feat:hover{background:rgba(246,201,14,.04);border-color:rgba(246,201,14,.15)}
+.feat-icon{font-size:1.5rem;flex-shrink:0;margin-top:2px}
+.feat h4{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:3px}
+.feat p{font-size:12px;color:rgba(255,255,255,.4);line-height:1.6}
+/* PRICE */
+.price-wrap{max-width:520px;margin:0 auto}
+.price-card{background:rgba(255,255,255,.03);border:1px solid rgba(246,201,14,.25);border-radius:var(--r-lg);padding:2.5rem;position:relative;overflow:hidden;text-align:center}
+.price-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at top,rgba(246,201,14,.07),transparent 60%)}
+.price-badge{display:inline-block;background:var(--gold);color:var(--ink);font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:4px 12px;border-radius:100px;margin-bottom:1.25rem}
+.price-amt{font-family:'Bebas Neue',sans-serif;font-size:4.5rem;color:var(--gold);line-height:1;margin-bottom:.25rem}
+.price-amt sup{font-size:2rem}
+.price-per{font-size:13px;color:rgba(255,255,255,.4);margin-bottom:1.5rem}
+.price-list{list-style:none;text-align:left;margin-bottom:1.75rem}
+.price-list li{font-size:14px;color:rgba(255,255,255,.7);display:flex;align-items:center;gap:.5rem;padding:.35rem 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.price-list li:last-child{border:none}
+.price-list li::before{content:'✓';color:var(--gold);font-weight:700;flex-shrink:0}
+.price-note{font-size:11px;color:rgba(255,255,255,.25);margin-top:.75rem}
+/* FORM */
+.create-box{background:rgba(255,255,255,.03);border:1px solid rgba(246,201,14,.15);border-radius:var(--r-lg);padding:2rem;margin-top:2rem;max-width:520px;margin-left:auto;margin-right:auto;display:none}
+.create-box h3{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:1.5px;margin-bottom:1.5rem}
+.fg{margin-bottom:.85rem}
+.fg label{display:block;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:4px}
+.fg input,.fg select{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.65rem .9rem;color:#fff;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s}
+.fg input:focus,.fg select:focus{border-color:rgba(246,201,14,.5)}
+.fg input::placeholder{color:rgba(255,255,255,.2)}
+.fg select option{background:#1a1f2e}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.slug-prev{color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0;font-weight:normal}
+.form-err{background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);border-radius:8px;padding:.65rem 1rem;color:#fca5a5;font-size:13px;margin-bottom:.85rem}
+.sep-line{height:1px;background:rgba(255,255,255,.07);margin:1.25rem 0}
+.sep-lbl{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:.75rem}
+/* FAQ */
+.faq-sec{padding:5rem 1.5rem;background:rgba(246,201,14,.02);border-top:1px solid rgba(246,201,14,.06)}
+.faq-inner{max-width:720px;margin:0 auto}
+.faq-item{border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden}
+.faq-q{display:flex;justify-content:space-between;align-items:center;padding:1.1rem 0;cursor:pointer;font-weight:600;font-size:15px;gap:1rem;transition:color .15s}
+.faq-q:hover{color:var(--gold)}
+.faq-icon{font-size:1.2rem;flex-shrink:0;transition:transform .2s;color:var(--gold)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s}
+.faq-a.open{max-height:300px;padding-bottom:1rem}
+.faq-a p{font-size:14px;color:rgba(255,255,255,.5);line-height:1.8}
+/* GUIDE */
+.guide-sec{padding:5rem 1.5rem;border-top:1px solid rgba(255,255,255,.05)}
+.guide-inner{max-width:800px;margin:0 auto}
+.guide-steps{display:flex;flex-direction:column;gap:1.25rem;margin-top:2rem}
+.guide-step{display:flex;gap:1.25rem;align-items:flex-start;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:var(--r-lg);padding:1.5rem;transition:border-color .2s}
+.guide-step:hover{border-color:rgba(246,201,14,.2)}
+.guide-n{background:var(--gold);color:var(--ink);font-family:'Bebas Neue',sans-serif;font-size:1.5rem;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.guide-content h4{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:.3rem}
+.guide-content p{font-size:13px;color:rgba(255,255,255,.45);line-height:1.7}
+.guide-tip{display:inline-block;background:rgba(246,201,14,.1);border:1px solid rgba(246,201,14,.2);color:var(--gold);border-radius:100px;font-size:11px;padding:2px 10px;margin-top:.5rem}
+/* ENTER */
+.enter-sec{padding:4rem 1.5rem;background:rgba(246,201,14,.03);border-top:1px solid rgba(246,201,14,.08)}
+.enter-inner{max-width:540px;margin:0 auto;text-align:center}
+.enter-title{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:2px;margin-bottom:.5rem}
+.enter-sub{color:rgba(255,255,255,.4);margin-bottom:1.5rem;font-size:14px}
+.enter-box{display:flex;background:rgba(255,255,255,.05);border:1px solid rgba(246,201,14,.2);border-radius:var(--r);overflow:hidden}
+.enter-box .pfx{padding:0 .75rem;display:flex;align-items:center;color:rgba(255,255,255,.3);font-size:11px;white-space:nowrap;border-right:1px solid rgba(255,255,255,.08)}
+.enter-box input{flex:1;background:none;border:none;outline:none;padding:.8rem .7rem;color:#fff;font-size:14px;font-family:'DM Sans',sans-serif}
+.enter-box input::placeholder{color:rgba(255,255,255,.2)}
+.enter-box button{background:var(--gold);color:var(--ink);border:none;padding:.8rem 1.25rem;font-weight:700;font-size:14px;cursor:pointer}
+/* FOOTER */
+footer{border-top:1px solid rgba(255,255,255,.05);padding:2rem 1.5rem;text-align:center}
+footer img{width:36px;opacity:.35;margin:0 auto .6rem;display:block}
+footer p{color:rgba(255,255,255,.2);font-size:11px}
+/* UTIL */
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--ink);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+/* RESPONSIVE */
+@media(max-width:600px){.nav-enter{display:none}.hero-ctas,.fg-row{flex-direction:column}.hcd{padding:.6rem .8rem;min-width:50px}.hcd-n{font-size:1.6rem}.guide-step{flex-direction:column}.guide-n{width:36px;height:36px;font-size:1.2rem}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-brand" href="/"><img src="/logo.png" alt="" class="nav-logo"/>
+    <div><div class="nav-name">La Polla IA</div><div class="nav-sub">Mundial 2026</div></div>
+  </a>
+  <div class="nav-right">
+    <div class="nav-enter">
+      <input type="text" id="navSlug" placeholder="" onkeypress="if(event.key==='Enter')go('navSlug')"/>
+      <button onclick="go('navSlug')" id="navEnterBtn">→</button>
+    </div>
+    <button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
+    <button class="nav-cta" onclick="showCreate()" id="navCta">Crear →</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-grid"></div><div class="hero-glow"></div>
+  <img src="/logo.png" alt="Polla IA" class="hero-logo"/>
+  <div class="hero-eyebrow" id="h-eyebrow">⚽ FIFA World Cup 2026 · USA · CAN · MEX</div>
+  <h1 class="hero-title">La Polla <span class="y">IA</span></h1>
+  <p class="hero-sub" id="h-sub">Crea tu torneo de pronósticos privado en minutos. Con Inteligencia Artificial que analiza cada partido. Para tu familia, amigos o empresa.</p>
+  <div class="hero-badge" id="h-badge">⚡ Oferta de lanzamiento — Solo $3.99 USD pago único</div>
+  <div class="hcd-wrap" id="cd"></div>
+  <div class="hero-ctas">
+    <button class="btn-main" id="h-cta1" onclick="showCreate();document.getElementById('crear').scrollIntoView({behavior:'smooth'})">🏆 Crear mi Polla ahora</button>
+    <button class="btn-sec" id="h-cta2" onclick="document.getElementById('entrar').scrollIntoView({behavior:'smooth'})">Ya tengo una →</button>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<div class="wrap"><div class="sec">
+  <h2 class="sec-title" id="s1-title">Así de fácil</h2>
+  <p class="sec-sub" id="s1-sub">Sin configuraciones complicadas · Sin soporte · Autogestionado</p>
+  <div class="steps">
+    <div class="step" data-n="1"><div class="step-icon">💳</div><h3 class="t-step1h">Paga una vez, $3.99</h3><p class="t-step1p">Pago seguro vía MercadoPago. Sin mensualidades ni sorpresas. Tu torneo activo durante todo el Mundial.</p></div>
+    <div class="step" data-n="2"><div class="step-icon">🎨</div><h3 class="t-step2h">Personaliza tu Polla</h3><p class="t-step2p">Pon el nombre, sube tu logo, elige 1 de 4 colores y decide si cobras inscripción — o la dejas gratis.</p></div>
+    <div class="step" data-n="3"><div class="step-icon">📲</div><h3 class="t-step3h">Comparte el link</h3><p class="t-step3p">Un link único. Lo mandas por WhatsApp al grupo. Tus participantes se registran solos. Tú solo administras.</p></div>
+  </div>
+</div></div>
+
+<!-- FEATURES -->
+<div class="feat-sec">
+  <h2 class="sec-title" id="s2-title" style="max-width:1100px;margin:0 auto .5rem">Todo incluido</h2>
+  <p class="sec-sub" id="s2-sub" style="max-width:1100px;margin:0 auto 2.5rem">Una plataforma completa · Nada que instalar</p>
+  <div class="feats">
+    <div class="feat"><div class="feat-icon">🤖</div><div><h4 class="f1h">Pelé IA — Análisis Real</h4><p class="f1p">Analiza cada partido con datos reales: ranking FIFA, historial, sede. No inventos.</p></div></div>
+    <div class="feat"><div class="feat-icon">🎨</div><div><h4 class="f2h">100% Personalizable</h4><p class="f2p">Tu logo, tu nombre, 4 opciones de color. Parece hecha desde cero.</p></div></div>
+    <div class="feat"><div class="feat-icon">🔒</div><div><h4 class="f3h">Privada por defecto</h4><p class="f3p">Solo entra quien tú invites. Tu link es tu llave.</p></div></div>
+    <div class="feat"><div class="feat-icon">💰</div><div><h4 class="f4h">Inscripción flexible</h4><p class="f4p">Cobras lo que quieras, o la dejas gratis. Hay familias que juegan solo por el honor.</p></div></div>
+    <div class="feat"><div class="feat-icon">📊</div><div><h4 class="f5h">Ranking automático</h4><p class="f5p">Puntos calculados al instante. Marcador exacto, ganador, extras.</p></div></div>
+    <div class="feat"><div class="feat-icon">⚽</div><div><h4 class="f6h">104 partidos FIFA 2026</h4><p class="f6p">Calendario oficial completo. Grupos A-L, eliminatorias y Gran Final.</p></div></div>
+    <div class="feat"><div class="feat-icon">🏆</div><div><h4 class="f7h">Predicciones especiales</h4><p class="f7p">Campeón, sorpresa, Balón/Bota/Guante de Oro. Más emoción.</p></div></div>
+    <div class="feat"><div class="feat-icon">📱</div><div><h4 class="f8h">Optimizada para móvil</h4><p class="f8p">Tus jugadores ingresan marcadores desde donde estén.</p></div></div>
+  </div>
+</div>
+
+<!-- PRICING + FORM -->
+<div class="wrap" id="crear"><div class="sec" style="text-align:center">
+  <h2 class="sec-title" id="s3-title">Un precio. Todo incluido.</h2>
+  <p class="sec-sub" id="s3-sub">Sin mensualidades · Sin límite de jugadores · Activo hasta el 19 Jul 2026</p>
+  <div class="price-wrap">
+    <div class="price-card">
+      <div class="price-badge" id="t-badge">⏰ Oferta por tiempo limitado</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:.75rem;margin-bottom:.25rem">
+        <div style="font-size:1.5rem;color:rgba(255,255,255,.3);text-decoration:line-through;font-family:'Bebas Neue',sans-serif">$9.99</div>
+        <div style="background:#E53E3E;color:#fff;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:100px">-60% OFF</div>
+      </div>
+      <div class="price-amt"><sup>$</sup>3<small style="font-size:2.5rem">.99</small></div>
+      <div class="price-per" id="t-per">USD · pago único · precio normal $9.99</div>
+      <div style="background:rgba(229,62,62,.1);border:1px solid rgba(229,62,62,.3);border-radius:8px;padding:.4rem .75rem;margin-bottom:.75rem;font-size:11px;color:#fc8181;display:flex;align-items:center;gap:.4rem" id="t-urgency">
+        ⏳ <span>Oferta activa solo hasta el inicio del torneo mundialista 2026</span>
+      </div>
+      <ul class="price-list">
+        <li class="pl1">Torneo privado con tu link único</li>
+        <li class="pl2">Logo y nombre 100% personalizados</li>
+        <li class="pl3">4 colores a elegir</li>
+        <li class="pl4">Jugadores ilimitados</li>
+        <li class="pl5">Pelé IA con análisis real</li>
+        <li class="pl6">Ranking automático en tiempo real</li>
+        <li class="pl7">104 partidos — calendario oficial FIFA</li>
+        <li class="pl8">Sin mensualidades</li>
+      </ul>
+      <button class="btn-main btn-full" id="t-cta" onclick="showCreate()">🏆 Crear mi Polla ahora →</button>
+      <p class="price-note" id="t-note">Pago seguro vía MercadoPago · Tu polla queda activa en minutos</p>
+    </div>
+
+    <div class="create-box" id="createForm">
+      <h3 id="cf-title">⚙️ Configura tu Polla</h3>
+      <div class="form-err" id="fErr" style="display:none"></div>
+      <div class="fg"><label id="lbl-name">Nombre de tu Polla</label><input type="text" id="cf-name" placeholder="Ej: Polla Familia Palacio"/></div>
+      <div class="fg"><label id="lbl-slug">Tu link único &nbsp;<span class="slug-prev" id="slugPrev">lapollaia.com/t/...</span></label><input type="text" id="cf-slug" placeholder="familia-palacio" oninput="updSlug(this.value)" onblur="chkSlug()"/></div>
+      <div class="fg"><label id="lbl-aname">Tu nombre completo</label><input type="text" id="cf-aname" placeholder="Tu nombre"/></div>
+      <div class="fg"><label id="lbl-email">Tu correo (serás el administrador)</label><input type="email" id="cf-email" placeholder="tu@correo.com"/></div>
+      <div class="fg"><label id="lbl-pass">Contraseña</label><input type="password" id="cf-pass" placeholder="Mínimo 6 caracteres"/></div>
+      <div class="sep-line"></div>
+      <div class="sep-lbl" id="lbl-ins-sec">Inscripción para tus participantes</div>
+      <div class="fg-row">
+        <div class="fg"><label id="lbl-fee">Monto por jugador</label><input type="number" id="cf-fee" placeholder="0 = gratis" value="20" min="0"/></div>
+        <div class="fg"><label id="lbl-cur">Moneda</label><select id="cf-cur"><option value="USD">USD</option><option value="COP">COP</option><option value="MXN">MXN</option><option value="ARS">ARS</option><option value="PEN">PEN</option></select></div>
+      </div>
+      <p style="font-size:11px;color:rgba(255,255,255,.3);margin-bottom:1.25rem" id="t-fee-note">Pon 0 si tu polla es gratis — muchas familias juegan solo por el honor ⚽</p>
+      <button class="btn-main btn-full" id="createBtn" onclick="doCreate()">💳 Pagar $3.99 y crear mi Polla</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- ADMIN GUIDE -->
+<div class="guide-sec">
+  <div class="guide-inner">
+    <h2 class="sec-title" id="g-title">Guía para el Admin</h2>
+    <p class="sec-sub" id="g-sub">Paso a paso para que tu polla funcione perfecto desde el primer día</p>
+    <div class="guide-steps">
+      <div class="guide-step"><div class="guide-n">1</div><div class="guide-content"><h4 class="gs1h">Paga y crea tu Polla</h4><p class="gs1p">Completa el formulario de arriba y paga $3.99. En menos de 2 minutos tu polla queda activa y recibes un correo de confirmación con tu link.</p><span class="guide-tip" id="gt1">✅ Ya hecho al pagar</span></div></div>
+      <div class="guide-step"><div class="guide-n">2</div><div class="guide-content"><h4 class="gs2h">Configura tu identidad visual</h4><p class="gs2p">Entra a tu polla → Admin → Configuración. Sube tu logo (200×200 px, PNG o JPG, máx 2MB) y elige uno de los 4 colores disponibles. Tu polla lucirá única.</p><span class="guide-tip" id="gt2">🎨 Logo + color en 2 minutos</span></div></div>
+      <div class="guide-step"><div class="guide-n">3</div><div class="guide-content"><h4 class="gs3h">Define el precio de inscripción</h4><p class="gs3p">En Configuración pon el monto que cobrarás a cada participante. Si tu polla es familiar y no quieren cobrar, pon $0 y déjala gratis. También agrega tu PayPal o número de Nequi para que sepan cómo pagarte.</p><span class="guide-tip" id="gt3">💰 Puede ser $0 — gratis</span></div></div>
+      <div class="guide-step"><div class="guide-n">4</div><div class="guide-content"><h4 class="gs4h">Comparte el link</h4><p class="gs4p">Copia tu link único (lapollaia.com/t/tu-slug) y mándalo al grupo de WhatsApp. Tus participantes hacen clic, se registran con su correo y crean su avatar. Tú no tienes que hacer nada más.</p><span class="guide-tip" id="gt4">📲 Un solo link para todo</span></div></div>
+      <div class="guide-step"><div class="guide-n">5</div><div class="guide-content"><h4 class="gs5h">Confirma los pagos de inscripción</h4><p class="gs5p">En Admin → Usuarios verás a cada participante. Cuando te paguen (Nequi, PayPal, efectivo), haz clic en "Confirmar pago" para activar su avatar. Solo los avatares activos aparecen en el ranking.</p><span class="guide-tip" id="gt5">👆 Un clic por participante</span></div></div>
+      <div class="guide-step"><div class="guide-n">6</div><div class="guide-content"><h4 class="gs6h">Durante el Mundial — ingresa resultados</h4><p class="gs6p">Después de cada partido, ve a Admin → Resultados e ingresa el marcador real. El sistema calcula automáticamente los puntos de todos los participantes y actualiza el ranking al instante.</p><span class="guide-tip" id="gt6">⚽ Después de cada partido</span></div></div>
+      <div class="guide-step"><div class="guide-n">7</div><div class="guide-content"><h4 class="gs7h">Gestiona las fases (opcional)</h4><p class="gs7p">En Admin → Fases puedes cerrar manualmente una fase (ej: cerrar todos los pronósticos de grupos el día que empieza octavos). O deja el sistema automático que cierra cada partido 2 horas antes.</p><span class="guide-tip" id="gt7">🔒 Opcional — el sistema lo hace solo</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ -->
+<div class="faq-sec">
+  <div class="faq-inner">
+    <h2 class="sec-title" style="margin-bottom:.5rem" id="faq-title">Preguntas frecuentes</h2>
+    <p class="sec-sub" id="faq-sub">Todo lo que necesitas saber</p>
+    <div id="faq-list"></div>
+  </div>
+</div>
+
+<!-- ENTER POLLA -->
+<div class="enter-sec" id="entrar">
+  <div class="enter-inner">
+    <h2 class="enter-title" id="e-title">¿Ya tienes una Polla?</h2>
+    <p class="enter-sub" id="e-sub">Ingresa el nombre para acceder o registrarte</p>
+    <div class="enter-box">
+      <span class="pfx">lapollaia.com/t/</span>
+      <input type="text" id="enterSlug" placeholder="familia-palacio" onkeypress="if(event.key==='Enter')go('enterSlug')"/>
+      <button onclick="go('enterSlug')" id="e-btn">Entrar →</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEGAL DISCLAIMER -->
+<div style="background:rgba(255,255,255,.02);border-top:1px solid rgba(255,255,255,.05);padding:1.5rem;text-align:center">
+  <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.3);margin-bottom:.6rem;font-weight:600">Aviso Legal Importante</div>
+  <p style="font-size:11px;color:rgba(255,255,255,.28);line-height:1.75;max-width:680px;margin:0 auto .85rem">
+    <strong style="color:rgba(255,255,255,.4)">La Polla IA NO es una plataforma de apuestas ni de juegos de azar.</strong> Somos un servicio de software (SaaS) de entretenimiento deportivo basado en inteligencia artificial para la generación de pronósticos entre grupos de personas conocidas. No captamos, administramos ni distribuimos dinero por concepto de apuestas. El pago de $3.99 USD corresponde únicamente al acceso a nuestra plataforma tecnológica. Cualquier acuerdo económico entre participantes de una polla es de exclusiva responsabilidad del administrador de dicha polla y sus participantes, y no involucra a La Polla IA en ningún sentido legal o financiero. El servicio se rige por las normas nacionales e internacionales aplicables en la jurisdicción del usuario.
+  </p>
+  <div style="display:flex;gap:.85rem;justify-content:center;flex-wrap:wrap">
+    <a href="/terminos.html" style="font-size:11px;color:rgba(246,201,14,.5);text-decoration:underline">Términos y Condiciones</a>
+    <a href="/privacidad.html" style="font-size:11px;color:rgba(246,201,14,.5);text-decoration:underline">Política de Privacidad</a>
+    <a href="/datos.html" style="font-size:11px;color:rgba(246,201,14,.5);text-decoration:underline">Protección de Datos</a>
+  </div>
+</div>
+
+<footer>
+  <img src="/logo.png" alt=""/>
+  <p>© 2026 La Polla IA · <a href="/" style="color:rgba(255,255,255,.2);text-decoration:none">lapollaia.com</a></p>
+  <div style="margin-top:.5rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">
+    <a href="/terminos.html" style="color:rgba(246,201,14,.4);font-size:11px;text-decoration:none">Términos y Condiciones</a>
+    <a href="/privacidad.html" style="color:rgba(246,201,14,.4);font-size:11px;text-decoration:none">Política de Privacidad</a>
+    <a href="/datos.html" style="color:rgba(246,201,14,.4);font-size:11px;text-decoration:none">Protección de Datos</a>
+  </div>
+</footer>
+
+<script>
+// ── TRANSLATIONS ──────────────────────────────────────────────────────────────
+const T={
+  es:{
+    navEnter:'Entrar →',navCta:'Crear mi Polla →',langBtn:'EN',
+    eyebrow:'⚽ FIFA World Cup 2026 · USA · CAN · MEX',
+    sub:'Crea tu torneo de pronósticos privado en minutos. Con Inteligencia Artificial que analiza cada partido. Para tu familia, amigos o empresa.',
+    badge:'⚡ Precio normal $9.99 · Oferta: Solo $3.99 USD · Tiempo limitado',
+    cta1:'🏆 Crear mi Polla ahora',cta2:'Ya tengo una →',
+    s1:'Así de fácil',s1s:'Sin configuraciones complicadas · Sin soporte · Autogestionado',
+    s2:'Todo incluido',s2s:'Una plataforma completa · Nada que instalar',
+    s3:'Un precio. Todo incluido.',s3s:'Sin mensualidades · Sin límite de jugadores · Activo hasta el 19 Jul 2026',
+    badge2:'🎯 Oferta Mundial 2026',per:'USD · pago único · activo hasta el 19 Jul 2026',
+    pl:['Torneo privado con tu link único','Logo y nombre 100% personalizados','4 colores a elegir','Jugadores ilimitados','Pelé IA con análisis real','Ranking automático en tiempo real','104 partidos — calendario oficial FIFA','Sin mensualidades'],
+    tCta:'🏆 Crear mi Polla ahora →',tNote:'Pago seguro vía MercadoPago · Tu polla queda activa en minutos',
+    cfTitle:'⚙️ Configura tu Polla',cfName:'Nombre de tu Polla',cfSlug:'Tu link único',cfAname:'Tu nombre completo',cfEmail:'Tu correo (serás el administrador)',cfPass:'Contraseña',cfInsSec:'Inscripción para tus participantes',cfFee:'Monto por jugador',cfCur:'Moneda',cfFeeNote:'Pon 0 si tu polla es gratis — muchas familias juegan solo por el honor ⚽',
+    cfBtn:'💳 Pagar $3.99 (precio normal $9.99)',
+    step1h:'Paga hoy $3.99 — precio normal $9.99',step1p:'Pago seguro vía MercadoPago. Sin mensualidades. Tu torneo activo durante todo el Mundial.',
+    step2h:'Personaliza tu Polla',step2p:'Pon el nombre, sube tu logo, elige 1 de 4 colores y decide si cobras inscripción — o la dejas gratis.',
+    step3h:'Comparte el link',step3p:'Un link único. Lo mandas por WhatsApp. Tus participantes se registran solos.',
+    f1h:'Pelé IA — Análisis Real',f1p:'Analiza cada partido con datos reales: ranking FIFA, historial, sede.',
+    f2h:'100% Personalizable',f2p:'Tu logo, tu nombre, 4 opciones de color.',
+    f3h:'Privada por defecto',f3p:'Solo entra quien tú invites.',
+    f4h:'Inscripción flexible',f4p:'Cobras lo que quieras, o la dejas gratis.',
+    f5h:'Ranking automático',f5p:'Puntos calculados al instante.',
+    f6h:'104 partidos FIFA 2026',f6p:'Calendario oficial completo.',
+    f7h:'Predicciones especiales',f7p:'Campeón, sorpresa, Balón/Bota/Guante de Oro.',
+    f8h:'Optimizada para móvil',f8p:'Tus jugadores ingresan marcadores desde donde estén.',
+    gTitle:'Guía para el Admin',gSub:'Paso a paso para que tu polla funcione perfecto desde el primer día',
+    gs:['Paga y crea tu Polla','Configura tu identidad visual','Define el precio de inscripción','Comparte el link','Confirma los pagos de inscripción','Durante el Mundial — ingresa resultados','Gestiona las fases (opcional)'],
+    gsp:['Completa el formulario y paga $3.99. En menos de 2 minutos tu polla queda activa y recibes un correo con tu link.','Entra a tu polla → Admin → Configuración. Sube tu logo (200×200 px, PNG, máx 2MB) y elige uno de los 4 colores.','Pon el monto que cobrarás a cada participante. Si es familiar y gratis, pon $0. Agrega tu PayPal o Nequi.','Copia tu link y mándalo al grupo de WhatsApp. Los participantes se registran solos.','En Admin → Usuarios verás a cada participante. Haz clic en "Confirmar pago" para activar cada avatar.','Después de cada partido, ve a Admin → Resultados e ingresa el marcador. El ranking se actualiza automáticamente.','En Admin → Fases puedes cerrar manualmente una fase. O deja el sistema automático que cierra 2h antes de cada partido.'],
+    gt:['✅ Ya hecho al pagar','🎨 Logo + color en 2 minutos','💰 Puede ser $0 — gratis','📲 Un solo link para todo','👆 Un clic por participante','⚽ Después de cada partido','🔒 Opcional — el sistema lo hace solo'],
+    faqTitle:'Preguntas frecuentes',faqSub:'Todo lo que necesitas saber',
+    eTitle:'¿Ya tienes una Polla?',eSub:'Ingresa el nombre para acceder o registrarte',eBtn:'Entrar →',
+    faq:[
+      {q:'¿Cuánto tiempo dura mi polla?',a:'Hasta el 19 de julio de 2026, el día de la Gran Final del Mundial. Después de eso el torneo cierra automáticamente.'},
+      {q:'¿Cuántos participantes puede tener mi polla?',a:'Ilimitados. No hay restricciones en el número de participantes. Hemos probado con grupos de 5 y de 200 personas.'},
+      {q:'¿La inscripción de mis participantes va a ustedes o a mí?',a:'A ti. Tú cobras directamente a tus participantes por Nequi, PayPal o como quieras. Nosotros solo cobramos los $3.99 por el sistema.'},
+      {q:'¿Puedo dejar mi polla gratis?',a:'Sí. Si tu familia quiere jugar solo por el honor sin pagar, pon $0 en el campo de inscripción. Tus participantes se registran sin ningún costo.'},
+      {q:'¿Qué pasa si no sé manejar tecnología?',a:'La plataforma está diseñada para ser muy simple. El admin solo necesita confirmar pagos y ingresar resultados después de cada partido. Todo lo demás es automático.'},
+      {q:'¿Puedo cambiar el logo y los colores después?',a:'Sí, desde Admin → Configuración puedes cambiar tu logo, colores y precio de inscripción en cualquier momento antes y durante el Mundial.'},
+      {q:'¿Cómo sé que el pago fue exitoso?',a:'Después de pagar con MercadoPago, te redirigimos a una página de confirmación y te enviamos un correo. Tu polla queda activa en minutos.'},
+      {q:'¿Funciona en Colombia, México, Argentina?',a:'Sí. MercadoPago está disponible en toda Latinoamérica. El precio de inscripción lo puedes poner en USD, COP, MXN, ARS o PEN.'},
+    ]
+  },
+  en:{
+    navEnter:'Enter →',navCta:'Create my Pool →',langBtn:'ES',
+    eyebrow:'⚽ FIFA World Cup 2026 · USA · CAN · MEX',
+    sub:'Create your private prediction tournament in minutes. With Artificial Intelligence that analyzes every match. For your family, friends, or company.',
+    badge:'⚡ Regular $9.99 · Limited offer: Only $3.99 USD',
+    cta1:'🏆 Create my Pool now',cta2:'I already have one →',
+    s1:'That simple',s1s:'No complex setup · No support needed · Self-managed',
+    s2:'Everything included',s2s:'A complete platform · Nothing to install',
+    s3:'One price. Everything included.',s3s:'No subscriptions · Unlimited players · Active until Jul 19, 2026',
+    badge2:'🎯 World Cup 2026 Offer',per:'USD · one-time payment · active until Jul 19, 2026',
+    pl:['Private tournament with your unique link','100% personalized logo and name','4 colors to choose from','Unlimited players','Pelé AI with real analysis','Automatic real-time ranking','104 matches — official FIFA calendar','No monthly fees'],
+    tCta:'🏆 Create my Pool now →',tNote:'Secure payment via MercadoPago · Your pool is active in minutes',
+    cfTitle:'⚙️ Set up your Pool',cfName:'Your Pool Name',cfSlug:'Your unique link',cfAname:'Your full name',cfEmail:'Your email (you will be the admin)',cfPass:'Password',cfInsSec:'Entry fee for your players',cfFee:'Amount per player',cfCur:'Currency',cfFeeNote:'Set $0 if your pool is free — many families play just for the glory ⚽',
+    cfBtn:'💳 Pay $3.99 (regular $9.99)',
+    step1h:'Pay $3.99 today — regular price $9.99',step1p:'Secure payment via MercadoPago. No subscriptions. Your tournament active throughout the World Cup.',
+    step2h:'Customize your Pool',step2p:'Set the name, upload your logo, choose 1 of 4 colors and decide if you charge entry — or keep it free.',
+    step3h:'Share the link',step3p:'One unique link. Share it on WhatsApp. Participants register themselves.',
+    f1h:'Pelé AI — Real Analysis',f1p:'Analyzes each match with real data: FIFA ranking, history, venue.',
+    f2h:'100% Customizable',f2p:'Your logo, your name, 4 color options.',
+    f3h:'Private by default',f3p:'Only who you invite can enter.',
+    f4h:'Flexible entry fee',f4p:'Charge what you want, or keep it free.',
+    f5h:'Automatic ranking',f5p:'Points calculated instantly.',
+    f6h:'104 FIFA 2026 matches',f6p:'Complete official calendar.',
+    f7h:'Special predictions',f7p:'Champion, surprise team, Golden Ball/Boot/Glove.',
+    f8h:'Mobile-optimized',f8p:'Players enter predictions from anywhere.',
+    gTitle:'Admin Guide',gSub:'Step by step to make your pool run perfectly from day one',
+    gs:['Pay and create your Pool','Set up your visual identity','Define the entry fee','Share the link','Confirm entry payments','During the World Cup — enter results','Manage phases (optional)'],
+    gsp:['Complete the form and pay $3.99. In less than 2 minutes your pool is active and you receive a confirmation email with your link.','Go to your pool → Admin → Settings. Upload your logo (200×200 px, PNG, max 2MB) and choose one of the 4 colors.','Set the amount you will charge each player. If it is a family pool and free, set $0. Add your PayPal or payment info.','Copy your link and share it on the WhatsApp group. Participants register themselves.','In Admin → Users you will see each participant. Click "Confirm payment" to activate each avatar.','After each match, go to Admin → Results and enter the real score. The ranking updates automatically.','In Admin → Phases you can manually close a phase. Or leave the automatic system that closes 2h before each match.'],
+    gt:['✅ Done when you pay','🎨 Logo + color in 2 minutes','💰 Can be $0 — free','📲 One link for everything','👆 One click per player','⚽ After each match','🔒 Optional — the system does it'],
+    faqTitle:'Frequently Asked Questions',faqSub:'Everything you need to know',
+    eTitle:'Already have a Pool?',eSub:'Enter the pool name to access or register',eBtn:'Enter →',
+    faq:[
+      {q:'How long does my pool last?',a:'Until July 19, 2026, the day of the World Cup Final. After that the tournament closes automatically.'},
+      {q:'How many participants can my pool have?',a:'Unlimited. There are no restrictions on the number of participants. We have tested with groups of 5 and 200 people.'},
+      {q:'Does the entry fee go to you or to me?',a:'To you. You collect directly from your participants via your preferred payment method. We only charge the $3.99 for the platform.'},
+      {q:'Can I make my pool free?',a:'Yes. If your family wants to play just for bragging rights, set $0 for the entry fee. Participants register at no cost.'},
+      {q:'What if I am not tech-savvy?',a:'The platform is designed to be very simple. The admin only needs to confirm payments and enter results after each match. Everything else is automatic.'},
+      {q:'Can I change the logo and colors later?',a:'Yes, from Admin → Settings you can change your logo, colors and entry fee at any time before and during the World Cup.'},
+      {q:'How do I know the payment was successful?',a:'After paying with MercadoPago, we redirect you to a confirmation page and send you an email. Your pool is active in minutes.'},
+      {q:'Does it work in Colombia, Mexico, Argentina?',a:'Yes. MercadoPago is available throughout Latin America. You can set the entry fee in USD, COP, MXN, ARS or PEN.'},
+    ]
+  }
+}
+
+// ── LANGUAGE DETECTION ────────────────────────────────────────────────────────
+let lang='es'
+async function detectLang(){
+  // Check stored preference
+  const stored=localStorage.getItem('polla_lang')
+  if(stored){lang=stored;applyLang();return}
+  // Try IP geolocation
+  try{
+    const r=await fetch('https://ipapi.co/json/',{signal:AbortSignal.timeout(3000)})
+    const d=await r.json()
+    const enCountries=['US','CA','GB','AU','NZ','IE','ZA']
+    lang=enCountries.includes(d.country_code)?'en':'es'
+  }catch(e){
+    lang=navigator.language?.startsWith('es')?'es':'en'
+  }
+  localStorage.setItem('polla_lang',lang)
+  applyLang()
+}
+
+function toggleLang(){
+  lang=lang==='es'?'en':'es'
+  localStorage.setItem('polla_lang',lang)
+  applyLang()
+}
+
+function applyLang(){
+  const t=T[lang]
+  document.documentElement.lang=lang
+  // Nav
+  document.getElementById('navEnterBtn').textContent=t.navEnter
+  document.getElementById('navCta').textContent=t.navCta
+  document.getElementById('langBtn').textContent=t.langBtn
+  document.querySelector('#navSlug').placeholder=lang==='es'?'nombre de tu polla...':'your pool name...'
+  // Hero
+  document.getElementById('h-eyebrow').textContent=t.eyebrow
+  document.getElementById('h-sub').textContent=t.sub
+  document.getElementById('h-badge').innerHTML='<span style="width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:pulse 2s infinite;display:inline-block"></span>'+t.badge
+  document.getElementById('h-cta1').textContent=t.cta1
+  document.getElementById('h-cta2').textContent=t.cta2
+  // Sections
+  document.getElementById('s1-title').textContent=t.s1
+  document.getElementById('s1-sub').textContent=t.s1s
+  document.getElementById('s2-title').textContent=t.s2
+  document.getElementById('s2-sub').textContent=t.s2s
+  document.getElementById('s3-title').textContent=t.s3
+  document.getElementById('s3-sub').textContent=t.s3s
+  // Steps
+  document.querySelector('.t-step1h').textContent=t.step1h
+  document.querySelector('.t-step1p').textContent=t.step1p
+  document.querySelector('.t-step2h').textContent=t.step2h
+  document.querySelector('.t-step2p').textContent=t.step2p
+  document.querySelector('.t-step3h').textContent=t.step3h
+  document.querySelector('.t-step3p').textContent=t.step3p
+  // Features
+  for(let i=1;i<=8;i++){
+    const el1=document.querySelector(`.f${i}h`),el2=document.querySelector(`.f${i}p`)
+    if(el1)el1.textContent=t[`f${i}h`]
+    if(el2)el2.textContent=t[`f${i}p`]
+  }
+  // Price
+  document.getElementById('t-badge').textContent=t.badge2
+  document.getElementById('t-per').textContent=t.per
+  document.querySelectorAll('.pl1,.pl2,.pl3,.pl4,.pl5,.pl6,.pl7,.pl8').forEach((el,i)=>{
+    el.innerHTML='<span style="color:var(--gold);font-weight:700;flex-shrink:0">✓</span> '+t.pl[i]
+  })
+  document.getElementById('t-cta').textContent=t.tCta
+  document.getElementById('t-note').textContent=t.tNote
+  // Form
+  document.getElementById('cf-title').textContent=t.cfTitle
+  document.getElementById('lbl-name').textContent=t.cfName
+  document.getElementById('lbl-slug').innerHTML=t.cfSlug+'&nbsp;<span class="slug-prev" id="slugPrev">lapollaia.com/t/...</span>'
+  document.getElementById('lbl-aname').textContent=t.cfAname
+  document.getElementById('lbl-email').textContent=t.cfEmail
+  document.getElementById('lbl-pass').textContent=t.cfPass
+  document.getElementById('lbl-ins-sec').textContent=t.cfInsSec
+  document.getElementById('lbl-fee').textContent=t.cfFee
+  document.getElementById('lbl-cur').textContent=t.cfCur
+  document.getElementById('t-fee-note').textContent=t.cfFeeNote
+  document.getElementById('createBtn').textContent=t.cfBtn
+  // Guide
+  document.getElementById('g-title').textContent=t.gTitle
+  document.getElementById('g-sub').textContent=t.gSub
+  for(let i=1;i<=7;i++){
+    const h=document.querySelector(`.gs${i}h`),p=document.querySelector(`.gs${i}p`)
+    const tip=document.getElementById(`gt${i}`)
+    if(h)h.textContent=t.gs[i-1]
+    if(p)p.textContent=t.gsp[i-1]
+    if(tip)tip.textContent=t.gt[i-1]
+  }
+  // FAQ
+  document.getElementById('faq-title').textContent=t.faqTitle
+  document.getElementById('faq-sub').textContent=t.faqSub
+  renderFaq(t.faq)
+  // Enter
+  document.getElementById('e-title').textContent=t.eTitle
+  document.getElementById('e-sub').textContent=t.eSub
+  document.getElementById('e-btn').textContent=t.eBtn
+  document.querySelector('#enterSlug').placeholder=lang==='es'?'familia-palacio':'my-family-pool'
+}
+
+// ── FAQ ───────────────────────────────────────────────────────────────────────
+function renderFaq(items){
+  const el=document.getElementById('faq-list')
+  el.innerHTML=items.map((f,i)=>`
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(${i})">
+        <span>${f.q}</span>
+        <span class="faq-icon" id="fi${i}">+</span>
+      </div>
+      <div class="faq-a" id="fa${i}"><p>${f.a}</p></div>
+    </div>`).join('')
+}
+function toggleFaq(i){
+  const a=document.getElementById('fa'+i),ic=document.getElementById('fi'+i)
+  const open=a.classList.toggle('open')
+  ic.textContent=open?'−':'+'
+  ic.style.transform=open?'rotate(180deg)':''
+}
+
+// ── COUNTDOWN ─────────────────────────────────────────────────────────────────
+function tick(){
+  const d=new Date('2026-06-11T19:00:00Z')-new Date()
+  const lbls=lang==='es'?['DÍAS','HRS','MIN','SEG']:['DAYS','HRS','MIN','SEC']
+  if(d<=0){document.getElementById('cd').innerHTML=`<div class="hcd"><div class="hcd-n">🏆</div><div class="hcd-l">${lang==='es'?'INICIÓ':'STARTED'}</div></div>`;return}
+  const dd=Math.floor(d/864e5),h=Math.floor(d%864e5/36e5),m=Math.floor(d%36e5/6e4),s=Math.floor(d%6e4/1e3)
+  document.getElementById('cd').innerHTML=[dd,h,m,s].map((v,i)=>`<div class="hcd"><div class="hcd-n">${v}</div><div class="hcd-l">${lbls[i]}</div></div>`).join('')
+}
+tick();setInterval(tick,1000)
+
+// ── FORM ──────────────────────────────────────────────────────────────────────
+function showCreate(){
+  const f=document.getElementById('createForm');f.style.display='block'
+  setTimeout(()=>f.scrollIntoView({behavior:'smooth',block:'start'}),100)
+}
+function go(id){
+  const s=(document.getElementById(id).value||'').trim().toLowerCase()
+  if(s)window.location.href='/t/'+s
+}
+function updSlug(v){
+  const s=v.toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')
+  const el=document.getElementById('slugPrev')||document.querySelector('.slug-prev')
+  if(el)el.textContent='lapollaia.com/t/'+(s||'...')
+  document.getElementById('cf-slug').value=s
+}
+let slugOk=true
+async function chkSlug(){
+  const slug=document.getElementById('cf-slug').value.trim()
+  if(slug.length<3)return
+  try{
+    const r=await fetch('/api/tournaments/check/'+slug),d=await r.json()
+    const el=document.getElementById('slugPrev')||document.querySelector('.slug-prev')
+    if(!el)return
+    if(d.available){el.style.color='#86efac';slugOk=true;el.textContent='lapollaia.com/t/'+slug+' ✓'}
+    else{el.style.color='#fca5a5';slugOk=false;el.textContent='lapollaia.com/t/'+slug+' ✗ '+(lang==='es'?'ya existe':'already taken')}
+  }catch(e){}
+}
+async function doCreate(){
+  const name=document.getElementById('cf-name').value.trim()
+  const slug=document.getElementById('cf-slug').value.trim()
+  const adminName=document.getElementById('cf-aname').value.trim()
+  const email=document.getElementById('cf-email').value.trim()
+  const pass=document.getElementById('cf-pass').value
+  const fee=parseFloat(document.getElementById('cf-fee').value)||0
+  const currency=document.getElementById('cf-cur').value
+  const errEl=document.getElementById('fErr'),btn=document.getElementById('createBtn')
+  errEl.style.display='none'
+  const req=lang==='es'?'⚠️ Completa todos los campos obligatorios.':'⚠️ Please fill in all required fields.'
+  if(!name||!slug||!adminName||!email||!pass){errEl.textContent=req;errEl.style.display='block';return}
+  if(pass.length<6){errEl.textContent=lang==='es'?'⚠️ La contraseña debe tener al menos 6 caracteres.':'⚠️ Password must be at least 6 characters.';errEl.style.display='block';return}
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>'+(lang==='es'?'Creando tu Polla...':'Creating your Pool...')
+  try{
+    const r=await fetch('/api/tournaments/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,slug,adminName,email,password:pass,inscriptionFee:fee,currency})})
+    const d=await r.json()
+    if(!r.ok)throw new Error(d.error||'Error')
+    window.location.href=d.initPoint
+  }catch(e){
+    errEl.textContent='❌ '+e.message;errEl.style.display='block'
+    btn.disabled=false;btn.textContent=T[lang].cfBtn
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+detectLang()
+</script>
+</body>
+</html>
