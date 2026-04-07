@@ -2419,7 +2419,7 @@ function AppRoot(){
             if(t.primary_color&&t.primary_color!=='#F6C90E')
               document.documentElement.style.setProperty('--gold',t.primary_color)
             document.title=t.name+' · La Polla IA'
-          } else {
+          } else if(t.error) {
             setView('not_found')
             return
           }

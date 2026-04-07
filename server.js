@@ -392,6 +392,13 @@ app.get('/payment/pending', (req,res)=>{
 })
 
 // ─── TOURNAMENT PUBLIC INFO ───────────────────────────────────────────────────
+// Check slug availability — MUST be before /:slug to avoid route conflict
+app.get('/api/tournaments/check/:slug', async(req,res)=>{
+  const slug=req.params.slug.toLowerCase().replace(/[^a-z0-9-]/g,'-')
+  const {rows:[ex]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[slug])
+  res.json({available:!ex, slug})
+})
+
 app.get('/api/tournaments/:slug', async(req,res)=>{
   try{
     const {rows:[t]}=await pool.query(
@@ -402,13 +409,6 @@ app.get('/api/tournaments/:slug', async(req,res)=>{
     if(!t.is_active) return res.status(403).json({error:'Esta polla aún no está activada. El administrador debe completar el pago.'})
     res.json(t)
   }catch(e){ res.status(500).json({error:'Error'}) }
-})
-
-// Check slug availability
-app.get('/api/tournaments/check/:slug', async(req,res)=>{
-  const slug=req.params.slug.toLowerCase().replace(/[^a-z0-9-]/g,'-')
-  const {rows:[ex]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[slug])
-  res.json({available:!ex, slug})
 })
 
 // ─── AUTH (tournament-scoped) ─────────────────────────────────────────────────
