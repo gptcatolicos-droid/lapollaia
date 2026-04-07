@@ -339,14 +339,14 @@ const T={
     faqTitle:'Preguntas frecuentes',faqSub:'Todo lo que necesitas saber',
     eTitle:'¿Ya tienes una Polla?',eSub:'Ingresa el nombre para acceder o registrarte',eBtn:'Entrar →',
     faq:[
-      {q:'¿Cuánto tiempo dura mi polla?',a:'Hasta el 19 de julio de 2026, el día de la Gran Final del Mundial. Después de eso el torneo cierra automáticamente.'},
-      {q:'¿Cuántos participantes puede tener mi polla?',a:'Ilimitados. No hay restricciones en el número de participantes. Hemos probado con grupos de 5 y de 200 personas.'},
-      {q:'¿La inscripción de mis participantes va a ustedes o a mí?',a:'A ti. Tú cobras directamente a tus participantes por Nequi, PayPal o como quieras. Nosotros solo cobramos los $3.99 por el sistema.'},
-      {q:'¿Puedo dejar mi polla gratis?',a:'Sí. Si tu familia quiere jugar solo por el honor sin pagar, pon $0 en el campo de inscripción. Tus participantes se registran sin ningún costo.'},
-      {q:'¿Qué pasa si no sé manejar tecnología?',a:'La plataforma está diseñada para ser muy simple. El admin solo necesita confirmar pagos y ingresar resultados después de cada partido. Todo lo demás es automático.'},
-      {q:'¿Puedo cambiar el logo y los colores después?',a:'Sí, desde Admin → Configuración puedes cambiar tu logo, colores y precio de inscripción en cualquier momento antes y durante el Mundial.'},
-      {q:'¿Cómo sé que el pago fue exitoso?',a:'Después de pagar con MercadoPago, te redirigimos a una página de confirmación y te enviamos un correo. Tu polla queda activa en minutos.'},
-      {q:'¿Funciona en Colombia, México, Argentina?',a:'Sí. MercadoPago está disponible en toda Latinoamérica. El precio de inscripción lo puedes poner en USD, COP, MXN, ARS o PEN.'},
+      {q:'¿Cuánto tiempo dura mi polla?',a:'Hasta el 19 de julio de 2026, el día de la Gran Final del torneo. Después de eso la plataforma cierra automáticamente.'},
+      {q:'¿Cuántos participantes puede tener mi polla?',a:'Ilimitados. No hay restricciones. Grupos de 5, de 50 o de 200 personas — todo funciona igual.'},
+      {q:'¿Cómo controlo quién entra a mi polla?',a:'Tú como administrador apruebas a cada participante. Solo quienes tú apruebes podrán pronosticar. Tu polla es completamente privada.'},
+      {q:'¿Qué pasa si no sé de tecnología?',a:'No necesitas saber nada técnico. Una vez activa tu polla, solo apruebas participantes e ingresas resultados después de cada partido. Todo lo demás es automático.'},
+      {q:'¿Puedo personalizar el logo y los colores?',a:'Sí. Desde Admin → Configuración subes tu logo, eliges uno de 4 colores y le pones el nombre que quieras. Tu polla luce única.'},
+      {q:'¿Cómo sé que el pago fue exitoso?',a:'Después de pagar con MercadoPago te redirigimos a una página de confirmación con tu link único y los próximos pasos. Tu polla queda activa en minutos.'},
+      {q:'¿Esto es una plataforma de apuestas?',a:'No. La Polla IA es un SaaS de pronósticos deportivos de entretenimiento. No se realizan apuestas reales ni se garantizan premios de ningún tipo.'},
+      {q:'¿Funciona en Colombia, México, Argentina?',a:'Sí. Funciona desde cualquier dispositivo con internet en toda Latinoamérica y el mundo.'},
     ]
   },
   en:{
@@ -565,6 +565,11 @@ async function doCreate(){
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 detectLang()
+// Safety fallback: render FAQ if detectLang failed
+setTimeout(()=>{
+  const faqEl=document.getElementById('faq-list')
+  if(faqEl&&!faqEl.innerHTML.trim()) renderFaq(T[lang].faq)
+},1500)
 </script>
 </body>
 </html>
