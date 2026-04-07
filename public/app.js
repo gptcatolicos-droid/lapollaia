@@ -335,7 +335,7 @@ function AuthPage(){
         <div className="card" style={{maxWidth:400,width:'100%'}}>
           <div style={{textAlign:'center',marginBottom:'1.5rem'}}>
             <img src={tournament?.logo_url||"/logo.png"} alt={tournament?.name||"Polla 2026"} style={{width:'90px',height:'90px',objectFit:'contain',marginBottom:'.5rem'}}/>
-            <p className="text-muted text-sm">Un correo · múltiples avatares · U$20 por avatar</p>
+            <p className="text-muted text-sm">{tournament?.is_demo?'⚡ Demo gratuita — explora sin límites':'Regístrate y participa en la polla'}</p>
           </div>
 
           {err&&<Alert type="error">{err}</Alert>}
@@ -436,9 +436,9 @@ function TermsPage(){
           {err&&<Alert type="error">{err}</Alert>}
           <div style={{fontSize:'12px',color:'var(--ink3)',lineHeight:'1.8'}}>
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>1. Registro y Avatares</strong>
-            Un usuario puede registrarse con su correo y contraseña, y crear múltiples avatares (nicknames de competencia). Cada avatar tiene un costo de <strong>U$20</strong>, pagaderos por PayPal o Nequi. La activación de cada avatar es manual por parte del administrador.
+            Un usuario puede registrarse con su correo y contraseña y crear múltiples avatares (nicknames de competencia). El administrador aprueba quién participa según las normas de su polla.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>2. Plazo de Pago</strong>
-            Todos los avatares deben tener su pago confirmado antes del inicio del torneo. Avatares sin pago quedan bloqueados permanentemente.
+            Los participantes deben ser aprobados por el administrador antes del inicio del torneo.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>3. Pronósticos y Edición</strong>
             Cada avatar puede editar sus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>4. Sistema de Puntos</strong>
@@ -463,7 +463,7 @@ function TermsPage(){
             <div className={`chk ${form.accepted?'chk-on':''}`} onClick={()=>setForm(p=>({...p,accepted:!p.accepted}))}>
               {form.accepted&&'✓'}
             </div>
-            <span><strong>He leído y acepto los Términos y Condiciones</strong> — incluye política de premios y pagos</span>
+            <span><strong>He leído y acepto los Términos y Condiciones</strong> de La Polla IA</span>
           </div>
         </div>
         <div className="modal-foot">
@@ -481,9 +481,9 @@ function TermsPage(){
 function GuidePage(){
   const {setView,avatars}=useApp()
   const steps=[
-    {n:1,icon:'🏆',title:'Crea tu avatar y paga U$20',
-      desc:'Regístrate y crea un nickname (avatar) por U$20. Puedes crear varios — cada uno compite por separado. El admin lo activa al confirmar el pago por PayPal o Nequi.',
-      badges:['U$20 por avatar','Activación manual']},
+    {n:1,icon:'🏆',title:'Crea tu avatar de participante',
+      desc:'Regístrate y crea tu nickname (avatar). Puedes tener hasta 3 avatares — cada uno compite por separado en el ranking.',
+      badges:['Hasta 3 avatares','Aprobación del admin']},
     {n:2,icon:'💬',title:'Habla con Pelé IA y llena tus pronósticos',
       desc:'Pelé IA te guía partido por partido con estadísticas. Puedes editar tus pronósticos hasta 2 horas antes de cada partido. Todo se guarda automáticamente.',
       badges:['104 partidos totales','Guardado automático']},
@@ -601,7 +601,7 @@ function AvatarsPage(){
       <Nav/>
       <div className="container pad">
         <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.6rem',marginBottom:'.25rem'}}>MIS AVATARES</h2>
-        <p className="text-muted text-sm mb2">Cada avatar compite por separado · U$20 por avatar</p>
+        <p className="text-muted text-sm mb2">Cada avatar compite por separado en el ranking</p>
 
         <div className="av-grid mb2">
           {(avatars||[]).map(av=>(
@@ -616,14 +616,14 @@ function AvatarsPage(){
                 </div>
               </div>
               <div className="av-nick">{av.nickname}</div>
-              <div className="av-pts">{av.is_paid?'Activo 🟢':'Pendiente pago ⏳'}</div>
+              <div className="av-pts">{av.is_paid?'Activo 🟢':'Pendiente aprobación ⏳'}</div>
             </div>
           ))}
           {(!avatars||avatars.length<3)&&(
             <div className="av-card av-card-add" onClick={()=>setShowCreate(true)}>
               <div className="av-add-icon">+</div>
               <div className="av-nick" style={{color:'var(--gold)'}}>Nuevo avatar</div>
-              <div className="av-pts">{avatars?.length||0}/3 máx · U$20</div>
+              <div className="av-pts">{avatars?.length||0}/3 máx</div>
             </div>
           )}
         </div>
