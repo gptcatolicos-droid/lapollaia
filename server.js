@@ -56,6 +56,11 @@ const pool = new Pool({
 async function initDb() {
   const c = await pool.connect()
   try {
+    // Run migrations first — safe to run even if column already exists
+    try{
+      await c.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE")
+    }catch(e){ /* column may not exist yet if fresh DB, that's ok */ }
+
     await c.query(`
       -- Tournaments: one per admin who pays $3.99
       CREATE TABLE IF NOT EXISTS tournaments (
@@ -180,8 +185,6 @@ async function initDb() {
       console.log('✅ Demo tournament created')
     }
 
-    // Add is_demo column if missing (migration for existing DBs)
-    await c.query("ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE")
     // Make sure demo is always active
     await c.query("UPDATE tournaments SET is_active=TRUE WHERE slug='demo'")
 
