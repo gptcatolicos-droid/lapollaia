@@ -916,6 +916,133 @@ app.post('/api/admin/results', auth, tournamentAdmin, async(req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:'Error'}) }
 })
 
+// ─── SUPER ADMIN (dueño de la plataforma) ────────────────────────────────────
+function superAdmin(req,res,next){
+  const key=req.headers['x-super-key']||req.query.key
+  if(key!==process.env.SUPER_ADMIN_KEY) return res.status(403).json({error:'Acceso denegado'})
+  next()
+}
+
+// Ver todas las pollas
+app.get('/superadmin/tournaments', superAdmin, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT t.id,t.slug,t.name,t.owner_name,t.owner_email,t.is_active,t.mp_payment_id,t.created_at,
+        COUNT(DISTINCT u.id) as user_count,
+        COUNT(DISTINCT av.id) as avatar_count
+      FROM tournaments t
+      LEFT JOIN users u ON u.tournament_id=t.id
+      LEFT JOIN avatars av ON av.tournament_id=t.id
+      GROUP BY t.id ORDER BY t.created_at DESC`)
+    res.json({total:rows.length, revenue_usd:(rows.filter(r=>r.is_active).length*3.99).toFixed(2), tournaments:rows})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Activar torneo manualmente
+app.post('/superadmin/activate/:id', superAdmin, async(req,res)=>{
+  try{
+    const {rowCount}=await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[req.params.id])
+    if(rowCount===0) return res.status(404).json({error:'Torneo no encontrado'})
+    const phases=['group','round32','round16','quarters','semis','third','final']
+    for(const ph of phases)
+      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[req.params.id,ph])
+    res.json({success:true})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Activar por slug
+app.post('/superadmin/activate-slug/:slug', superAdmin, async(req,res)=>{
+  try{
+    const {rows:[t]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[req.params.slug])
+    if(!t) return res.status(404).json({error:'Torneo no encontrado'})
+    await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[t.id])
+    const phases=['group','round32','round16','quarters','semis','third','final']
+    for(const ph of phases)
+      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[t.id,ph])
+    res.json({success:true, tournamentId:t.id})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Eliminar torneo
+app.delete('/superadmin/tournaments/:id', superAdmin, async(req,res)=>{
+  try{
+    const id=req.params.id
+    await pool.query('DELETE FROM extra_predictions WHERE avatar_id IN (SELECT id FROM avatars WHERE tournament_id=$1)',[id])
+    await pool.query('DELETE FROM predictions WHERE avatar_id IN (SELECT id FROM avatars WHERE tournament_id=$1)',[id])
+    await pool.query('DELETE FROM special_predictions WHERE avatar_id IN (SELECT id FROM avatars WHERE tournament_id=$1)',[id])
+    await pool.query('DELETE FROM avatars WHERE tournament_id=$1',[id])
+    await pool.query('DELETE FROM phase_locks WHERE tournament_id=$1',[id])
+    await pool.query('DELETE FROM users WHERE tournament_id=$1',[id])
+    await pool.query('DELETE FROM tournaments WHERE id=$1',[id])
+    res.json({success:true})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Panel HTML del super admin
+app.get('/superadmin', superAdmin, async(req,res)=>{
+  const key=req.query.key||''
+  try{
+    const {rows}=await pool.query(`
+      SELECT t.id,t.slug,t.name,t.owner_name,t.owner_email,t.is_active,t.created_at,
+        COUNT(DISTINCT u.id) as user_count
+      FROM tournaments t LEFT JOIN users u ON u.tournament_id=t.id
+      GROUP BY t.id ORDER BY t.created_at DESC`)
+    const active=rows.filter(r=>r.is_active).length
+    const revenue=(active*3.99).toFixed(2)
+    const rows_html=rows.map(t=>`
+      <tr style="border-bottom:1px solid #222">
+        <td style="padding:.6rem">${t.name}</td>
+        <td style="padding:.6rem;font-family:monospace;font-size:11px">/t/${t.slug}</td>
+        <td style="padding:.6rem">${t.owner_name}<br/><span style="font-size:11px;color:#888">${t.owner_email}</span></td>
+        <td style="padding:.6rem;text-align:center">
+          <span style="background:${t.is_active?'#16a34a':'#dc2626'};color:#fff;padding:2px 8px;border-radius:20px;font-size:11px">
+            ${t.is_active?'Activa':'Inactiva'}
+          </span>
+        </td>
+        <td style="padding:.6rem;text-align:center">${t.user_count}</td>
+        <td style="padding:.6rem;font-size:11px;color:#888">${new Date(t.created_at).toLocaleDateString('es-CO')}</td>
+        <td style="padding:.6rem">
+          ${!t.is_active?`<button onclick="activate('${t.id}')" style="background:#F6C90E;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px">Activar</button>`:''}
+          <button onclick="del('${t.id}','${t.name}')" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">Eliminar</button>
+        </td>
+      </tr>`).join('')
+    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+<title>Super Admin — La Polla IA</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:sans-serif;background:#0d1117;color:#fff;padding:2rem}
+h1{color:#F6C90E;margin-bottom:1.5rem;font-size:1.5rem}
+.stats{display:flex;gap:1rem;margin-bottom:2rem}
+.stat{background:#1a1f2e;border:1px solid #333;border-radius:10px;padding:1rem 1.5rem;text-align:center}
+.stat-n{font-size:2rem;font-weight:700;color:#F6C90E}
+.stat-l{font-size:11px;color:#888;margin-top:2px}
+table{width:100%;background:#1a1f2e;border-radius:10px;overflow:hidden;border-collapse:collapse}
+th{background:#111;padding:.6rem;text-align:left;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px}
+</style></head><body>
+<h1>🏆 Super Admin — La Polla IA</h1>
+<div class="stats">
+  <div class="stat"><div class="stat-n">${rows.length}</div><div class="stat-l">Pollas totales</div></div>
+  <div class="stat"><div class="stat-n">${active}</div><div class="stat-l">Activas</div></div>
+  <div class="stat"><div class="stat-n">$${revenue}</div><div class="stat-l">Ingresos USD</div></div>
+</div>
+<table><thead><tr><th>Nombre</th><th>Slug</th><th>Admin</th><th>Estado</th><th>Usuarios</th><th>Fecha</th><th>Acciones</th></tr></thead>
+<tbody>${rows_html}</tbody></table>
+<script>
+const KEY='${key}'
+async function activate(id){
+  if(!confirm('¿Activar esta polla?'))return
+  const r=await fetch('/superadmin/activate/'+id,{method:'POST',headers:{'x-super-key':KEY}})
+  const d=await r.json()
+  if(d.success)location.reload(); else alert(d.error)
+}
+async function del(id,name){
+  if(!confirm('¿ELIMINAR "'+name+'" y todos sus datos? Esto no se puede deshacer.'))return
+  const r=await fetch('/superadmin/tournaments/'+id,{method:'DELETE',headers:{'x-super-key':KEY}})
+  const d=await r.json()
+  if(d.success)location.reload(); else alert(d.error)
+}
+</script></body></html>`)
+  }catch(e){res.status(500).send('Error: '+e.message)}
+})
+
 // ─── START ────────────────────────────────────────────────────────────────────
 initDb().then(()=>{
   app.listen(PORT,()=>console.log(`🚀 La Polla IA v2.0 en puerto ${PORT}`))
