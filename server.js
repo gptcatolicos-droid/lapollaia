@@ -426,7 +426,7 @@ app.get('/api/tournaments/check/:slug', async(req,res)=>{
 app.get('/api/tournaments/:slug', async(req,res)=>{
   try{
     const {rows:[t]}=await pool.query(
-      'SELECT id,slug,name,logo_url,primary_color,inscription_fee,currency,paypal_info,nequi_info,is_active,is_demo,predictions_open FROM tournaments WHERE slug=$1',
+      'SELECT id,slug,name,logo_url,primary_color,is_active,is_demo,predictions_open FROM tournaments WHERE slug=$1',
       [req.params.slug]
     )
     if(!t) return res.status(404).json({error:'Polla no encontrada'})
@@ -460,11 +460,9 @@ app.post('/api/auth/register', async(req,res)=>{
       'SELECT id FROM avatars WHERE LOWER(nickname)=$1 AND tournament_id=$2',
       [rawNick.toLowerCase(),tournamentId])
     const finalNick=nickEx.length?rawNick+'_'+avId.slice(-3):rawNick
-    const {rows:[t2]}=await pool.query('SELECT is_demo FROM tournaments WHERE id=$1',[tournamentId])
-    const isPaid=t2?.is_demo||false
     const {rows:[autoAv]}=await pool.query(
-      'INSERT INTO avatars(id,user_id,tournament_id,nickname,is_paid) VALUES($1,$2,$3,$4,$5) RETURNING *',
-      [avId,user.id,tournamentId,finalNick,isPaid])
+      'INSERT INTO avatars(id,user_id,tournament_id,nickname,is_paid,is_active) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',
+      [avId,user.id,tournamentId,finalNick,true,false])
 
     res.json({token,user:{id:user.id,name:user.name,email:user.email,isAdmin:false,termsAccepted:false},avatars:[autoAv]})
   }catch(e){ console.error('register:',e.message); res.status(500).json({error:'Error del servidor'}) }
@@ -507,10 +505,6 @@ app.get('/api/settings', auth, async(req,res)=>{
     if(!t) return res.status(404).json({error:'Torneo no encontrado'})
     res.json({
       predictions_open:t.predictions_open,
-      inscription_fee:t.inscription_fee,
-      currency:t.currency,
-      paypal:t.paypal_info||'',
-      nequi:t.nequi_info||'',
       name:t.name,
       logo_url:t.logo_url||'',
       primary_color:t.primary_color||'#F6C90E'
@@ -519,18 +513,14 @@ app.get('/api/settings', auth, async(req,res)=>{
 })
 
 app.put('/api/settings', auth, tournamentAdmin, async(req,res)=>{
-  const {predictions_open,inscription_fee,currency,paypal,nequi,primary_color,paypal_info,nequi_info}=req.body
+  const {predictions_open,primary_color}=req.body
   try{
     await pool.query(`
       UPDATE tournaments SET
         predictions_open=COALESCE($1,predictions_open),
-        inscription_fee=COALESCE($2,inscription_fee),
-        currency=COALESCE($3,currency),
-        paypal_info=COALESCE($4,paypal_info),
-        nequi_info=COALESCE($5,nequi_info),
-        primary_color=COALESCE($6,primary_color)
-      WHERE id=$7
-    `,[predictions_open,inscription_fee,currency,paypal||paypal_info,nequi||nequi_info,primary_color,req.user.tournamentId])
+        primary_color=COALESCE($2,primary_color)
+      WHERE id=$3
+    `,[predictions_open,primary_color,req.user.tournamentId])
     res.json({success:true})
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
@@ -546,13 +536,10 @@ app.post('/api/avatars', auth, async(req,res)=>{
     const {rows:mine}=await pool.query('SELECT id FROM avatars WHERE user_id=$1',[req.user.id])
     if(mine.length>=3) return res.status(400).json({error:'Máximo 3 avatares por usuario'})
     const id='av-'+crypto.randomBytes(12).toString('hex')
-    // Demo tournaments auto-approve avatars
-    const {rows:[tinfo]}=await pool.query('SELECT inscription_fee,currency,paypal_info,nequi_info,is_demo FROM tournaments WHERE id=$1',[tid])
-    const isDemo=tinfo?.is_demo||false
     const {rows:[av]}=await pool.query(
-      'INSERT INTO avatars(id,user_id,tournament_id,nickname,photo_url,is_paid) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',
-      [id,req.user.id,tid,nickname.trim(),photoUrl||null,isDemo])
-    res.json({avatar:av,paymentInfo:{inscription_fee:tinfo?.inscription_fee||0,currency:tinfo?.currency||'USD',paypal:tinfo?.paypal_info||'',nequi:tinfo?.nequi_info||'',isDemo}})
+      'INSERT INTO avatars(id,user_id,tournament_id,nickname,photo_url,is_paid,is_active) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [id,req.user.id,tid,nickname.trim(),photoUrl||null,true,false])
+    res.json({avatar:av})
   }catch(e){ console.error(e); res.status(500).json({error:'Error del servidor'}) }
 })
 
@@ -624,7 +611,7 @@ app.get('/api/ranking', auth, async(req,res)=>{
   try{
     const tid=req.user.tournamentId
     const {rows}=await pool.query(`
-      SELECT av.id,av.nickname,av.photo_url,av.is_paid,u.name as user_name,
+      SELECT av.id,av.nickname,av.photo_url,u.name as user_name,
         COALESCE(SUM(p.points_earned),0)+COALESCE(SUM(ep.points_earned),0)+
         COALESCE(sp.champion_pts,0)+COALESCE(sp.surprise_pts,0)+
         COALESCE(sp.balon_pts,0)+COALESCE(sp.guante_pts,0)+COALESCE(sp.bota_pts,0) as total_points,
@@ -634,8 +621,8 @@ app.get('/api/ranking', auth, async(req,res)=>{
       LEFT JOIN predictions p ON p.avatar_id=av.id
       LEFT JOIN extra_predictions ep ON ep.avatar_id=av.id
       LEFT JOIN special_predictions sp ON sp.avatar_id=av.id
-      WHERE av.tournament_id=$1 AND av.is_paid=TRUE AND av.is_active=TRUE
-      GROUP BY av.id,av.nickname,av.photo_url,av.is_paid,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts
+      WHERE av.tournament_id=$1 AND av.is_active=TRUE
+      GROUP BY av.id,av.nickname,av.photo_url,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts
       ORDER BY total_points DESC,matches_predicted ASC`,[tid])
     res.json(rows.map((r,i)=>({...r,rank:i+1})))
   }catch(e){ res.status(500).json({error:'Error'}) }
@@ -883,7 +870,7 @@ app.get('/api/admin/users', auth, tournamentAdmin, async(req,res)=>{
   try{
     const {rows}=await pool.query(`
       SELECT u.id,u.name,u.email,u.phone,u.created_at,
-        json_agg(json_build_object('id',av.id,'nickname',av.nickname,'is_paid',av.is_paid,'is_active',av.is_active,'created_at',av.created_at)
+        json_agg(json_build_object('id',av.id,'nickname',av.nickname,'is_active',av.is_active,'created_at',av.created_at)
           ORDER BY av.created_at) FILTER(WHERE av.id IS NOT NULL) as avatars
       FROM users u LEFT JOIN avatars av ON u.id=av.user_id
       WHERE u.tournament_id=$1 AND u.is_admin=FALSE GROUP BY u.id ORDER BY u.created_at DESC`,[req.user.tournamentId])
@@ -892,10 +879,9 @@ app.get('/api/admin/users', auth, tournamentAdmin, async(req,res)=>{
 })
 
 app.put('/api/admin/avatars/:id', auth, tournamentAdmin, async(req,res)=>{
-  const {isPaid,isActive}=req.body
+  const {isActive}=req.body
   try{
     const sets=[]; const vals=[]
-    if(isPaid!==undefined){ sets.push(`is_paid=$${vals.length+1}`); vals.push(!!isPaid) }
     if(isActive!==undefined){ sets.push(`is_active=$${vals.length+1}`); vals.push(!!isActive) }
     if(!sets.length) return res.status(400).json({error:'Nada que actualizar'})
     vals.push(req.params.id)
@@ -935,15 +921,15 @@ app.put('/api/admin/phase-locks/:phase', auth, tournamentAdmin, async(req,res)=>
 
 // Admin: update tournament branding
 app.put('/api/admin/tournament', auth, tournamentAdmin, async(req,res)=>{
-  const {name,logoUrl,primaryColor,inscriptionFee,currency,paypalInfo,nequiInfo}=req.body
+  const {name,logoUrl,primaryColor,predictions_open}=req.body
   try{
     await pool.query(`
       UPDATE tournaments SET
         name=COALESCE($1,name), logo_url=COALESCE($2,logo_url),
-        primary_color=COALESCE($3,primary_color), inscription_fee=COALESCE($4,inscription_fee),
-        currency=COALESCE($5,currency), paypal_info=COALESCE($6,paypal_info), nequi_info=COALESCE($7,nequi_info)
-      WHERE id=$8`,
-      [name,logoUrl,primaryColor,inscriptionFee,currency,paypalInfo,nequiInfo,req.user.tournamentId])
+        primary_color=COALESCE($3,primary_color),
+        predictions_open=COALESCE($4,predictions_open)
+      WHERE id=$5`,
+      [name,logoUrl,primaryColor,predictions_open,req.user.tournamentId])
     res.json({success:true})
   }catch(e){ res.status(500).json({error:'Error'}) }
 })

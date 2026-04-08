@@ -423,16 +423,16 @@ function TermsPage(){
         <div className="modal-body">
           {err&&<Alert type="error">{err}</Alert>}
           <div style={{fontSize:'12px',color:'var(--ink3)',lineHeight:'1.8'}}>
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>1. Registro y Participación</strong>
-            Un usuario puede registrarse con su correo y contraseña para participar en la polla. El administrador aprueba quién participa según las normas de su polla.
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>2. Participantes</strong>
-            Los participantes deben ser aprobados por el administrador antes del inicio del torneo.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>1. Naturaleza del Servicio</strong>
+            La Polla IA es una plataforma de entretenimiento y pronósticos deportivos. <strong>No es una plataforma de apuestas ni de juegos de azar.</strong> No se gestionan ni distribuyen premios económicos a través de esta plataforma.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>2. Registro y Participación</strong>
+            Al registrarte obtienes acceso a la plataforma. El administrador de la polla aprueba quién participa según las normas de su grupo. La participación es de carácter recreativo y social.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>3. Pronósticos y Edición</strong>
-            Cada avatar puede editar sus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
+            Puedes editar tus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>4. Sistema de Puntos</strong>
             Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u.
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Normas de la Polla</strong>
-            Cada administrador define las reglas de su polla. La Polla IA no interviene en acuerdos entre participantes.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Conducta</strong>
+            Queda prohibido utilizar la plataforma para apuestas, captación de dinero o cualquier actividad económica entre participantes. El uso es exclusivamente recreativo.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>6. Privacidad</strong>
             Los datos personales solo se usan para gestionar la Polla. El celular solo se usa para notificaciones WhatsApp si el usuario lo aprueba.
           </div>
@@ -473,7 +473,7 @@ function GuidePage(){
       desc:'Pelé IA te guía partido por partido con estadísticas. Puedes editar tus pronósticos hasta 2 horas antes de cada partido. Todo se guarda automáticamente.',
       badges:['104 partidos totales','Guardado automático']},
     {n:2,icon:'⭐',title:'Extra Points — puntos adicionales',
-      desc:'Después de cada marcador, apuesta campos extra: tarjetas, goles por tiempo, MVP. Si aciertas al menos uno, ganas +1 punto extra.',
+      desc:'Después de cada marcador, predice campos extra: tarjetas, goles por tiempo, MVP. Si aciertas al menos uno, ganas +1 punto extra.',
       badges:['+1 pt si aciertas ≥1 campo']},
     {n:3,gold:true,icon:'🎯',title:'Sistema de puntos',
       table:[
@@ -485,9 +485,9 @@ function GuidePage(){
     {n:4,gold:true,icon:'🌟',title:'Predicciones especiales',
       desc:'Al inicio: Campeón del Mundial (+10 pts) y equipo sorpresa (+3 pts). Antes de la Final: Balón de Oro, Guante de Oro y Bota de Oro (+5 pts c/u).',
       badges:['🏆 Campeón +10','😲 Sorpresa +3','⭐+🧤+👟 +5 c/u']},
-    {n:5,icon:'💰',title:'Premios al ganador',
-      desc:'Del total recaudado: 80% al primer lugar y 20% al segundo. Los premios se envían por PayPal o Nequi en los 5 días tras la Gran Final.',
-      badges:['🥇 80% del pozo','🥈 20% del pozo']},
+    {n:5,icon:'🏅',title:'Ranking en tiempo real',
+      desc:'El ranking se actualiza automáticamente después de cada partido. ¡Compite por el primer lugar con tu grupo de amigos o familia!',
+      badges:['🥇 Primer lugar','🥈 Segundo lugar','🥉 Tercer lugar']},
   ]
   return(
     <div className="modal-overlay">
@@ -535,151 +535,6 @@ function GuidePage(){
   )
 }
 
-// ─── AVATAR SYSTEM ────────────────────────────────────────────────────────────
-function AvatarsPage(){
-  const {user,avatars,setAvatars,activeAvatar,setActiveAvatar,setView}=useApp()
-  const [showCreate,setShowCreate]=React.useState(false)
-  const [payInfo,setPayInfo]=React.useState(null)
-
-  function onCreated(av,info){
-    setAvatars(p=>[...p,av])
-    setActiveAvatar(av)
-    setPayInfo(info)
-  }
-
-  if(payInfo) return(
-    <div className="page">
-      <Nav/>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'2rem 1rem'}}>
-        <div className="card" style={{maxWidth:400,width:'100%',textAlign:'center'}}>
-          <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>🎉</div>
-          <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.5rem'}}>¡Avatar creado!</h2>
-          <p className="text-muted text-sm mb2">Nickname: <strong className="text-gold">{payInfo.avatar.nickname}</strong></p>
-          {payInfo.settings?.isDemo?(
-            <div style={{background:'rgba(246,201,14,.1)',border:'1px solid rgba(246,201,14,.3)',borderRadius:'var(--r)',padding:'1rem',marginBottom:'1rem'}}>
-              <div style={{fontSize:'1.5rem',marginBottom:'.4rem'}}>⚽</div>
-              <div style={{fontWeight:700,color:'var(--gold)',marginBottom:'.3rem'}}>¡Estás en modo Demo!</div>
-              <p className="text-sm text-muted">Puedes ingresar pronósticos, hablar con Pelé IA y explorar todo sin ningún costo. ¡Disfrútalo!</p>
-            </div>
-          ):(
-            <div className="card-gold" style={{textAlign:'left',marginBottom:'1rem'}}>
-              <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',marginBottom:'.5rem'}}>✅ Avatar listo</div>
-              <p className="text-sm text-muted">El administrador de la polla te aprobará para participar. Pronto estarás en la competencia 🏆</p>
-            </div>
-          )}
-          <button className="btn btn-gold btn-full mb1" onClick={()=>setView('chat')}>⚽ Ingresar marcadores</button>
-          {avatars&&avatars.length<3?(
-            <button className="btn btn-outline btn-full mb1" onClick={()=>{setPayInfo(null);setShowCreate(true)}}>
-              ➕ Crear otro avatar ({avatars.length}/3)
-            </button>
-          ):(
-            <p className="text-muted text-xs mb1">Has alcanzado el máximo de 3 avatares.</p>
-          )}
-          <button className="btn btn-outline btn-sm btn-full" onClick={()=>setView('dashboard')}>Ir al inicio</button>
-        </div>
-      </div>
-    </div>
-  )
-
-  return(
-    <div className="page">
-      <Nav/>
-      <div className="container pad">
-        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.6rem',marginBottom:'.25rem'}}>MIS AVATARES</h2>
-        <p className="text-muted text-sm mb2">Cada avatar compite por separado en el ranking</p>
-
-        <div className="av-grid mb2">
-          {(avatars||[]).map(av=>(
-            <div key={av.id} className={`av-card ${activeAvatar?.id===av.id?'av-card-active':''}`}
-              onClick={()=>{setActiveAvatar(av);setView('dashboard')}}>
-              <div className="av-circle" style={{background:generateAvatarColor(av.nickname)}}>
-                {av.photo_url?<img src={av.photo_url} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover'}} alt=""/>
-                  :<span>{av.nickname.substring(0,2).toUpperCase()}</span>}
-                <div className={`av-status-dot ${av.is_paid?'':'chip-o'}`}
-                  style={{background:av.is_paid?'var(--green)':'var(--orange)'}}>
-                  {av.is_paid?'✓':'⏳'}
-                </div>
-              </div>
-              <div className="av-nick">{av.nickname}</div>
-              <div className="av-pts">{av.is_paid?'Activo 🟢':'Pendiente aprobación ⏳'}</div>
-            </div>
-          ))}
-          {(!avatars||avatars.length<3)&&(
-            <div className="av-card av-card-add" onClick={()=>setShowCreate(true)}>
-              <div className="av-add-icon">+</div>
-              <div className="av-nick" style={{color:'var(--gold)'}}>Nuevo avatar</div>
-              <div className="av-pts">{avatars?.length||0}/3 máx</div>
-            </div>
-          )}
-        </div>
-
-        <div className="alert alert-info text-sm">
-          💡 Cada avatar participa por separado en el ranking. Al crear uno nuevo, el admin recibe una notificación para verificar tu pago.
-        </div>
-
-        {avatars&&avatars.length>0&&(
-          <button className="btn btn-ink btn-full mt2" onClick={()=>setView('dashboard')}>
-            Continuar con {activeAvatar?.nickname||'mi avatar'} →
-          </button>
-        )}
-      </div>
-      {showCreate&&<CreateAvatarModal onClose={()=>setShowCreate(false)} onCreated={onCreated}/>}
-    </div>
-  )
-}
-
-function CreateAvatarModal({onClose,onCreated}){
-  const {settings}=useApp()
-  const [form,setForm]=React.useState({nickname:'',photoUrl:''})
-  const [loading,setLoading]=React.useState(false)
-  const [err,setErr]=React.useState('')
-  const upd=k=>e=>setForm(p=>({...p,[k]:e.target.value}))
-
-  async function submit(e){
-    e.preventDefault(); setErr(''); setLoading(true)
-    try{
-      const data=await api('/api/avatars','POST',{nickname:form.nickname,photoUrl:form.photoUrl||null})
-      onCreated(data.avatar,{avatar:data.avatar,settings:data.paymentInfo})
-      onClose()
-    }catch(e){setErr(e.message)}
-    setLoading(false)
-  }
-
-  return(
-    <div className="modal-overlay">
-      <div className="modal-box">
-        <div className="modal-head">
-          <div className="modal-title">Nuevo Avatar</div>
-          <button className="btn btn-outline btn-sm" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          {err&&<Alert type="error">{err}</Alert>}
-          <form onSubmit={submit}>
-            <div className="form-group">
-              <label>Nickname (aparece en el ranking)</label>
-              <input className="inp" value={form.nickname} onChange={upd('nickname')}
-                placeholder="Ej: LosPerez, ElLeón, DanFire..." required minLength={3} maxLength={25}/>
-            </div>
-            <div className="form-group">
-              <label>URL de foto (opcional)</label>
-              <input className="inp" value={form.photoUrl} onChange={upd('photoUrl')}
-                placeholder="https://... · JPG/PNG · mín 200×200px · máx 2MB"/>
-            </div>
-            <div className="alert alert-info text-sm">
-              📸 Sin foto → La IA genera un avatar con tus iniciales y colores únicos.<br/>
-              Si subes foto: JPG/PNG · Mínimo 200×200px · Máx 2MB · Se recorta en círculo.
-            </div>
-            <div className="alert alert-warn text-sm">
-              💰 Cada avatar cuesta <strong>U${settings?.inscription_fee||20}</strong>. El admin lo activará al confirmar el pago.
-            </div>
-            <button className="btn btn-gold btn-full mt1" disabled={loading}>
-              {loading?'Creando...':'🏆 Crear avatar'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ─── SPECIAL PREDICTIONS (Onboarding) ────────────────────────────────────────
@@ -1646,22 +1501,8 @@ function RankingPage(){
     <div className="page">
       <Nav/>
       <div className="container pad">
-        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.25rem'}}>🏅 RANKING FINAL</h2>
-        <p className="text-muted text-xs mb2">Se actualiza en tiempo real · {ranking.length} avatares activos</p>
-
-        {/* Prizes */}
-        {ranking.length>0&&(
-          <div className="prize-row">
-            <div className="prize-card p-card-g">
-              <div className="p-icon">🥇</div><div className="p-label">1er Lugar</div>
-              <div className="p-amt">80%</div><div className="p-pct">del pozo total</div>
-            </div>
-            <div className="prize-card p-card-n">
-              <div className="p-icon">🥈</div><div className="p-label">2do Lugar</div>
-              <div className="p-amt">20%</div><div className="p-pct">del pozo total</div>
-            </div>
-          </div>
-        )}
+        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.25rem'}}>🏅 RANKING</h2>
+        <p className="text-muted text-xs mb2">Se actualiza en tiempo real · {ranking.length} participantes activos</p>
 
         {/* Podium top 3 */}
         {top3.length>0&&(
@@ -1704,7 +1545,7 @@ function RankingPage(){
               </div>
             </div>
           ))}
-          {ranking.length===0&&<div style={{padding:'2rem',textAlign:'center',color:'var(--ink3)'}}>Aún no hay avatares activos 🏆</div>}
+          {ranking.length===0&&<div style={{padding:'2rem',textAlign:'center',color:'var(--ink3)'}}>Aún no hay participantes activos 🏆</div>}
         </div>
       </div>
     </div>
@@ -1805,7 +1646,7 @@ function AdminPage(){
   const [tab,setTab]=React.useState('users')
   if(!user?.isAdmin) return null
   const tabs=[
-    {k:'users',l:'👥 Usuarios'},
+    {k:'users',l:'👥 Participantes'},
     {k:'locks',l:'🔒 Fases'},
     {k:'teams',l:'⚽ Equipos'},
     {k:'results',l:'📊 Resultados'},
@@ -1845,7 +1686,7 @@ function AdminUsers(){
   async function toggleAvatar(avId,field,val){
     try{
       await api(`/api/admin/avatars/${avId}`,'PUT',{[field]:val})
-      setUsers(us=>us.map(u=>({...u,avatars:(u.avatars||[]).map(a=>a.id===avId?{...a,[field==='isPaid'?'is_paid':'is_active']:val}:a)})))
+      setUsers(us=>us.map(u=>({...u,avatars:(u.avatars||[]).map(a=>a.id===avId?{...a,['is_active']:val}:a)})))
     }catch(e){alert(e.message)}
   }
 
@@ -1863,7 +1704,7 @@ function AdminUsers(){
   return(
     <div>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
-        <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',color:'var(--ink3)'}}>{users.length} USUARIOS · {users.reduce((s,u)=>s+(u.avatars?.length||0),0)} AVATARES</div>
+        <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',color:'var(--ink3)'}}>{users.length} PARTICIPANTES</div>
         <input className="inp" style={{maxWidth:200}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..."/>
       </div>
       {filtered.map(u=>(
@@ -1879,12 +1720,9 @@ function AdminUsers(){
               {(u.avatars||[]).map(av=>(
                 <div key={av.id} style={{background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 8px',fontSize:10}}>
                   <span className="font-bold">{av.nickname}</span>{' '}
-                  <span className={`chip ${av.is_paid?'chip-g':'chip-o'}`}>{av.is_paid?'Pagado':'Pendiente'}</span>{' '}
-                  <button className={`btn btn-sm ${av.is_paid?'btn-red':'btn-green'}`} style={{padding:'1px 6px',fontSize:9}} onClick={()=>toggleAvatar(av.id,'isPaid',!av.is_paid)}>
-                    {av.is_paid?'Desactivar pago':'✓ Confirmar pago'}
-                  </button>{' '}
-                  <button className={`btn btn-sm btn-outline`} style={{padding:'1px 6px',fontSize:9}} onClick={()=>toggleAvatar(av.id,'isActive',!av.is_active)}>
-                    {av.is_active?'🚫 Suspender':'✓ Activar'}
+                  <span className={`chip ${av.is_active?'chip-g':'chip-o'}`}>{av.is_active?'✅ Activo':'⏳ Pendiente aprobación'}</span>{' '}
+                  <button className={`btn btn-sm ${av.is_active?'btn-red':'btn-green'}`} style={{padding:'1px 6px',fontSize:9}} onClick={()=>toggleAvatar(av.id,'isActive',!av.is_active)}>
+                    {av.is_active?'🚫 Suspender':'✓ Aprobar'}
                   </button>
                 </div>
               ))}
@@ -2215,9 +2053,6 @@ function AdminConfig(){
 
   React.useEffect(()=>{
     if(settings) setForm({
-      paypal:settings.paypal||'',nequi:settings.nequi||'',
-      inscription_fee:settings.inscription_fee??'20',
-      currency:settings.currency||'USD',
       predictions_open:settings.predictions_open===true||settings.predictions_open==='true',
       primary_color:settings.primary_color||'#F6C90E',
     })
@@ -2227,21 +2062,15 @@ function AdminConfig(){
     e.preventDefault(); setLoading(true); setMsg(null)
     try{
       await api('/api/admin/tournament','PUT',{
-        paypalInfo:form.paypal,nequiInfo:form.nequi,
-        inscriptionFee:parseFloat(form.inscription_fee)||0,
-        currency:form.currency,
         predictions_open:form.predictions_open,
         primary_color:form.primary_color
       })
-      // Also update predictions_open via settings route
       await api('/api/settings','PUT',{
         predictions_open:form.predictions_open,
-        paypal_info:form.paypal, nequi_info:form.nequi,
-        inscription_fee:parseFloat(form.inscription_fee)||0,
-        currency:form.currency, primary_color:form.primary_color
+        primary_color:form.primary_color
       })
       setSettings(s=>({...s,...form}))
-      if(tournament) setTournament(t=>({...t,primary_color:form.primary_color,inscription_fee:form.inscription_fee}))
+      if(tournament) setTournament(t=>({...t,primary_color:form.primary_color}))
       document.documentElement.style.setProperty('--gold',form.primary_color)
       setMsg({type:'success',text:'✅ Configuración guardada'})
     }catch(e){setMsg({type:'error',text:e.message})}
@@ -2308,29 +2137,6 @@ function AdminConfig(){
       <div style={{height:1,background:'var(--border)',margin:'1rem 0'}}/>
 
       <form onSubmit={save}>
-        {/* Inscripción */}
-        <div className="form-group">
-          <label style={{fontWeight:700}}>💰 Inscripción por participante</label>
-          <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:'.5rem',marginTop:'.35rem',alignItems:'center'}}>
-            <input className="inp" type="number" min="0" step="0.01" value={form.inscription_fee??''} 
-              onChange={e=>setForm(p=>({...p,inscription_fee:e.target.value}))} placeholder="0"/>
-            <select className="inp" style={{width:'auto'}} value={form.currency||'USD'} onChange={e=>setForm(p=>({...p,currency:e.target.value}))}>
-              <option value="USD">USD</option><option value="COP">COP</option><option value="MXN">MXN</option>
-              <option value="ARS">ARS</option><option value="PEN">PEN</option>
-            </select>
-          </div>
-          <div className="text-muted text-xs mt1">Pon 0 si tu polla es gratis — solo por el honor ⚽</div>
-        </div>
-
-        {/* Pagos */}
-        {parseFloat(form.inscription_fee)>0&&(
-          <div style={{background:'var(--cream2)',borderRadius:8,padding:'1rem',marginBottom:'1rem'}}>
-            <div style={{fontSize:12,fontWeight:700,marginBottom:'.5rem'}}>📬 Métodos de pago para tus participantes</div>
-            <div className="form-group"><label>💙 PayPal / correo</label><input className="inp" value={form.paypal||''} onChange={e=>setForm(p=>({...p,paypal:e.target.value}))} placeholder="tu@paypal.com"/></div>
-            <div className="form-group" style={{marginBottom:0}}><label>📱 Nequi / Daviplata / número</label><input className="inp" value={form.nequi||''} onChange={e=>setForm(p=>({...p,nequi:e.target.value}))} placeholder="300-000-0000"/></div>
-          </div>
-        )}
-
         {/* Pronósticos */}
         <div className="form-group">
           <label>🔓 Pronósticos</label>
@@ -2370,10 +2176,6 @@ function AppRoot(){
             setTournament(t)
             setSettings({
               predictions_open:t.predictions_open,
-              inscription_fee:t.inscription_fee,
-              currency:t.currency,
-              paypal:t.paypal_info||'',
-              nequi:t.nequi_info||'',
               primary_color:t.primary_color||'#F6C90E',
             })
             if(t.primary_color&&t.primary_color!=='#F6C90E')
@@ -2393,7 +2195,7 @@ function AppRoot(){
         api('/api/me').then(({user:u,avatars:avs})=>{
           setUser(u); setAvatars(avs||[])
           if(avs&&avs.length>0){
-            const first=avs.find(a=>a.is_paid&&a.is_active)||avs[0]
+            const first=avs.find(a=>a.is_active)||avs[0]
             setActiveAvatar(first)
           }
           if(!u.termsAccepted) setView('terms')
@@ -2406,7 +2208,7 @@ function AppRoot(){
 
   React.useEffect(()=>{
     if(avatars.length&&!activeAvatar){
-      const first=avatars.find(a=>a.is_paid&&a.is_active)||avatars[0]
+      const first=avatars.find(a=>a.is_active)||avatars[0]
       setActiveAvatar(first)
     }
   },[avatars])
