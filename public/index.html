@@ -112,7 +112,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--ink);color:var(--white);o
 .faq-a.open{max-height:300px;padding-bottom:1rem}
 .faq-a p{font-size:14px;color:rgba(255,255,255,.5);line-height:1.8}
 /* GUIDE */
-.guide-sec{padding:5rem 1.5rem;border-top:1px solid rgba(255,255,255,.05)}
+.guide-sec{padding:5rem 1.5rem;border-top:2px solid rgba(246,201,14,.15);background:rgba(246,201,14,.02)}
 .guide-inner{max-width:800px;margin:0 auto}
 .guide-steps{display:flex;flex-direction:column;gap:1.25rem;margin-top:2rem}
 .guide-step{display:flex;gap:1.25rem;align-items:flex-start;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:var(--r-lg);padding:1.5rem;transition:border-color .2s}
@@ -140,6 +140,7 @@ footer p{color:rgba(255,255,255,.2);font-size:11px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
 /* RESPONSIVE */
+@media(min-width:900px){.nav-guide-link{display:inline!important}}
 @media(max-width:600px){.nav-enter{display:none}.hero-ctas,.fg-row{flex-direction:column}.hcd{padding:.6rem .8rem;min-width:50px}.hcd-n{font-size:1.6rem}.guide-step{flex-direction:column}.guide-n{width:36px;height:36px;font-size:1.2rem}}
 </style>
 </head>
@@ -154,6 +155,7 @@ footer p{color:rgba(255,255,255,.2);font-size:11px}
       <input type="text" id="navSlug" placeholder="" onkeypress="if(event.key==='Enter')go('navSlug')"/>
       <button onclick="go('navSlug')" id="navEnterBtn">→</button>
     </div>
+    <a href="#guia" style="font-size:11px;color:rgba(255,255,255,.5);text-decoration:none;white-space:nowrap;display:none" class="nav-guide-link" id="navGuide">📖 Cómo funciona</a>
     <button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
     <button class="nav-cta" onclick="showCreate()" id="navCta">Crear →</button>
   </div>
@@ -245,7 +247,7 @@ footer p{color:rgba(255,255,255,.2);font-size:11px}
 </div></div>
 
 <!-- ADMIN GUIDE -->
-<div class="guide-sec">
+<div class="guide-sec" id="guia">
   <div class="guide-inner">
     <h2 class="sec-title" id="g-title">Guía para el Admin</h2>
     <p class="sec-sub" id="g-sub">Paso a paso para que tu polla funcione perfecto desde el primer día</p>

@@ -209,7 +209,7 @@ function Nav(){
         <img src={tournament?.logo_url||"/logo.png"} alt={tournament?.name||"Polla IA"} style={{height:'42px',width:'42px',objectFit:'contain'}}/>
         <div>
           <div className="nav-logo" style={{lineHeight:1,fontSize:tournament?.name&&tournament.name.length>12?'1rem':'inherit'}}>{tournament?.name||'POLLA'} <span style={{color:'var(--gold)'}}>2026</span></div>
-          <div className="nav-sub">FIFA World Cup · USA · CAN · MEX</div>
+          <div className="nav-sub">{tournament?.is_demo?'⚡ Demo gratuita':'Pronósticos · Torneo de Fútbol 2026'}</div>
         </div>
       </div>
       <div className="nav-actions">
@@ -377,24 +377,10 @@ function AuthPage(){
                 </form>
               )}
 
-              <div style={{textAlign:'center',marginTop:'1.25rem'}}>
-                <button className="btn btn-outline btn-sm" style={{fontSize:'11px',opacity:.6}} onClick={()=>{setTab('admin');setErr('')}}>⚙️ Acceso Admin</button>
+              <div style={{textAlign:'center',marginTop:'1.25rem',fontSize:'11px',color:'var(--ink3)'}}>
+                ¿Eres admin? Ingresa con tu correo y contraseña normalmente.
               </div>
             </>
-          ):(
-            <form onSubmit={handleLogin}>
-              <div style={{textAlign:'center',marginBottom:'1rem',fontWeight:700,fontSize:'13px',letterSpacing:'.5px'}}>ADMINISTRADOR</div>
-              <div className="form-group">
-                <label>Correo</label>
-                <input className="inp" type="email" value={form.email} onChange={upd('email')} required/>
-              </div>
-              <div className="form-group">
-                <label>Contraseña</label>
-                <input className="inp" type="password" value={form.password} onChange={upd('password')} required/>
-              </div>
-              <button className="btn btn-ink btn-full" disabled={loading}>{loading?'Entrando...':'Entrar como Admin'}</button>
-              <button type="button" className="btn btn-outline btn-sm btn-full mt1" onClick={()=>{setTab('login');setErr('')}}>← Volver</button>
-            </form>
           )}
 
           <p className="text-center text-muted text-xs mt2">
