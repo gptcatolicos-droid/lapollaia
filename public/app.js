@@ -340,7 +340,7 @@ function AuthPage(){
 
           {err&&<Alert type="error">{err}</Alert>}
 
-          {tab!=='admin'?(
+          {tab!=='admin'&&(
             <>
               <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1.25rem'}}>
                 <button style={tabStyle(tab==='login')} onClick={()=>{setTab('login');setErr('')}}>Ingresar</button>
