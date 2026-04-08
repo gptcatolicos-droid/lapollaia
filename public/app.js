@@ -290,8 +290,8 @@ function LandingPage(){
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
 function AuthPage(){
-  const {setUser,setAvatars,setView,tournament}=useApp()
-  const [tab,setTab]=React.useState('login') // 'login' | 'register' | 'admin'
+  const {setUser,setAvatars,setActiveAvatar,setView,tournament}=useApp()
+  const [tab,setTab]=React.useState('login')
   const [form,setForm]=React.useState({name:'',email:'',password:''})
   const [loading,setLoading]=React.useState(false)
   const [err,setErr]=React.useState('')
@@ -299,32 +299,70 @@ function AuthPage(){
   const upd=k=>e=>setForm(p=>({...p,[k]:e.target.value}))
 
   async function handleLogin(e){
-    e.preventDefault(); setLoading(true); setErr('')
+    e.preventDefault()
+    setLoading(true)
+    setErr('')
+
     try{
-      const data=await api('/api/auth/login','POST',{email:form.email,password:form.password,tournamentId:window.__TOURNAMENT_ID__||''})
-      localStorage.setItem('polla_token',data.token)
-      setUser(data.user); setAvatars(data.avatars||[])
-      if(data.user.isAdmin) setView('admin')
-      else if(!data.user.termsAccepted) setView('terms')
-      else setView('dashboard')
-    }catch(e){setErr(e.message)}
+      const data = await api('/api/auth/login','POST',{
+        email: form.email,
+        password: form.password,
+        tournamentId: window.__TOURNAMENT_ID__ || ''
+      })
+
+      localStorage.setItem('polla_token', data.token)
+
+      setUser(data.user)
+      setAvatars(data.avatars || [])
+
+      if (data.avatars && data.avatars.length > 0) {
+        setActiveAvatar(data.avatars[0])
+      }
+
+      setView('dashboard')
+
+    }catch(e){
+      setErr(e.message)
+    }
+
     setLoading(false)
   }
 
   async function handleRegister(e){
-    e.preventDefault(); setLoading(true); setErr('')
+    e.preventDefault()
+    setLoading(true)
+    setErr('')
+
     try{
-      const data=await api('/api/auth/register','POST',{name:form.name,email:form.email,password:form.password,tournamentId:window.__TOURNAMENT_ID__||''})
-      localStorage.setItem('polla_token',data.token)
-      setUser(data.user); setAvatars([])
-      setView('terms')
-    }catch(e){setErr(e.message)}
+      const data = await api('/api/auth/register','POST',{
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        tournamentId: window.__TOURNAMENT_ID__ || ''
+      })
+
+      localStorage.setItem('polla_token', data.token)
+
+      setUser(data.user)
+      setAvatars(data.avatars || [])
+
+      if (data.avatars && data.avatars.length > 0) {
+        setActiveAvatar(data.avatars[0])
+      }
+
+      setView('dashboard')
+
+    }catch(e){
+      setErr(e.message)
+    }
+
     setLoading(false)
   }
 
   const tabStyle=active=>({
-    flex:1,padding:'.5rem',fontWeight:700,fontSize:'12px',letterSpacing:'.5px',textTransform:'uppercase',
-    border:'none',cursor:'pointer',transition:'all .2s',
+    flex:1,padding:'.5rem',fontWeight:700,fontSize:'12px',
+    letterSpacing:'.5px',textTransform:'uppercase',
+    border:'none',cursor:'pointer',
     background:active?'var(--ink)':'transparent',
     color:active?'var(--cream)':'var(--ink3)',
     borderRadius:'6px'
@@ -335,59 +373,36 @@ function AuthPage(){
       <Nav/>
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'2rem 1rem'}}>
         <div className="card" style={{maxWidth:400,width:'100%'}}>
+
           <div style={{textAlign:'center',marginBottom:'1.5rem'}}>
-            <img src={tournament?.logo_url||"/logo.png"} alt={tournament?.name||"Polla 2026"} style={{width:'90px',height:'90px',objectFit:'contain',marginBottom:'.5rem'}}/>
-            <p className="text-muted text-sm">{tournament?.is_demo?'⚡ Demo gratuita — explora sin límites':'Regístrate y participa en la polla'}</p>
+            <img src={tournament?.logo_url||"/logo.png"} style={{width:'90px'}}/>
+            <p className="text-muted text-sm">
+              {tournament?.is_demo?'⚡ Demo gratuita':'Regístrate y participa'}
+            </p>
           </div>
 
-          {err&&<Alert type="error">{err}</Alert>}
+          {err && <Alert type="error">{err}</Alert>}
 
-          {tab!=='admin'&&(
-            <>
-              <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1.25rem'}}>
-                <button style={tabStyle(tab==='login')} onClick={()=>{setTab('login');setErr('')}}>Ingresar</button>
-                <button style={tabStyle(tab==='register')} onClick={()=>{setTab('register');setErr('')}}>Registrarse</button>
-              </div>
+          <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1.25rem'}}>
+            <button style={tabStyle(tab==='login')} onClick={()=>setTab('login')}>Ingresar</button>
+            <button style={tabStyle(tab==='register')} onClick={()=>setTab('register')}>Registrarse</button>
+          </div>
 
-              {tab==='login'?(
-                <form onSubmit={handleLogin}>
-                  <div className="form-group">
-                    <label>Correo electrónico</label>
-                    <input className="inp" type="email" placeholder="tu@correo.com" value={form.email} onChange={upd('email')} required/>
-                  </div>
-                  <div className="form-group">
-                    <label>Contraseña</label>
-                    <input className="inp" type="password" placeholder="••••••••" value={form.password} onChange={upd('password')} required/>
-                  </div>
-                  <button className="btn btn-ink btn-full" disabled={loading}>{loading?'Ingresando...':'Ingresar →'}</button>
-                </form>
-              ):(
-                <form onSubmit={handleRegister}>
-                  <div className="form-group">
-                    <label>Nombre completo</label>
-                    <input className="inp" type="text" placeholder="Tu nombre" value={form.name} onChange={upd('name')} required/>
-                  </div>
-                  <div className="form-group">
-                    <label>Correo electrónico</label>
-                    <input className="inp" type="email" placeholder="tu@correo.com" value={form.email} onChange={upd('email')} required/>
-                  </div>
-                  <div className="form-group">
-                    <label>Contraseña <span className="text-muted text-xs">(mínimo 6 caracteres)</span></label>
-                    <input className="inp" type="password" placeholder="••••••••" value={form.password} onChange={upd('password')} required minLength={6}/>
-                  </div>
-                  <button className="btn btn-gold btn-full" disabled={loading}>{loading?'Creando cuenta...':'Crear cuenta →'}</button>
-                </form>
-              )}
-
-              <div style={{textAlign:'center',marginTop:'1.25rem',fontSize:'11px',color:'var(--ink3)'}}>
-                ¿Eres admin? Ingresa con tu correo y contraseña normalmente.
-              </div>
-            </>
+          {tab==='login'?(
+            <form onSubmit={handleLogin}>
+              <input className="inp" placeholder="Email" value={form.email} onChange={upd('email')} required/>
+              <input className="inp" type="password" placeholder="Password" value={form.password} onChange={upd('password')} required/>
+              <button className="btn btn-ink btn-full">{loading?'...':'Ingresar'}</button>
+            </form>
+          ):(
+            <form onSubmit={handleRegister}>
+              <input className="inp" placeholder="Nombre" value={form.name} onChange={upd('name')} required/>
+              <input className="inp" placeholder="Email" value={form.email} onChange={upd('email')} required/>
+              <input className="inp" type="password" placeholder="Password" value={form.password} onChange={upd('password')} required/>
+              <button className="btn btn-gold btn-full">{loading?'...':'Crear cuenta'}</button>
+            </form>
           )}
 
-          <p className="text-center text-muted text-xs mt2">
-            Al entrar aceptas los <span className="text-gold" style={{cursor:'pointer'}} onClick={()=>setView('landing')}>Términos y Condiciones</span>
-          </p>
         </div>
       </div>
     </div>
@@ -497,7 +512,7 @@ function GuidePage(){
       <div className="modal-box">
         <div className="modal-head">
           <div className="modal-title">🏆 CÓMO FUNCIONA LA POLLA 2026</div>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView(avatars&&avatars.length?'special':'avatars')}>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')>
             Saltar →
           </button>
         </div>
@@ -529,7 +544,7 @@ function GuidePage(){
         </div>
         <div className="modal-foot">
           <span className="text-muted text-xs">¡Ya estás listo para jugar! 🏆</span>
-          <button className="btn btn-ink" onClick={()=>setView(avatars&&avatars.length?'special':'avatars')}>
+          <button className="btn btn-ink" onClick={()=>setView('dashboard')}>
             ¡Entendido! Hablar con Pelé IA →
           </button>
         </div>
@@ -594,7 +609,7 @@ function AvatarsPage(){
         <div className="av-grid mb2">
           {(avatars||[]).map(av=>(
             <div key={av.id} className={`av-card ${activeAvatar?.id===av.id?'av-card-active':''}`}
-              onClick={()=>{setActiveAvatar(av);setView('dashboard')}}>
+              onClick={()=>{setActiveAvatar(av);setView('dashboard')}>
               <div className="av-circle" style={{background:generateAvatarColor(av.nickname)}}>
                 {av.photo_url?<img src={av.photo_url} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover'}} alt=""/>
                   :<span>{av.nickname.substring(0,2).toUpperCase()}</span>}
