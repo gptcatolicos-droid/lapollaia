@@ -298,115 +298,69 @@ function AuthPage(){
 
   const upd=k=>e=>setForm(p=>({...p,[k]:e.target.value}))
 
-  async function handleLogin(e){
-    e.preventDefault()
-    setLoading(true)
-    setErr('')
+ async function handleLogin(e){
+  e.preventDefault();
+  setLoading(true);
+  setErr('');
 
-    try{
-      const data = await api('/api/auth/login','POST',{
-        email: form.email,
-        password: form.password,
-        tournamentId: window.__TOURNAMENT_ID__ || ''
-      })
+  try{
+    const data = await api('/api/auth/login','POST',{
+      email: form.email,
+      password: form.password,
+      tournamentId: window.__TOURNAMENT_ID__ || ''
+    });
 
-      localStorage.setItem('polla_token', data.token)
+    localStorage.setItem('polla_token', data.token);
 
-      setUser(data.user)
-      setAvatars(data.avatars || [])
+    setUser(data.user);
+    setAvatars(data.avatars || []);
+    setActiveAvatar({
+  id: data.user.id,
+  nickname: data.user.name
+});
 
-      if (data.avatars && data.avatars.length > 0) {
-        setActiveAvatar(data.avatars[0])
-      }
-
-      setView('dashboard')
-
-    }catch(e){
-      setErr(e.message)
+    if (data.avatars && data.avatars.length > 0) {
+     
     }
 
-    setLoading(false)
+    setView('dashboard');
+
+  }catch(e){
+    setErr(e.message);
   }
 
-  async function handleRegister(e){
-    e.preventDefault()
-    setLoading(true)
-    setErr('')
+  setLoading(false);
+}
 
-    try{
-      const data = await api('/api/auth/register','POST',{
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        tournamentId: window.__TOURNAMENT_ID__ || ''
-      })
+async function handleRegister(e){
+  e.preventDefault();
+  setLoading(true);
+  setErr('');
 
-      localStorage.setItem('polla_token', data.token)
+  try{
+    const data = await api('/api/auth/register','POST',{
+      name: form.name,
+      email: form.email,
+      password: form.password,
+      tournamentId: window.__TOURNAMENT_ID__ || ''
+    });
 
-      setUser(data.user)
-      setAvatars(data.avatars || [])
+    localStorage.setItem('polla_token', data.token);
 
-      if (data.avatars && data.avatars.length > 0) {
-        setActiveAvatar(data.avatars[0])
-      }
+    setUser(data.user);
+    setAvatars(data.avatars || []);
 
-      setView('dashboard')
-
-    }catch(e){
-      setErr(e.message)
+    if (data.avatars && data.avatars.length > 0) {
+      ;
     }
 
-    setLoading(false)
+    setView('dashboard');
+
+  }catch(e){
+    setErr(e.message);
   }
 
-  const tabStyle=active=>({
-    flex:1,padding:'.5rem',fontWeight:700,fontSize:'12px',
-    letterSpacing:'.5px',textTransform:'uppercase',
-    border:'none',cursor:'pointer',
-    background:active?'var(--ink)':'transparent',
-    color:active?'var(--cream)':'var(--ink3)',
-    borderRadius:'6px'
-  })
-
-  return(
-    <div className="page">
-      <Nav/>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'2rem 1rem'}}>
-        <div className="card" style={{maxWidth:400,width:'100%'}}>
-
-          <div style={{textAlign:'center',marginBottom:'1.5rem'}}>
-            <img src={tournament?.logo_url||"/logo.png"} style={{width:'90px'}}/>
-            <p className="text-muted text-sm">
-              {tournament?.is_demo?'⚡ Demo gratuita':'Regístrate y participa'}
-            </p>
-          </div>
-
-          {err && <Alert type="error">{err}</Alert>}
-
-          <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1.25rem'}}>
-            <button style={tabStyle(tab==='login')} onClick={()=>setTab('login')}>Ingresar</button>
-            <button style={tabStyle(tab==='register')} onClick={()=>setTab('register')}>Registrarse</button>
-          </div>
-
-          {tab==='login'?(
-            <form onSubmit={handleLogin}>
-              <input className="inp" placeholder="Email" value={form.email} onChange={upd('email')} required/>
-              <input className="inp" type="password" placeholder="Password" value={form.password} onChange={upd('password')} required/>
-              <button className="btn btn-ink btn-full">{loading?'...':'Ingresar'}</button>
-            </form>
-          ):(
-            <form onSubmit={handleRegister}>
-              <input className="inp" placeholder="Nombre" value={form.name} onChange={upd('name')} required/>
-              <input className="inp" placeholder="Email" value={form.email} onChange={upd('email')} required/>
-              <input className="inp" type="password" placeholder="Password" value={form.password} onChange={upd('password')} required/>
-              <button className="btn btn-gold btn-full">{loading?'...':'Crear cuenta'}</button>
-            </form>
-          )}
-
-        </div>
-      </div>
-    </div>
-  )
+  setLoading(false);
 }
 
 // ─── TERMS MODAL ──────────────────────────────────────────────────────────────
@@ -512,7 +466,7 @@ function GuidePage(){
       <div className="modal-box">
         <div className="modal-head">
           <div className="modal-title">🏆 CÓMO FUNCIONA LA POLLA 2026</div>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>
             Saltar →
           </button>
         </div>
@@ -554,16 +508,7 @@ function GuidePage(){
 }
 
 // ─── AVATAR SYSTEM ────────────────────────────────────────────────────────────
-function AvatarsPage(){
-  const {user,avatars,setAvatars,activeAvatar,setActiveAvatar,setView}=useApp()
-  const [showCreate,setShowCreate]=React.useState(false)
-  const [payInfo,setPayInfo]=React.useState(null)
 
-  function onCreated(av,info){
-    setAvatars(p=>[...p,av])
-    setActiveAvatar(av)
-    setPayInfo(info)
-  }
 
   if(payInfo) return(
     <div className="page">
@@ -705,7 +650,7 @@ const TEAMS_SPECIAL=Object.keys(FLAGS).filter(t=>!t.startsWith('Play-Off')&&FLAG
 const UNDERDOGS=['Morocco','Japan','Norway','Turkey','Korea Republic','Iraq','DR Congo','Uzbekistan','Curaçao','Cape Verde','Bosnia and Herzegovina','Czechia','South Africa','Haiti','Jordan','Panama','Ghana','Senegal','Ecuador','Algeria']
 
 function SpecialPredictionsPage(){
-  const {activeAvatar,setView}=useApp()
+  const {activeAvatar,user,setView}=useApp()
   const [preds,setPreds]=React.useState({champion:'',surprise:'',balonDeOro:'',guanteDeOro:'',botaDeOro:''})
   const [existing,setExisting]=React.useState(null)
   const [loading,setLoading]=React.useState(false)
@@ -713,19 +658,19 @@ function SpecialPredictionsPage(){
   const isFinal=false // Could check if final is near
 
   React.useEffect(()=>{
-    if(!activeAvatar) return
-    api(`/api/special/${activeAvatar.id}`).then(d=>{
+    if(!activeAvatar && !user) return
+    api(`/api/special/${activeAvatar?.id || user?.id}`).then(d=>{
       if(d&&d.avatar_id){ setExisting(d);setPreds({champion:d.champion_team||'',surprise:d.surprise_team||'',
         balonDeOro:d.balon_de_oro||'',guanteDeOro:d.guante_de_oro||'',botaDeOro:d.bota_de_oro||''}) }
     }).catch(()=>{})
   },[activeAvatar])
 
   async function save(){
-    if(!activeAvatar) return
+    if(!activeAvatar && !user) return
     setErr(''); setLoading(true)
     try{
       await api('/api/special','POST',{
-        avatarId:activeAvatar.id,
+        avatarId: activeAvatar?.id || user?.id,
         championTeam:preds.champion,surpriseTeam:preds.surprise,
         balonDeOro:preds.balonDeOro,guanteDeOro:preds.guanteDeOro,botaDeOro:preds.botaDeOro
       })
@@ -1063,8 +1008,8 @@ function ChatPage(){
   React.useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}) },[messages])
 
   React.useEffect(()=>{
-    if(!activeAvatar) return
-    if(!activeAvatar?.id) return
+    if(!activeAvatar && !user) return
+    if(!activeAvatar?.id && !user?.id) return
     api(`/api/predictions/${activeAvatar.id}`).then(data=>{
       setPredictions(data.predictions||{})
       setExtras(data.extras||{})
@@ -1234,15 +1179,6 @@ function ChatPage(){
       setChatPhase('group_select')
     }
   }
-
-  if(!activeAvatar) return(
-    <div className="page"><Nav/>
-      <div className="container pad">
-        <Alert type="warn">Selecciona un avatar en el Dashboard primero.</Alert>
-        <button className="btn btn-ink" onClick={()=>setView('dashboard')}>← Dashboard</button>
-      </div>
-    </div>
-  )
 
   return(
     <div className="page">
@@ -1737,7 +1673,7 @@ function ResultsPage(){
   const [loading,setLoading]=React.useState(true)
 
   React.useEffect(()=>{
-    if(!activeAvatar){setLoading(false);return}
+    if(!activeAvatar && !user){setLoading(false);return}
     Promise.all([
       activeAvatar?.id?api(`/api/results/${activeAvatar.id}`):Promise.resolve([]),
       activeAvatar?.id?api(`/api/special/${activeAvatar.id}`):Promise.resolve([])
@@ -2369,7 +2305,7 @@ function AppRoot(){
   const [view,setView]=React.useState('landing')
   const [user,setUser]=React.useState(null)
   const [avatars,setAvatars]=React.useState([])
-  const [activeAvatar,setActiveAvatar]=React.useState(null)
+  const [activeAvatar,setActiveAvatar]=React.useState({ id: 'default-avatar' })
   const [matches,setMatches]=React.useState([])
   const [settings,setSettings]=React.useState({})
 
