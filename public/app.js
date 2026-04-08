@@ -213,16 +213,19 @@ function Nav(){
         </div>
       </div>
       <div className="nav-actions">
-        <button className="btn btn-outline btn-sm" onClick={()=>setView('ranking')}>🏅 Ranking</button>
-        {user?(
+        {user&&view!=='dashboard'&&(
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>← Inicio</button>
+        )}
+        {user&&view==='dashboard'&&(
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('ranking')}>🏅 Ranking</button>
+        )}
+        {user&&(
           <>
             {user.isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>setView('admin')}>⚙️ Admin</button>}
-            <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>
-              {activeAvatar?<AvatarCircle nickname={activeAvatar.nickname} photoUrl={activeAvatar.photo_url} size={22}/>:'🏠'}
-            </button>
             <button className="btn btn-outline btn-sm" onClick={logout}>Salir</button>
           </>
-        ):(
+        )}
+        {!user&&(
           <button className="btn btn-ink btn-sm" onClick={()=>setView('auth')}>Entrar →</button>
         )}
       </div>
@@ -303,7 +306,6 @@ function AuthPage(){
       setUser(data.user); setAvatars(data.avatars||[])
       if(data.user.isAdmin) setView('admin')
       else if(!data.user.termsAccepted) setView('terms')
-      else if(!data.avatars||!data.avatars.length) setView('avatars')
       else setView('dashboard')
     }catch(e){setErr(e.message)}
     setLoading(false)
@@ -406,7 +408,7 @@ function TermsPage(){
     try{
       await api('/api/auth/terms','POST',{phone:form.phone,whatsappConsent:form.whatsapp})
       setUser(u=>({...u,termsAccepted:true,phone:form.phone,whatsappConsent:form.whatsapp}))
-      setView('guide')
+      setView('dashboard')
     }catch(e){setErr(e.message)}
     setLoading(false)
   }
@@ -421,16 +423,16 @@ function TermsPage(){
         <div className="modal-body">
           {err&&<Alert type="error">{err}</Alert>}
           <div style={{fontSize:'12px',color:'var(--ink3)',lineHeight:'1.8'}}>
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>1. Registro y Avatares</strong>
-            Un usuario puede registrarse con su correo y contraseña y crear múltiples avatares (nicknames de competencia). El administrador aprueba quién participa según las normas de su polla.
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>2. Plazo de Pago</strong>
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>1. Registro y Participación</strong>
+            Un usuario puede registrarse con su correo y contraseña para participar en la polla. El administrador aprueba quién participa según las normas de su polla.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>2. Participantes</strong>
             Los participantes deben ser aprobados por el administrador antes del inicio del torneo.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>3. Pronósticos y Edición</strong>
             Cada avatar puede editar sus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>4. Sistema de Puntos</strong>
             Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u.
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Premios</strong>
-            Del total recaudado: 80% al primer lugar y 20% al segundo. Los premios se transfieren por PayPal o Nequi dentro de los 5 días hábiles siguientes al partido final.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Normas de la Polla</strong>
+            Cada administrador define las reglas de su polla. La Polla IA no interviene en acuerdos entre participantes.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>6. Privacidad</strong>
             Los datos personales solo se usan para gestionar la Polla. El celular solo se usa para notificaciones WhatsApp si el usuario lo aprueba.
           </div>
@@ -822,63 +824,33 @@ function SpecialPredictionsPage(){
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function DashboardPage(){
-  const {user,avatars,activeAvatar,setActiveAvatar,setView}=useApp()
+  const {user,setView,tournament}=useApp()
   const [stats,setStats]=React.useState(null)
 
   React.useEffect(()=>{
-    if(!activeAvatar) return
-    api(`/api/results/${activeAvatar.id}`).then(rows=>{
-      const total=rows.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0)
-      setStats({total,played:rows.length})
-    }).catch(()=>{})
-  },[activeAvatar])
+    if(!user) return
+    api(`/api/results/user/${user.id}`).then(rows=>{
+      const arr=Array.isArray(rows)?rows:[]
+      const total=arr.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0)
+      setStats({total,played:arr.length})
+    }).catch(()=>{ setStats({total:0,played:0}) })
+  },[user])
 
   return(
     <div className="page">
       <Nav/>
       <div className="container pad">
-        <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
-          {activeAvatar&&<AvatarCircle nickname={activeAvatar.nickname} photoUrl={activeAvatar.photo_url} size={46}/>}
-          <div>
-            <div style={{fontFamily:'Bebas Neue',fontSize:'1.4rem',color:'var(--ink)'}}>
-              Hola, {user?.name?.split(' ')[0]}! 👋
+        <div style={{marginBottom:'1rem'}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1.6rem',color:'var(--ink)'}}>
+            Hola, {user?.name?.split(' ')[0]}! 👋
+          </div>
+          {tournament?.is_demo&&(
+            <div style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(34,197,94,.1)',
+              border:'1px solid rgba(34,197,94,.25)',borderRadius:'20px',padding:'3px 10px',marginTop:'4px'}}>
+              <span style={{fontSize:'10px',color:'#4ade80',fontWeight:600}}>⚡ Demo gratuita — explora sin límites</span>
             </div>
-            {activeAvatar&&(
-              <div style={{display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
-                <span className={`chip ${activeAvatar.is_paid?'chip-g':'chip-o'}`}>
-                  {activeAvatar.is_paid?(tournament?.is_demo?'✓ Demo activo':'✓ Activo'):'⏳ Pendiente aprobación'}
-                </span>
-                <span className="text-muted text-xs">{activeAvatar.nickname}</span>
-              </div>
-            )}
-          </div>
+          )}
         </div>
-
-        {/* Avatar selector */}
-        {avatars&&avatars.length>1&&(
-          <div style={{display:'flex',gap:'5px',flexWrap:'wrap',marginBottom:'.85rem'}}>
-            {avatars.map(av=>(
-              <div key={av.id} style={{
-                display:'flex',alignItems:'center',gap:'5px',padding:'4px 10px',
-                borderRadius:'50px',cursor:'pointer',border:'1.5px solid var(--border)',
-                background:activeAvatar?.id===av.id?'var(--ink)':'transparent',
-                color:activeAvatar?.id===av.id?'var(--cream)':'var(--ink2)',
-                fontSize:'11px',fontWeight:600
-              }} onClick={()=>setActiveAvatar(av)}>
-                <AvatarCircle nickname={av.nickname} photoUrl={av.photo_url} size={18}/>
-                {av.nickname}
-              </div>
-            ))}
-            <div style={{padding:'4px 10px',borderRadius:'50px',cursor:'pointer',border:'1.5px dashed var(--border)',
-              color:'var(--gold)',fontSize:'11px',fontWeight:600}} onClick={()=>setView('avatars')}>+ Nuevo</div>
-          </div>
-        )}
-
-        {activeAvatar&&!activeAvatar.is_paid&&false&&(
-          <div className="alert alert-warn mb2">
-            ⚠️ <strong>{activeAvatar.nickname}</strong> está pendiente de pago. El admin lo activará al confirmar.
-          </div>
-        )}
 
         {stats&&(
           <div className="dash-stats">
@@ -914,11 +886,7 @@ function DashboardPage(){
             <div className="ac-label">Predicciones Especiales</div>
             <div className="ac-desc">Campeón · Premios individuales</div>
           </div>
-          <div className="action-card" onClick={()=>setView('avatars')}>
-            <div className="ac-icon">➕</div>
-            <div className="ac-label">Mis Avatares</div>
-            <div className="ac-desc">Crear · Cambiar</div>
-          </div>
+
         </div>
 
         {/* Pelé IA free chat CTA */}
@@ -945,7 +913,7 @@ function DashboardPage(){
 
 // ─── PELÉ IA FREE CHAT (Cualquier pregunta de fútbol) ────────────────────────
 function PeleFreeChatPage(){
-  const {activeAvatar,setView}=useApp()
+  const {user,setView}=useApp()
   const [messages,setMessages]=React.useState([
     {role:'pele',content:'¡Hola! Soy **Pelé IA** 🏆 — el mayor experto en fútbol de esta plataforma.\n\nPuedes preguntarme lo que quieras sobre fútbol: estadísticas, jugadores, equipos, tácticas, historia, partidos, jugadas… ¡Todo! Si no tiene que ver con el fútbol, mejor busca en Google 😄',id:'intro'}
   ])
@@ -961,7 +929,7 @@ function PeleFreeChatPage(){
     setMessages(p=>[...p,userMsg]); setInput(''); setLoading(true)
     try{
       const data=await api('/api/pele/free','POST',{
-        message:txt, avatarName:activeAvatar?.nickname||'campeón',
+        message:txt, avatarName:user?.name?.split(' ')[0]||'campeón',
         history:messages.slice(-6).map(m=>({role:m.role==='pele'?'assistant':'user',content:m.content}))
       })
       setMessages(p=>[...p,{role:'pele',content:data.response,id:Date.now()+'p'}])
@@ -1045,7 +1013,7 @@ const JOKES=[
 ]
 
 function ChatPage(){
-  const {activeAvatar,matches,settings,setView}=useApp()
+  const {user,activeAvatar,matches,settings,setView,tournament}=useApp()
   const [predictions,setPredictions]=React.useState({})
   const [extras,setExtras]=React.useState({})
   const [chatPhase,setChatPhase]=React.useState('intro') // intro,group_select,stats,score_input,confirm,extra,group_done
@@ -1081,13 +1049,14 @@ function ChatPage(){
 
   React.useEffect(()=>{
     if(!activeAvatar) return
+    if(!activeAvatar?.id) return
     api(`/api/predictions/${activeAvatar.id}`).then(data=>{
       setPredictions(data.predictions||{})
       setExtras(data.extras||{})
     }).catch(()=>{})
     // Start with intro messages
     addPeleMsgs([
-      `¡Hola ${activeAvatar.nickname}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el Mundial 2026.`,
+      `¡Hola ${activeAvatar?.nickname||user?.name?.split(' ')[0]||'campeón'}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
       `Antes de empezar... ${JOKES[Math.floor(Math.random()*JOKES.length)]}`,
       `¿De qué equipo eres hincha y cuál es tu selección favorita? ⚽`
     ], 'intro')
@@ -1271,7 +1240,7 @@ function ChatPage(){
         </div>
         <div>
           <div className="pele-name">Pelé IA</div>
-          <div className="pele-sub">● En línea · {activeAvatar.nickname}</div>
+          <div className="pele-sub">● En línea · {activeAvatar?.nickname||user?.name?.split(' ')[0]}</div>
         </div>
         <div style={{marginLeft:'auto',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'3px'}}>
           <span className="chip chip-gold" style={{fontSize:'9px'}}>{totalDone}/{(matches||[]).filter(m=>m.phase==='group').length} grupos</span>
@@ -1561,7 +1530,7 @@ function ExtraPointsCard({match,form,setForm,onSave,onSkip}){
 
 // ─── BOARD PAGE ───────────────────────────────────────────────────────────────
 function BoardPage(){
-  const {matches,activeAvatar,setView}=useApp()
+  const {user,matches,activeAvatar,setView}=useApp()
   const [predictions,setPredictions]=React.useState({})
   const [filterPhase,setFilterPhase]=React.useState('all')
   const [filterGroup,setFilterGroup]=React.useState('all')
@@ -1755,8 +1724,8 @@ function ResultsPage(){
   React.useEffect(()=>{
     if(!activeAvatar){setLoading(false);return}
     Promise.all([
-      api(`/api/results/${activeAvatar.id}`),
-      api(`/api/special/${activeAvatar.id}`)
+      activeAvatar?.id?api(`/api/results/${activeAvatar.id}`):Promise.resolve([]),
+      activeAvatar?.id?api(`/api/special/${activeAvatar.id}`):Promise.resolve([])
     ]).then(([r,s])=>{setResults(r);setSpecial(s)}).catch(()=>{}).finally(()=>setLoading(false))
   },[activeAvatar])
 
@@ -2431,7 +2400,6 @@ function AppRoot(){
             setActiveAvatar(first)
           }
           if(!u.termsAccepted) setView('terms')
-          else if(!avs||!avs.length) setView('avatars')
           else setView('dashboard')
         }).catch(()=>{ localStorage.removeItem('polla_token') })
       }

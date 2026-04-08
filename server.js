@@ -452,7 +452,21 @@ app.post('/api/auth/register', async(req,res)=>{
       [id,tournamentId,name.trim(),email.toLowerCase(),hash]
     )
     const token=jwt.sign({id:user.id,email:user.email,isAdmin:false,tournamentId},JWT_SECRET,{expiresIn:'30d'})
-    res.json({token,user:{id:user.id,name:user.name,email:user.email,isAdmin:false,termsAccepted:false},avatars:[]})
+
+    // Auto-create default avatar so user can predict immediately
+    const avId='av-'+crypto.randomBytes(12).toString('hex')
+    const rawNick=name.trim().split(' ')[0]
+    const {rows:nickEx}=await pool.query(
+      'SELECT id FROM avatars WHERE LOWER(nickname)=$1 AND tournament_id=$2',
+      [rawNick.toLowerCase(),tournamentId])
+    const finalNick=nickEx.length?rawNick+'_'+avId.slice(-3):rawNick
+    const {rows:[t2]}=await pool.query('SELECT is_demo FROM tournaments WHERE id=$1',[tournamentId])
+    const isPaid=t2?.is_demo||false
+    const {rows:[autoAv]}=await pool.query(
+      'INSERT INTO avatars(id,user_id,tournament_id,nickname,is_paid) VALUES($1,$2,$3,$4,$5) RETURNING *',
+      [avId,user.id,tournamentId,finalNick,isPaid])
+
+    res.json({token,user:{id:user.id,name:user.name,email:user.email,isAdmin:false,termsAccepted:false},avatars:[autoAv]})
   }catch(e){ console.error('register:',e.message); res.status(500).json({error:'Error del servidor'}) }
 })
 
@@ -830,6 +844,20 @@ app.post('/api/special', auth, async(req,res)=>{
 })
 
 // ─── RESULTS ─────────────────────────────────────────────────────────────────
+// Results by user (across all their avatars in this tournament)
+app.get('/api/results/user/:userId', auth, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT p.match_id,p.home_score,p.away_score,p.points_earned,p.extra_pts
+      FROM predictions p
+      JOIN avatars av ON av.id=p.avatar_id
+      WHERE av.user_id=$1 AND av.tournament_id=$2
+      ORDER BY p.match_id`,
+      [req.params.userId, req.user.tournamentId])
+    res.json(rows)
+  }catch(e){res.json([])}
+})
+
 app.get('/api/results/:avatarId', auth, async(req,res)=>{
   try{
     const {rows:preds}=await pool.query('SELECT p.*,m.phase,m.group_name FROM predictions p JOIN matches m ON m.id=p.match_id WHERE p.avatar_id=$1',[req.params.avatarId])
