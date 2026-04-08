@@ -1010,7 +1010,7 @@ function ChatPage(){
   React.useEffect(()=>{
     if(!activeAvatar && !user) return
     if(!activeAvatar?.id && !user?.id) return
-    api(`/api/predictions/${activeAvatar.id}`).then(data=>{
+    api(`/api/predictions/${activeAvatar?.id || user?.id}`).then(data=>{
       setPredictions(data.predictions||{})
       setExtras(data.extras||{})
     }).catch(()=>{})
@@ -1068,7 +1068,7 @@ function ChatPage(){
           try{
             const h=parseInt(m[1])||0, a=parseInt(m[2])||0
             await api('/api/predictions','POST',{
-              avatarId:activeAvatar.id,matchId:currentMatch.id,home:h,away:a,penaltyWinner:null
+              avatarId: activeAvatar?.id || user?.id,matchId:currentMatch.id,home:h,away:a,penaltyWinner:null
             })
             setPredictions(p=>({...p,[currentMatch.id]:{score_home:h,score_away:a,penalty_winner:null}}))
             setScoreForm({home:'',away:'',pen:''})
@@ -1136,7 +1136,7 @@ function ChatPage(){
     try{
       const h=parseInt(scoreForm.home)||0, a=parseInt(scoreForm.away)||0
       await api('/api/predictions','POST',{
-        avatarId:activeAvatar.id,matchId:currentMatch.id,home:h,away:a,
+        avatarId: activeAvatar?.id || user?.id,matchId:currentMatch.id,home:h,away:a,
         penaltyWinner:scoreForm.pen||null
       })
       setPredictions(p=>({...p,[currentMatch.id]:{score_home:h,score_away:a,penalty_winner:scoreForm.pen||null}}))
@@ -1153,7 +1153,7 @@ function ChatPage(){
       const ef=extraForm
       if(ef.yellow||ef.red||ef.pen_count||ef.g1h||ef.g2h||ef.mvp){
         await api('/api/extra-predictions','POST',{
-          avatarId:activeAvatar.id,matchId:currentMatch.id,
+          avatarId: activeAvatar?.id || user?.id,matchId:currentMatch.id,
           yellowCards:ef.yellow?+ef.yellow:null,redCards:ef.red?+ef.red:null,
           penaltiesCount:ef.pen_count?+ef.pen_count:null,
           goalsFirstHalf:ef.g1h?+ef.g1h:null,goalsSecondHalf:ef.g2h?+ef.g2h:null,
@@ -1489,7 +1489,7 @@ function BoardPage(){
 
   React.useEffect(()=>{
     if(activeAvatar)
-      api(`/api/predictions/${activeAvatar.id}`).then(d=>setPredictions(d.predictions||{})).catch(()=>{})
+      api(`/api/predictions/${activeAvatar?.id || user?.id}`).then(d=>setPredictions(d.predictions||{})).catch(()=>{})
     setLoading(false)
   },[activeAvatar])
 
@@ -1675,8 +1675,8 @@ function ResultsPage(){
   React.useEffect(()=>{
     if(!activeAvatar && !user){setLoading(false);return}
     Promise.all([
-      activeAvatar?.id?api(`/api/results/${activeAvatar.id}`):Promise.resolve([]),
-      activeAvatar?.id?api(`/api/special/${activeAvatar.id}`):Promise.resolve([])
+      activeAvatar?.id?api(`/api/results/${activeAvatar?.id || user?.id}`):Promise.resolve([]),
+      activeAvatar?.id?api(`/api/special/${activeAvatar?.id || user?.id}`):Promise.resolve([])
     ]).then(([r,s])=>{setResults(r);setSpecial(s)}).catch(()=>{}).finally(()=>setLoading(false))
   },[activeAvatar])
 
