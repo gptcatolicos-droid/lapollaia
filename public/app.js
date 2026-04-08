@@ -290,77 +290,108 @@ function LandingPage(){
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
 function AuthPage(){
-  const {setUser,setAvatars,setActiveAvatar,setView,tournament}=useApp()
-  const [tab,setTab]=React.useState('login')
+  const {setUser,setAvatars,setView,tournament}=useApp()
+  const [tab,setTab]=React.useState('login') // 'login' | 'register' | 'admin'
   const [form,setForm]=React.useState({name:'',email:'',password:''})
   const [loading,setLoading]=React.useState(false)
   const [err,setErr]=React.useState('')
 
   const upd=k=>e=>setForm(p=>({...p,[k]:e.target.value}))
 
- async function handleLogin(e){
-  e.preventDefault();
-  setLoading(true);
-  setErr('');
-
-  try{
-    const data = await api('/api/auth/login','POST',{
-      email: form.email,
-      password: form.password,
-      tournamentId: window.__TOURNAMENT_ID__ || ''
-    });
-
-    localStorage.setItem('polla_token', data.token);
-
-    setUser(data.user);
-    setAvatars(data.avatars || []);
-    setActiveAvatar({
-  id: data.user.id,
-  nickname: data.user.name
-});
-
-    if (data.avatars && data.avatars.length > 0) {
-     
-    }
-
-    setView('dashboard');
-
-  }catch(e){
-    setErr(e.message);
+  async function handleLogin(e){
+    e.preventDefault(); setLoading(true); setErr('')
+    try{
+      const data=await api('/api/auth/login','POST',{email:form.email,password:form.password,tournamentId:window.__TOURNAMENT_ID__||''})
+      localStorage.setItem('polla_token',data.token)
+      setUser(data.user); setAvatars(data.avatars||[])
+      if(data.user.isAdmin) setView('admin')
+      else if(!data.user.termsAccepted) setView('terms')
+      else setView('dashboard')
+    }catch(e){setErr(e.message)}
+    setLoading(false)
   }
 
-  setLoading(false);
-}
-
-async function handleRegister(e){
-  e.preventDefault();
-  setLoading(true);
-  setErr('');
-
-  try{
-    const data = await api('/api/auth/register','POST',{
-      name: form.name,
-      email: form.email,
-      password: form.password,
-      tournamentId: window.__TOURNAMENT_ID__ || ''
-    });
-
-    localStorage.setItem('polla_token', data.token);
-
-    setUser(data.user);
-    setAvatars(data.avatars || []);
-
-    if (data.avatars && data.avatars.length > 0) {
-      ;
-    }
-
-    setView('dashboard');
-
-  }catch(e){
-    setErr(e.message);
+  async function handleRegister(e){
+    e.preventDefault(); setLoading(true); setErr('')
+    try{
+      const data=await api('/api/auth/register','POST',{name:form.name,email:form.email,password:form.password,tournamentId:window.__TOURNAMENT_ID__||''})
+      localStorage.setItem('polla_token',data.token)
+      setUser(data.user); setAvatars(data.avatars||[])
+      setView('terms')
+    }catch(e){setErr(e.message)}
+    setLoading(false)
   }
 
-  setLoading(false);
+  const tabStyle=active=>({
+    flex:1,padding:'.5rem',fontWeight:700,fontSize:'12px',letterSpacing:'.5px',textTransform:'uppercase',
+    border:'none',cursor:'pointer',transition:'all .2s',
+    background:active?'var(--ink)':'transparent',
+    color:active?'var(--cream)':'var(--ink3)',
+    borderRadius:'6px'
+  })
+
+  return(
+    <div className="page">
+      <Nav/>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'2rem 1rem'}}>
+        <div className="card" style={{maxWidth:400,width:'100%'}}>
+          <div style={{textAlign:'center',marginBottom:'1.5rem'}}>
+            <img src={tournament?.logo_url||"/logo.png"} alt={tournament?.name||"Polla 2026"} style={{width:'90px',height:'90px',objectFit:'contain',marginBottom:'.5rem'}}/>
+            <p className="text-muted text-sm">{tournament?.is_demo?'⚡ Demo gratuita — explora sin límites':'Regístrate y participa en la polla'}</p>
+          </div>
+
+          {err&&<Alert type="error">{err}</Alert>}
+
+          {tab!=='admin'&&(
+            <>
+              <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1.25rem'}}>
+                <button style={tabStyle(tab==='login')} onClick={()=>{setTab('login');setErr('')}}>Ingresar</button>
+                <button style={tabStyle(tab==='register')} onClick={()=>{setTab('register');setErr('')}}>Registrarse</button>
+              </div>
+
+              {tab==='login'?(
+                <form onSubmit={handleLogin}>
+                  <div className="form-group">
+                    <label>Correo electrónico</label>
+                    <input className="inp" type="email" placeholder="tu@correo.com" value={form.email} onChange={upd('email')} required/>
+                  </div>
+                  <div className="form-group">
+                    <label>Contraseña</label>
+                    <input className="inp" type="password" placeholder="••••••••" value={form.password} onChange={upd('password')} required/>
+                  </div>
+                  <button className="btn btn-ink btn-full" disabled={loading}>{loading?'Ingresando...':'Ingresar →'}</button>
+                </form>
+              ):(
+                <form onSubmit={handleRegister}>
+                  <div className="form-group">
+                    <label>Nombre completo</label>
+                    <input className="inp" type="text" placeholder="Tu nombre" value={form.name} onChange={upd('name')} required/>
+                  </div>
+                  <div className="form-group">
+                    <label>Correo electrónico</label>
+                    <input className="inp" type="email" placeholder="tu@correo.com" value={form.email} onChange={upd('email')} required/>
+                  </div>
+                  <div className="form-group">
+                    <label>Contraseña <span className="text-muted text-xs">(mínimo 6 caracteres)</span></label>
+                    <input className="inp" type="password" placeholder="••••••••" value={form.password} onChange={upd('password')} required minLength={6}/>
+                  </div>
+                  <button className="btn btn-gold btn-full" disabled={loading}>{loading?'Creando cuenta...':'Crear cuenta →'}</button>
+                </form>
+              )}
+
+              <div style={{textAlign:'center',marginTop:'1.25rem',fontSize:'11px',color:'var(--ink3)'}}>
+                ¿Eres admin? Ingresa con tu correo y contraseña normalmente.
+              </div>
+            </>
+          )}
+
+          <p className="text-center text-muted text-xs mt2">
+            Al entrar aceptas los <span className="text-gold" style={{cursor:'pointer'}} onClick={()=>setView('landing')}>Términos y Condiciones</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── TERMS MODAL ──────────────────────────────────────────────────────────────
@@ -377,7 +408,7 @@ function TermsPage(){
     try{
       await api('/api/auth/terms','POST',{phone:form.phone,whatsappConsent:form.whatsapp})
       setUser(u=>({...u,termsAccepted:true,phone:form.phone,whatsappConsent:form.whatsapp}))
-      setView('dashboard')
+      setView('chat')
     }catch(e){setErr(e.message)}
     setLoading(false)
   }
@@ -436,28 +467,25 @@ function TermsPage(){
 
 // ─── GUIDE MODAL ──────────────────────────────────────────────────────────────
 function GuidePage(){
-  const {setView,avatars}=useApp()
+  const {setView}=useApp()
   const steps=[
-    {n:1,icon:'🏆',title:'Crea tu avatar de participante',
-      desc:'Regístrate y crea tu nickname (avatar). Puedes tener hasta 3 avatares — cada uno compite por separado en el ranking.',
-      badges:['Hasta 3 avatares','Aprobación del admin']},
-    {n:2,icon:'💬',title:'Habla con Pelé IA y llena tus pronósticos',
+    {n:1,icon:'💬',title:'Habla con Pelé IA y llena tus pronósticos',
       desc:'Pelé IA te guía partido por partido con estadísticas. Puedes editar tus pronósticos hasta 2 horas antes de cada partido. Todo se guarda automáticamente.',
       badges:['104 partidos totales','Guardado automático']},
-    {n:3,icon:'⭐',title:'Extra Points — puntos adicionales',
+    {n:2,icon:'⭐',title:'Extra Points — puntos adicionales',
       desc:'Después de cada marcador, apuesta campos extra: tarjetas, goles por tiempo, MVP. Si aciertas al menos uno, ganas +1 punto extra.',
       badges:['+1 pt si aciertas ≥1 campo']},
-    {n:4,gold:true,icon:'🎯',title:'Sistema de puntos',
+    {n:3,gold:true,icon:'🎯',title:'Sistema de puntos',
       table:[
         ['Grupos','3','2','+1'],['Ronda de 32','4','2','+1'],
         ['Octavos','5','3','+1'],['Cuartos','6','3','+1'],
         ['Semis','7','4','+1'],['3er Puesto','5','3','+1'],
         ['Final','10','5','+1']
       ]},
-    {n:5,gold:true,icon:'🌟',title:'Predicciones especiales',
+    {n:4,gold:true,icon:'🌟',title:'Predicciones especiales',
       desc:'Al inicio: Campeón del Mundial (+10 pts) y equipo sorpresa (+3 pts). Antes de la Final: Balón de Oro, Guante de Oro y Bota de Oro (+5 pts c/u).',
       badges:['🏆 Campeón +10','😲 Sorpresa +3','⭐+🧤+👟 +5 c/u']},
-    {n:6,icon:'💰',title:'Premios al ganador',
+    {n:5,icon:'💰',title:'Premios al ganador',
       desc:'Del total recaudado: 80% al primer lugar y 20% al segundo. Los premios se envían por PayPal o Nequi en los 5 días tras la Gran Final.',
       badges:['🥇 80% del pozo','🥈 20% del pozo']},
   ]
@@ -466,7 +494,7 @@ function GuidePage(){
       <div className="modal-box">
         <div className="modal-head">
           <div className="modal-title">🏆 CÓMO FUNCIONA LA POLLA 2026</div>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('special')}>
             Saltar →
           </button>
         </div>
@@ -498,7 +526,7 @@ function GuidePage(){
         </div>
         <div className="modal-foot">
           <span className="text-muted text-xs">¡Ya estás listo para jugar! 🏆</span>
-          <button className="btn btn-ink" onClick={()=>setView('dashboard')}>
+          <button className="btn btn-ink" onClick={()=>setView('special')}>
             ¡Entendido! Hablar con Pelé IA →
           </button>
         </div>
@@ -508,7 +536,16 @@ function GuidePage(){
 }
 
 // ─── AVATAR SYSTEM ────────────────────────────────────────────────────────────
+function AvatarsPage(){
+  const {user,avatars,setAvatars,activeAvatar,setActiveAvatar,setView}=useApp()
+  const [showCreate,setShowCreate]=React.useState(false)
+  const [payInfo,setPayInfo]=React.useState(null)
 
+  function onCreated(av,info){
+    setAvatars(p=>[...p,av])
+    setActiveAvatar(av)
+    setPayInfo(info)
+  }
 
   if(payInfo) return(
     <div className="page">
@@ -554,7 +591,7 @@ function GuidePage(){
         <div className="av-grid mb2">
           {(avatars||[]).map(av=>(
             <div key={av.id} className={`av-card ${activeAvatar?.id===av.id?'av-card-active':''}`}
-              onClick={()=>{setActiveAvatar(av);setView('dashboard')}>
+              onClick={()=>{setActiveAvatar(av);setView('dashboard')}}>
               <div className="av-circle" style={{background:generateAvatarColor(av.nickname)}}>
                 {av.photo_url?<img src={av.photo_url} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover'}} alt=""/>
                   :<span>{av.nickname.substring(0,2).toUpperCase()}</span>}
@@ -650,7 +687,7 @@ const TEAMS_SPECIAL=Object.keys(FLAGS).filter(t=>!t.startsWith('Play-Off')&&FLAG
 const UNDERDOGS=['Morocco','Japan','Norway','Turkey','Korea Republic','Iraq','DR Congo','Uzbekistan','Curaçao','Cape Verde','Bosnia and Herzegovina','Czechia','South Africa','Haiti','Jordan','Panama','Ghana','Senegal','Ecuador','Algeria']
 
 function SpecialPredictionsPage(){
-  const {activeAvatar,user,setView}=useApp()
+  const {activeAvatar,setView}=useApp()
   const [preds,setPreds]=React.useState({champion:'',surprise:'',balonDeOro:'',guanteDeOro:'',botaDeOro:''})
   const [existing,setExisting]=React.useState(null)
   const [loading,setLoading]=React.useState(false)
@@ -658,19 +695,19 @@ function SpecialPredictionsPage(){
   const isFinal=false // Could check if final is near
 
   React.useEffect(()=>{
-    if(!activeAvatar && !user) return
-    api(`/api/special/${activeAvatar?.id || user?.id}`).then(d=>{
+    if(!activeAvatar) return
+    api(`/api/special/${activeAvatar.id}`).then(d=>{
       if(d&&d.avatar_id){ setExisting(d);setPreds({champion:d.champion_team||'',surprise:d.surprise_team||'',
         balonDeOro:d.balon_de_oro||'',guanteDeOro:d.guante_de_oro||'',botaDeOro:d.bota_de_oro||''}) }
     }).catch(()=>{})
   },[activeAvatar])
 
   async function save(){
-    if(!activeAvatar && !user) return
+    if(!activeAvatar) return
     setErr(''); setLoading(true)
     try{
       await api('/api/special','POST',{
-        avatarId: activeAvatar?.id || user?.id,
+        avatarId:activeAvatar.id,
         championTeam:preds.champion,surpriseTeam:preds.surprise,
         balonDeOro:preds.balonDeOro,guanteDeOro:preds.guanteDeOro,botaDeOro:preds.botaDeOro
       })
@@ -1008,9 +1045,9 @@ function ChatPage(){
   React.useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}) },[messages])
 
   React.useEffect(()=>{
-    if(!activeAvatar && !user) return
-    if(!activeAvatar?.id && !user?.id) return
-    api(`/api/predictions/${activeAvatar?.id || user?.id}`).then(data=>{
+    if(!activeAvatar) return
+    if(!activeAvatar?.id) return
+    api(`/api/predictions/${activeAvatar.id}`).then(data=>{
       setPredictions(data.predictions||{})
       setExtras(data.extras||{})
     }).catch(()=>{})
@@ -1068,7 +1105,7 @@ function ChatPage(){
           try{
             const h=parseInt(m[1])||0, a=parseInt(m[2])||0
             await api('/api/predictions','POST',{
-              avatarId: activeAvatar?.id || user?.id,matchId:currentMatch.id,home:h,away:a,penaltyWinner:null
+              avatarId:activeAvatar.id,matchId:currentMatch.id,home:h,away:a,penaltyWinner:null
             })
             setPredictions(p=>({...p,[currentMatch.id]:{score_home:h,score_away:a,penalty_winner:null}}))
             setScoreForm({home:'',away:'',pen:''})
@@ -1136,7 +1173,7 @@ function ChatPage(){
     try{
       const h=parseInt(scoreForm.home)||0, a=parseInt(scoreForm.away)||0
       await api('/api/predictions','POST',{
-        avatarId: activeAvatar?.id || user?.id,matchId:currentMatch.id,home:h,away:a,
+        avatarId:activeAvatar.id,matchId:currentMatch.id,home:h,away:a,
         penaltyWinner:scoreForm.pen||null
       })
       setPredictions(p=>({...p,[currentMatch.id]:{score_home:h,score_away:a,penalty_winner:scoreForm.pen||null}}))
@@ -1153,7 +1190,7 @@ function ChatPage(){
       const ef=extraForm
       if(ef.yellow||ef.red||ef.pen_count||ef.g1h||ef.g2h||ef.mvp){
         await api('/api/extra-predictions','POST',{
-          avatarId: activeAvatar?.id || user?.id,matchId:currentMatch.id,
+          avatarId:activeAvatar.id,matchId:currentMatch.id,
           yellowCards:ef.yellow?+ef.yellow:null,redCards:ef.red?+ef.red:null,
           penaltiesCount:ef.pen_count?+ef.pen_count:null,
           goalsFirstHalf:ef.g1h?+ef.g1h:null,goalsSecondHalf:ef.g2h?+ef.g2h:null,
@@ -1179,6 +1216,15 @@ function ChatPage(){
       setChatPhase('group_select')
     }
   }
+
+  if(!activeAvatar) return(
+    <div className="page"><Nav/>
+      <div className="container pad">
+        <Alert type="warn">Selecciona un avatar en el Dashboard primero.</Alert>
+        <button className="btn btn-ink" onClick={()=>setView('dashboard')}>← Dashboard</button>
+      </div>
+    </div>
+  )
 
   return(
     <div className="page">
@@ -1489,7 +1535,7 @@ function BoardPage(){
 
   React.useEffect(()=>{
     if(activeAvatar)
-      api(`/api/predictions/${activeAvatar?.id || user?.id}`).then(d=>setPredictions(d.predictions||{})).catch(()=>{})
+      api(`/api/predictions/${activeAvatar.id}`).then(d=>setPredictions(d.predictions||{})).catch(()=>{})
     setLoading(false)
   },[activeAvatar])
 
@@ -1673,10 +1719,10 @@ function ResultsPage(){
   const [loading,setLoading]=React.useState(true)
 
   React.useEffect(()=>{
-    if(!activeAvatar && !user){setLoading(false);return}
+    if(!activeAvatar){setLoading(false);return}
     Promise.all([
-      activeAvatar?.id?api(`/api/results/${activeAvatar?.id || user?.id}`):Promise.resolve([]),
-      activeAvatar?.id?api(`/api/special/${activeAvatar?.id || user?.id}`):Promise.resolve([])
+      activeAvatar?.id?api(`/api/results/${activeAvatar.id}`):Promise.resolve([]),
+      activeAvatar?.id?api(`/api/special/${activeAvatar.id}`):Promise.resolve([])
     ]).then(([r,s])=>{setResults(r);setSpecial(s)}).catch(()=>{}).finally(()=>setLoading(false))
   },[activeAvatar])
 
@@ -2305,7 +2351,7 @@ function AppRoot(){
   const [view,setView]=React.useState('landing')
   const [user,setUser]=React.useState(null)
   const [avatars,setAvatars]=React.useState([])
-  const [activeAvatar,setActiveAvatar]=React.useState({ id: 'default-avatar' })
+  const [activeAvatar,setActiveAvatar]=React.useState(null)
   const [matches,setMatches]=React.useState([])
   const [settings,setSettings]=React.useState({})
 
@@ -2396,7 +2442,7 @@ function AppRoot(){
       {view==='guide'&&<><LandingPage/><GuidePage/></>}
 
       {/* Authenticated views */}
-      {view==='avatars'&&<AvatarsPage/>}
+      {view==='avatars'&&<DashboardPage/>}
       {view==='special'&&<SpecialPredictionsPage/>}
       {view==='dashboard'&&<DashboardPage/>}
       {view==='chat'&&<ChatPage/>}
