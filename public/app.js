@@ -886,32 +886,149 @@ function ChatPage(){
   const currentMatch=groupMatches[currentMatchIdx]
 
   const allGroups=['A','B','C','D','E','F','G','H','I','J','K','L']
-  const doneCounts=React.useMemo(()=>{
-    const c={}
+
+  // doneCounts: predictions already entered per group
+  // availableCounts: unlocked matches per group (for the "done" ✓ check)
+  const {doneCounts, availableCounts} = React.useMemo(()=>{
+    const now = Date.now()
+    const dc={}, ac={}
     allGroups.forEach(g=>{
       const ms=(matches||[]).filter(m=>m.phase==='group'&&m.group_name===g)
-      c[g]=ms.filter(m=>predictions[m.id]!=null).length
+      dc[g]=ms.filter(m=>predictions[m.id]!=null).length
+      ac[g]=ms.filter(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        return !m.phase_locked && now < lockTime
+      }).length
     })
-    return c
+    return {doneCounts:dc, availableCounts:ac}
   },[matches,predictions])
+
+  // Group is "done" when all available (unlocked) matches have predictions
+  const isGroupDone = (g) => availableCounts[g] === 0 || doneCounts[g] >= availableCounts[g]
+
   const totalDone=Object.values(doneCounts).reduce((s,v)=>s+v,0)
   const totalMatches=(matches||[]).length
 
   React.useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}) },[messages])
 
+  // Helper: find groups with pending (unlocked, no prediction) matches
+  function getPendingGroups(preds, matchList){
+    const now = Date.now()
+    const result = []
+    allGroups.forEach(g=>{
+      const gms = (matchList||[]).filter(m=>m.phase==='group'&&m.group_name===g)
+      const hasPending = gms.some(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        const locked = m.phase_locked || now >= lockTime
+        return !locked && !preds[m.id]
+      })
+      if(hasPending) result.push(g)
+    })
+    return result
+  }
+
+  // Helper: find the group currently in progress (has some done but not all unlocked ones done)
+  function getGroupInProgress(preds, matchList){
+    const now = Date.now()
+    for(const g of allGroups){
+      const gms = (matchList||[]).filter(m=>m.phase==='group'&&m.group_name===g)
+      const hasDone = gms.some(m=>preds[m.id]!=null)
+      const hasPending = gms.some(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        const locked = m.phase_locked || now >= lockTime
+        return !locked && !preds[m.id]
+      })
+      if(hasDone && hasPending) return g
+    }
+    return null
+  }
+
   React.useEffect(()=>{
-    if(!activeAvatar) return
     if(!activeAvatar?.id) return
     api(`/api/predictions/${activeAvatar.id}`).then(data=>{
-      setPredictions(data.predictions||{})
-      setExtras(data.extras||{})
-    }).catch(()=>{})
-    // Start with intro messages
-    addPeleMsgs([
-      `¡Hola ${activeAvatar?.nickname||user?.name?.split(' ')[0]||'campeón'}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
-      `Antes de empezar... ${JOKES[Math.floor(Math.random()*JOKES.length)]}`,
-      `¿De qué equipo eres hincha y cuál es tu selección favorita? ⚽`
-    ], 'intro')
+      const preds = data.predictions||{}
+      const exts  = data.extras||{}
+      setPredictions(preds)
+      setExtras(exts)
+
+      const nombre = activeAvatar?.nickname||user?.name?.split(' ')[0]||'campeón'
+      const now = Date.now()
+
+      // Count available (unlocked) matches
+      const availableMatches = (matches||[]).filter(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        return !m.phase_locked && now < lockTime
+      })
+
+      // How many available group matches already have predictions
+      const availableGroupMatches = availableMatches.filter(m=>m.phase==='group')
+      const donePreds = availableGroupMatches.filter(m=>preds[m.id]!=null).length
+      const totalAvailable = availableGroupMatches.length
+
+      // Find group in progress
+      const inProgress = getGroupInProgress(preds, matches)
+      // Find first group with pending matches (not started yet)
+      const pendingGroups = getPendingGroups(preds, matches)
+      const nextPending = pendingGroups.find(g=>g!==inProgress)
+
+      if(totalAvailable === 0){
+        // All available matches are locked — tournament started, no more group predictions
+        addPeleMsgs([
+          `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆`,
+          `Todos los partidos disponibles ya están bloqueados por fecha. Puedes ver el tablero general o el ranking. ¡A disfrutar el torneo! 🏆`
+        ], 'group_select')
+        addMsg('pele','__GROUP_SELECT__','group_select')
+      } else if(inProgress){
+        // Resume group in progress
+        addPeleMsgs([
+          `¡Hola de nuevo, ${nombre}! 👋 Soy **Pelé IA** 🏆`,
+          `Veo que tienes pronósticos pendientes del **Grupo ${inProgress}**. ¿Continuamos desde donde lo dejaste? 🎯`
+        ], 'group_select')
+        addMsg('pele','__GROUP_SELECT__','group_select')
+        // Auto-resume after brief delay
+        setTimeout(()=>{
+          setCurrentGroupKey(inProgress)
+          setChatPhase('stats')
+          const gms = (matches||[]).filter(m=>m.phase==='group'&&m.group_name===inProgress)
+          const firstPending = gms.find(m=>{
+            const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+            return !m.phase_locked && now < lockTime && !preds[m.id]
+          })
+          if(firstPending){
+            const idx = gms.indexOf(firstPending)
+            setCurrentMatchIdx(idx)
+            addMsg('pele',`⚽ Seguimos con el **Grupo ${inProgress}** — partido ${idx+1}/${gms.length}`)
+            addMsg('pele','__STATS__','stats')
+            addMsg('pele',`¿Cuánto crees que queda este partido? 🤔\n(Dime el marcador o escribe "no sé")`)
+            setChatPhase('score_input')
+          }
+        }, 1200)
+      } else if(donePreds > 0){
+        // Has some predictions but no group in progress — pick next
+        addPeleMsgs([
+          `¡Hola de nuevo, ${nombre}! 👋 Soy **Pelé IA** 🏆`,
+          `Llevas **${donePreds}** pronósticos ingresados. ${nextPending?`¿Seguimos con el Grupo ${nextPending}?`:'¿Cuál grupo quieres hacer ahora?'} 🎯`
+        ], 'group_select')
+        addMsg('pele','__GROUP_SELECT__','group_select')
+      } else {
+        // First time — full intro
+        addPeleMsgs([
+          `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
+          `Antes de empezar... ${JOKES[Math.floor(Math.random()*JOKES.length)]}`,
+          `¿De qué equipo eres hincha y cuál es tu selección favorita? ⚽`
+        ], 'intro')
+      }
+    }).catch(()=>{
+      const nombre = activeAvatar?.nickname||user?.name?.split(' ')[0]||'campeón'
+      addPeleMsgs([
+        `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
+        `¿De qué equipo eres hincha y cuál es tu selección favorita? ⚽`
+      ], 'intro')
+    })
   },[activeAvatar])
 
   function addMsg(role,content,type='text'){
@@ -978,14 +1095,50 @@ function ChatPage(){
 
   function selectGroup(g){
     setCurrentGroupKey(g)
-    setCurrentMatchIdx(0)
-    const teams=matches?.filter(m=>m.phase==='group'&&m.group_name===g).map(m=>[m.team1,m.team2]).flat().filter(Boolean)
+    const now = Date.now()
+    const ms=matches?.filter(m=>m.phase==='group'&&m.group_name===g)||[]
+    const teams=ms.map(m=>[m.team1,m.team2]).flat().filter(Boolean)
     const uniqueTeams=[...new Set(teams)]
-    addMsg('pele',`¡Grupo ${g}! 🎯 ${uniqueTeams.map(t=>f(t)).join(' ')} — empecemos con el primer partido.`)
+
+    // Find first match that is not locked and has no prediction yet
+    let startIdx = ms.findIndex(m=>{
+      if(!m.match_date) return false
+      const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+      const locked = m.phase_locked || now >= lockTime
+      return !locked && !predictions[m.id]
+    })
+    // If all have predictions or all locked, start at first unlocked (for editing)
+    if(startIdx === -1){
+      startIdx = ms.findIndex(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        return !m.phase_locked && now < lockTime
+      })
+    }
+    // If everything is locked, start at 0 (will show as locked)
+    if(startIdx === -1) startIdx = 0
+
+    setCurrentMatchIdx(startIdx)
+
+    const lockedCount = ms.filter(m=>{
+      if(!m.match_date) return false
+      const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+      return m.phase_locked || now >= lockTime
+    }).length
+    const pendingCount = ms.length - lockedCount
+
+    let msg = `¡Grupo ${g}! 🎯 ${uniqueTeams.map(t=>f(t)).join(' ')}`
+    if(lockedCount > 0 && pendingCount > 0)
+      msg += ` — ${lockedCount} partido${lockedCount>1?'s':''} ya bloqueado${lockedCount>1?'s':''}, empezamos desde el partido ${startIdx+1}.`
+    else if(lockedCount === ms.length)
+      msg += ` — todos los partidos de este grupo ya están bloqueados. 🔒`
+    else
+      msg += ` — empecemos con el primer partido.`
+
+    addMsg('pele', msg)
     setChatPhase('stats')
     setTimeout(()=>{
-      const ms=matches?.filter(m=>m.phase==='group'&&m.group_name===g)||[]
-      if(ms[0]) showMatchStats(ms[0], 0)
+      if(ms[startIdx]) showMatchStats(ms[startIdx], startIdx)
     },400)
   }
 
@@ -1059,10 +1212,20 @@ function ChatPage(){
 
   function goToNextMatch(){
     setExtraForm({yellow:'',red:'',pen_count:'',g1h:'',g2h:'',mvp:''})
-    const nextIdx=currentMatchIdx+1
-    if(nextIdx<groupMatches.length){
-      const next=groupMatches[nextIdx]
-      const total=groupMatches.length
+    const now = Date.now()
+    // Find next unlocked match after current
+    let nextIdx = currentMatchIdx + 1
+    while(nextIdx < groupMatches.length){
+      const m = groupMatches[nextIdx]
+      if(!m.match_date){ nextIdx++; continue }
+      const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+      const locked = m.phase_locked || now >= lockTime
+      if(!locked) break
+      nextIdx++
+    }
+    if(nextIdx < groupMatches.length){
+      const next = groupMatches[nextIdx]
+      const total = groupMatches.length
       addMsg('pele',`✅ Guardado — partido ${nextIdx}/${total} del Grupo ${currentGroupKey}. Siguiente ⚽`,'ok')
       showMatchStats(next, nextIdx)
     } else {
@@ -1095,19 +1258,19 @@ function ChatPage(){
           <div className="pele-sub">● En línea · {activeAvatar?.nickname||user?.name?.split(' ')[0]}</div>
         </div>
         <div style={{marginLeft:'auto',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'3px'}}>
-          <span className="chip chip-gold" style={{fontSize:'9px'}}>{totalDone}/{(matches||[]).filter(m=>m.phase==='group').length} grupos</span>
+          <span className="chip chip-gold" style={{fontSize:'9px'}}>{totalDone}/{Object.values(availableCounts).reduce((s,v)=>s+v,0)||'?'} disponibles</span>
           <div className="autosave"><div className="dot-g"/>Auto-guardado</div>
         </div>
       </div>
-      <div className="prog-bar"><div className="prog-fill" style={{width:`${totalMatches?Math.round(totalDone/72*100):0}%`}}/></div>
+      <div className="prog-bar"><div className="prog-fill" style={{width:`${(()=>{const av=Object.values(availableCounts).reduce((s,v)=>s+v,0);return av?Math.round(totalDone/av*100):0})()||0}%`}}/></div>
 
       {/* Phase strip */}
       {currentGroupKey&&(
         <div className="phase-bar">
           <div className={`ph ph-on`}>Grupo {currentGroupKey}</div>
           {allGroups.filter(g=>g!==currentGroupKey).map(g=>(
-            <div key={g} className={`ph ${doneCounts[g]>=6?'ph-done':''}`} onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
-              {doneCounts[g]>=6?'✓ ':''}{g}
+            <div key={g} className={`ph ${isGroupDone(g)?'ph-done':''}`} onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
+              {isGroupDone(g)?'✓ ':''}{g}
             </div>
           ))}
         </div>
@@ -1131,7 +1294,7 @@ function ChatPage(){
             <div key={msg.id} style={{width:'100%'}}>
               <div className="group-grid">
                 {allGroups.map(g=>{
-                  const done=doneCounts[g]>=6
+                  const done=isGroupDone(g)
                   const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
                   return(
                     <div key={g} className={`grp-btn ${done?'grp-btn-done':currentGroupKey===g?'grp-btn-on':''}`}
@@ -1192,7 +1355,7 @@ function ChatPage(){
             <div key={msg.id} style={{width:'100%'}}>
               <div className="group-grid">
                 {allGroups.filter(g=>g!==currentGroupKey).map(g=>{
-                  const done=doneCounts[g]>=6
+                  const done=isGroupDone(g)
                   const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
                   return(
                     <div key={g} className={`grp-btn ${done?'grp-btn-done':''}`}
