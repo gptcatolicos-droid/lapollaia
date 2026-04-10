@@ -535,8 +535,6 @@ function GuidePage(){
   )
 }
 
-}
-
 // ─── SPECIAL PREDICTIONS (Onboarding) ────────────────────────────────────────
 const TEAMS_SPECIAL=Object.keys(FLAGS).filter(t=>!t.startsWith('Play-Off')&&FLAGS[t]!=='❓')
 const UNDERDOGS=['Morocco','Japan','Norway','Turkey','Korea Republic','Iraq','DR Congo','Uzbekistan','Curaçao','Cape Verde','Bosnia and Herzegovina','Czechia','South Africa','Haiti','Jordan','Panama','Ghana','Senegal','Ecuador','Algeria']
