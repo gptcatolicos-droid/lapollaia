@@ -1920,8 +1920,6 @@ function BracketViz({bracket,onUpdate,locked}){
 
   const gap = '10px'
 
-  const gap = '10px'
-
   return(
     <div style={{overflowX:'auto',width:'100%'}}>
       <div style={{display:'flex',gap:gap,alignItems:'stretch',minWidth:'1200px',padding:'4px 0'}}>
