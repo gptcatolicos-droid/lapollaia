@@ -430,7 +430,7 @@ function TermsPage(){
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>3. Pronósticos y Edición</strong>
             Puedes editar tus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>4. Sistema de Puntos</strong>
-            Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u.
+            Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u. Bracket del Mundial: +100 pts si aciertas el path completo sin editar, +10 pts si editas y aciertas.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Conducta</strong>
             Queda prohibido utilizar la plataforma para apuestas, captación de dinero o cualquier actividad económica entre participantes. El uso es exclusivamente recreativo.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>6. Privacidad</strong>
@@ -469,23 +469,26 @@ function TermsPage(){
 function GuidePage(){
   const {setView}=useApp()
   const steps=[
-    {n:1,icon:'💬',title:'Habla con Pelé IA y llena tus pronósticos',
-      desc:'Pelé IA te guía partido por partido con estadísticas. Puedes editar tus pronósticos hasta 2 horas antes de cada partido. Todo se guarda automáticamente.',
-      badges:['104 partidos totales','Guardado automático']},
-    {n:2,icon:'⭐',title:'Extra Points — puntos adicionales',
+    {n:1,icon:'💬',title:'Llena tus pronósticos — tú o con IA',
+      desc:'Pelé IA te pregunta si quieres que llene toda tu polla automáticamente, un grupo específico, o hacerlo tú partido por partido con su ayuda. Puedes editar hasta 2 horas antes de cada partido.',
+      badges:['🤖 Auto-fill IA','✍️ Manual con ayuda','Guardado automático']},
+    {n:2,icon:'🏆',title:'Mi Bracket del Mundial — hasta 100 pts',
+      desc:'Define el camino al título: quién avanza en cada fase hasta el campeón. Pelé IA puede generarlo por ti. Si aciertas sin editar: +100 pts. Si editas y aciertas: +10 pts. ¡Descárgalo como imagen!',
+      badges:['🏆 100 pts sin editar','✏️ 10 pts si editas','📸 Exportar PNG']},
+    {n:3,icon:'⭐',title:'Extra Points — puntos adicionales',
       desc:'Después de cada marcador, predice campos extra: tarjetas, goles por tiempo, MVP. Si aciertas al menos uno, ganas +1 punto extra.',
       badges:['+1 pt si aciertas ≥1 campo']},
-    {n:3,gold:true,icon:'🎯',title:'Sistema de puntos',
+    {n:4,gold:true,icon:'🎯',title:'Sistema de puntos',
       table:[
         ['Grupos','3','2','+1'],['Ronda de 32','4','2','+1'],
         ['Octavos','5','3','+1'],['Cuartos','6','3','+1'],
         ['Semis','7','4','+1'],['3er Puesto','5','3','+1'],
         ['Final','10','5','+1']
       ]},
-    {n:4,gold:true,icon:'🌟',title:'Predicciones especiales',
+    {n:5,gold:true,icon:'🌟',title:'Predicciones especiales',
       desc:'Al inicio: Campeón del Mundial (+10 pts) y equipo sorpresa (+3 pts). Antes de la Final: Balón de Oro, Guante de Oro y Bota de Oro (+5 pts c/u).',
       badges:['🏆 Campeón +10','😲 Sorpresa +3','⭐+🧤+👟 +5 c/u']},
-    {n:5,icon:'🏅',title:'Ranking en tiempo real',
+    {n:6,icon:'🏅',title:'Ranking en tiempo real',
       desc:'El ranking se actualiza automáticamente después de cada partido. ¡Compite por el primer lugar con tu grupo de amigos o familia!',
       badges:['🥇 Primer lugar','🥈 Segundo lugar','🥉 Tercer lugar']},
   ]
@@ -736,6 +739,11 @@ function DashboardPage(){
             <div className="ac-label">Predicciones Especiales</div>
             <div className="ac-desc">Campeón · Premios individuales</div>
           </div>
+          <div className="action-card action-card-dark" onClick={()=>setView('bracket')} style={{gridColumn:'span 2',background:'linear-gradient(135deg,#1a1a2a,#0f1923)',border:'1.5px solid var(--gold)'}}>
+            <div className="ac-icon">🏆</div>
+            <div className="ac-label ac-label-w">Mi Bracket del Mundial</div>
+            <div className="ac-desc ac-desc-w">Define el camino al título · 100 pts si aciertas · Comparte tu bracket</div>
+          </div>
 
         </div>
 
@@ -866,13 +874,14 @@ function ChatPage(){
   const {user,activeAvatar,matches,settings,setView,tournament}=useApp()
   const [predictions,setPredictions]=React.useState({})
   const [extras,setExtras]=React.useState({})
-  const [chatPhase,setChatPhase]=React.useState('intro') // intro,group_select,stats,score_input,confirm,extra,group_done
+  const [chatPhase,setChatPhase]=React.useState('intro') // intro,mode_select,autofill_confirm,group_select,stats,score_input,confirm,extra,group_done
   const [messages,setMessages]=React.useState([])
   const [currentGroupKey,setCurrentGroupKey]=React.useState(null)
   const [currentMatchIdx,setCurrentMatchIdx]=React.useState(0)
   const [inputVal,setInputVal]=React.useState('')
   const [scoreForm,setScoreForm]=React.useState({home:'',away:'',pen:''})
   const [extraForm,setExtraForm]=React.useState({yellow:'',red:'',pen_count:'',g1h:'',g2h:'',mvp:''})
+  const [autofilling,setAutofilling]=React.useState(false)
   const [loadingMsg,setLoadingMsg]=React.useState(false)
   const [saving,setSaving]=React.useState(false)
   const bottomRef=React.useRef(null)
@@ -1013,19 +1022,21 @@ function ChatPage(){
         ], 'group_select')
         addMsg('pele','__GROUP_SELECT__','group_select')
       } else {
-        // First time — full intro
+        // First time — intro + mode selector
         addPeleMsgs([
           `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
           `Antes de empezar... ${JOKES[Math.floor(Math.random()*JOKES.length)]}`,
-          `¿De qué equipo eres hincha y cuál es tu selección favorita? ⚽`
-        ], 'intro')
+          `¿Cómo quieres llenar tus pronósticos?`
+        ], 'mode_select')
+        addMsg('pele','__MODE_SELECT__','mode_select')
       }
     }).catch(()=>{
       const nombre = activeAvatar?.nickname||user?.name?.split(' ')[0]||'campeón'
       addPeleMsgs([
         `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
-        `¿De qué equipo eres hincha y cuál es tu selección favorita? ⚽`
-      ], 'intro')
+        `¿Cómo quieres llenar tus pronósticos?`
+      ], 'mode_select')
+      addMsg('pele','__MODE_SELECT__','mode_select')
     })
   },[activeAvatar])
 
@@ -1048,17 +1059,66 @@ function ChatPage(){
     setLoadingMsg(false)
   }
 
+  async function runAutofill(groupFilter=null){
+    if(!activeAvatar) return
+    setAutofilling(true)
+    const label = groupFilter ? `Grupo ${groupFilter}` : 'toda la polla'
+    addMsg('pele',`🤖 Analizando y llenando ${label} con mi inteligencia... ⏳ Esto tarda unos segundos.`)
+    try{
+      const data = await api('/api/autofill','POST',{avatarId:activeAvatar.id, groupFilter})
+      if(data.filled===0){
+        addMsg('pele','No encontré partidos disponibles para llenar. Puede que ya estén bloqueados o ya tengan pronóstico. ✅')
+      } else {
+        if(data.predictions){
+          const newPreds={...predictions}
+          data.predictions.forEach(p=>{ newPreds[p.matchId]={score_home:p.home,score_away:p.away} })
+          setPredictions(newPreds)
+        }
+        addMsg('pele',`✅ ¡Listo! Llené **${data.filled} partido${data.filled>1?'s':''}** con mi análisis IA. Puedes editar cualquier marcador hasta 2 horas antes de cada partido.`)
+        if(data.total > data.filled)
+          addMsg('pele',`ℹ️ ${data.total-data.filled} partido${data.total-data.filled>1?'s':''} ya estaban bloqueados o con pronóstico previo.`)
+        addMsg('pele','¿Quieres revisar algún marcador, o ir al tablero para verlos todos? 🏆')
+      }
+      setChatPhase('group_select')
+      addMsg('pele','__GROUP_SELECT__','group_select')
+    }catch(e){ addMsg('pele','❌ Error en el auto-fill: '+e.message) }
+    setAutofilling(false)
+  }
+
   async function handleUserSend(text){
     if(!text.trim()) return
     addMsg('user',text)
     setInputVal('')
 
-    if(chatPhase==='intro'){
-      await askPele(text,{phase:'greeting'},chatPhase)
-      setTimeout(()=>{
-        addMsg('pele','🎯 ¡Ya rompimos el hielo! Estoy listo para ayudarte con todos tus pronósticos. ¿Por qué grupo quieres empezar?','text')
+    if(chatPhase==='mode_select'){
+      const t=text.toLowerCase()
+      if(t.includes('todo')||t.includes('toda')||t.includes('auto')||t.includes('llena')||t.includes('completo')){
+        addMsg('pele','¡Perfecto! Voy a analizar todos los partidos disponibles y llenar tu polla completa con mi IA. 🤖⚽')
+        await runAutofill(null)
+      } else if(t.includes('grupo')||t.includes('group')){
+        addMsg('pele','¿De qué grupo quieres que llene los pronósticos? Dime la letra (A-L) 👇')
+        setChatPhase('autofill_group')
+      } else if(t.includes('manual')||t.includes('yo')||t.includes('personalmente')||t.includes('ayuda')||t.includes('partido')){
+        addMsg('pele','¡Genial! Te guío partido por partido con estadísticas reales. ¿Por qué grupo empezamos? 🎯')
         addMsg('pele','__GROUP_SELECT__','group_select')
         setChatPhase('group_select')
+      } else {
+        await askPele(text,{phase:'greeting'},chatPhase)
+        setTimeout(()=>{
+          addMsg('pele','¿Cómo quieres llenar tus pronósticos?')
+          addMsg('pele','__MODE_SELECT__','mode_select')
+        },600)
+      }
+    } else if(chatPhase==='autofill_group'){
+      const g=allGroups.find(k=>text.toUpperCase().includes(k)||text.toLowerCase().includes(`grupo ${k.toLowerCase()}`))
+      if(g){ addMsg('pele',`¡Grupo ${g}! Voy a analizarlo. 🤖`); await runAutofill(g) }
+      else addMsg('pele','Dime la letra del grupo (A-L) que quieres que llene.')
+    } else if(chatPhase==='intro'){
+      await askPele(text,{phase:'greeting'},chatPhase)
+      setTimeout(()=>{
+        addMsg('pele','🎯 ¿Cómo quieres llenar tus pronósticos?')
+        addMsg('pele','__MODE_SELECT__','mode_select')
+        setChatPhase('mode_select')
       },800)
     } else if(chatPhase==='group_select'){
       const g=allGroups.find(k=>text.toUpperCase().includes(k)||text.toLowerCase().includes(`grupo ${k.toLowerCase()}`))
@@ -1068,7 +1128,6 @@ function ChatPage(){
       const m=text.match(/(\d+)\s*[-–a]\s*(\d+)/i)
       if(m){
         setScoreForm({home:m[1],away:m[2],pen:''})
-        // Save directly — no intermediate confirm step via chat
         setTimeout(async()=>{
           if(!currentMatch||!activeAvatar) return
           setSaving(true)
@@ -1288,6 +1347,47 @@ function ChatPage(){
               <div className="bbl bbl-ok">{msg.content}</div>
             </div>
           )
+          if(msg.type==='mode_select') return(
+            <div key={msg.id} style={{width:'100%',padding:'0 .5rem .5rem'}}>
+              {autofilling?(
+                <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'1rem',background:'var(--cream2)',borderRadius:'var(--r)',border:'1px solid var(--border)'}}>
+                  <span style={{fontSize:'1.2rem'}}>🤖</span>
+                  <span style={{fontSize:'13px',color:'var(--ink3)'}}>Pelé IA está analizando y llenando tus pronósticos...</span>
+                </div>
+              ):(
+                <div style={{display:'grid',gridTemplateColumns:'1fr',gap:'8px'}}>
+                  <button onClick={()=>runAutofill(null)}
+                    style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 16px',
+                      background:'linear-gradient(135deg,var(--ink),#2a2a3a)',
+                      border:'2px solid var(--gold)',borderRadius:'var(--r)',cursor:'pointer',textAlign:'left'}}>
+                    <span style={{fontSize:'1.5rem'}}>🤖</span>
+                    <div>
+                      <div style={{fontWeight:700,color:'var(--gold)',fontSize:'13px'}}>Pelé IA llena toda mi polla</div>
+                      <div style={{fontSize:'11px',color:'rgba(247,244,238,.5)'}}>Analizo todos los partidos disponibles y los lleno por ti. Puedes editar después.</div>
+                    </div>
+                  </button>
+                  <button onClick={()=>{addMsg('pele','¿De qué grupo quieres que llene los pronósticos? Dime la letra (A-L) 👇');setChatPhase('autofill_group')}}
+                    style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 16px',
+                      background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:'var(--r)',cursor:'pointer',textAlign:'left'}}>
+                    <span style={{fontSize:'1.5rem'}}>📋</span>
+                    <div>
+                      <div style={{fontWeight:700,color:'var(--ink)',fontSize:'13px'}}>Llenar un grupo específico</div>
+                      <div style={{fontSize:'11px',color:'var(--ink3)'}}>Selecciono grupo A-L y Pelé IA llena esos 6 partidos.</div>
+                    </div>
+                  </button>
+                  <button onClick={()=>{addMsg('pele','¡Perfecto! ¿Por qué grupo empezamos? 🎯');addMsg('pele','__GROUP_SELECT__','group_select');setChatPhase('group_select')}}
+                    style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 16px',
+                      background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:'var(--r)',cursor:'pointer',textAlign:'left'}}>
+                    <span style={{fontSize:'1.5rem'}}>⚽</span>
+                    <div>
+                      <div style={{fontWeight:700,color:'var(--ink)',fontSize:'13px'}}>Yo lo hago con tu ayuda</div>
+                      <div style={{fontSize:'11px',color:'var(--ink3)'}}>Me guías partido por partido con estadísticas y análisis.</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )
           if(msg.type==='group_select') return(
             <div key={msg.id} style={{width:'100%'}}>
               <div className="group-grid">
@@ -1389,9 +1489,16 @@ function ChatPage(){
       </div>
 
       {/* Quick replies */}
+      {chatPhase==='mode_select'&&!autofilling&&(
+        <div className="qr-row">
+          <div className="qr qr-gold" onClick={()=>setView('bracket')}>🏆 Definir mi bracket</div>
+          <div className="qr" onClick={()=>setView('dashboard')}>🏠 Inicio</div>
+        </div>
+      )}
       {chatPhase==='group_select'&&(
         <div className="qr-row">
           <div className="qr qr-gold" onClick={()=>setView('board')}>📋 Ver tablero general</div>
+          <div className="qr" onClick={()=>setView('bracket')}>🏆 Mi bracket</div>
           <div className="qr" onClick={()=>setView('dashboard')}>🏠 Inicio</div>
         </div>
       )}
@@ -1536,6 +1643,276 @@ function ExtraPointsCard({match,form,setForm,onSave,onSkip}){
       <div style={{display:'flex',gap:'.5rem',marginTop:'.6rem'}}>
         <button className="btn btn-outline btn-sm" onClick={onSkip}>Omitir →</button>
         <button className="btn btn-gold" style={{flex:1}} onClick={onSave}>💾 Guardar y siguiente →</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── BRACKET PAGE ─────────────────────────────────────────────────────────────
+const BRACKET_TEAMS_ALL=['Brazil','France','Argentina','England','Spain','Portugal','Germany','Netherlands',
+  'Belgium','Croatia','Colombia','Uruguay','Morocco','Japan','USA','Mexico','Korea Republic','Senegal',
+  'Ecuador','Norway','Australia','Switzerland','Turkey','Sweden','Austria','Ghana','IR Iran','Saudi Arabia',
+  'Ivory Coast','Iraq','DR Congo','Uzbekistan','Curaçao','Panama','Jordan','New Zealand','Scotland',
+  'Cape Verde','Haiti','Algeria','Tunisia','Bosnia and Herzegovina','Czechia','Egypt','Qatar',
+  'South Africa','Canada']
+
+function BracketPage(){
+  const {activeAvatar,setView}=useApp()
+  const [bracket,setBracket]=React.useState(null)
+  const [savedBracket,setSavedBracket]=React.useState(null)
+  const [loading,setLoading]=React.useState(true)
+  const [saving,setSaving]=React.useState(false)
+  const [generating,setGenerating]=React.useState(false)
+  const [champion,setChampion]=React.useState('')
+  const [err,setErr]=React.useState('')
+  const [msg,setMsg]=React.useState('')
+  const [locked,setLocked]=React.useState(false)
+  const [hasBeenEdited,setHasBeenEdited]=React.useState(false)
+  const [tab,setTab]=React.useState('view') // view | setup
+  const bracketRef=React.useRef(null)
+
+  // Empty bracket structure
+  const emptyBracket=()=>({
+    round32:Array.from({length:32},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
+    round16:Array.from({length:16},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
+    quarters:Array.from({length:8},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
+    semis:Array.from({length:4},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
+    third:{home:'',away:'',winner:'',home_score:0,away_score:0},
+    final:{home:'',away:'',winner:'',home_score:0,away_score:0},
+    champion:''
+  })
+
+  React.useEffect(()=>{
+    if(!activeAvatar?.id){setLoading(false);return}
+    api(`/api/bracket/${activeAvatar.id}`).then(data=>{
+      if(data){
+        setBracket(data.bracket)
+        setSavedBracket(data.bracket)
+        setLocked(!!data.locked_at)
+        setHasBeenEdited(data.has_been_edited)
+        setChampion(data.bracket?.champion||'')
+      } else {
+        setBracket(emptyBracket())
+      }
+    }).catch(()=>setBracket(emptyBracket())).finally(()=>setLoading(false))
+  },[activeAvatar])
+
+  async function generateWithAI(){
+    if(!champion){setErr('Elige un campeón primero');return}
+    setGenerating(true); setErr('')
+    try{
+      const data=await api('/api/bracket/suggest','POST',{champion,avatarId:activeAvatar.id})
+      setBracket(data.bracket)
+      setChampion(data.bracket.champion||champion)
+      setMsg('¡Bracket generado por Pelé IA! Revísalo y guárdalo cuando estés listo.')
+      setTab('view')
+    }catch(e){setErr(e.message)}
+    setGenerating(false)
+  }
+
+  async function saveBracket(lock=false){
+    if(!activeAvatar||!bracket){return}
+    setSaving(true); setErr(''); setMsg('')
+    try{
+      const wasLocked = locked
+      await api('/api/bracket','POST',{
+        avatarId:activeAvatar.id,
+        bracket,
+        isAiGenerated:!!bracket._aiGenerated
+      })
+      if(lock&&!wasLocked){
+        await api('/api/bracket/lock','POST',{avatarId:activeAvatar.id})
+        setLocked(true)
+        setMsg('🔒 Bracket confirmado y guardado. ¡Si aciertas el campeón y el path completo sin editar, ganas 100 puntos!')
+      } else {
+        if(wasLocked) setHasBeenEdited(true)
+        setMsg('✅ Bracket guardado. ' + (wasLocked?'Has editado tu bracket — si aciertas ganarás 10 pts.':'Confírmalo cuando estés seguro para optar por los 100 pts.'))
+      }
+      setSavedBracket(bracket)
+    }catch(e){setErr(e.message)}
+    setSaving(false)
+  }
+
+  async function exportPNG(){
+    if(!bracketRef.current){return}
+    setMsg('Generando imagen...')
+    try{
+      // Use html2canvas via CDN if available, otherwise show info
+      if(typeof html2canvas!=='undefined'){
+        const canvas=await html2canvas(bracketRef.current,{backgroundColor:'#0d1117',scale:1.5})
+        const link=document.createElement('a')
+        link.download=`mi-bracket-mundial-2026.png`
+        link.href=canvas.toDataURL('image/png')
+        link.click()
+        setMsg('✅ Imagen descargada')
+      } else {
+        setMsg('Para descargar: haz clic derecho en el bracket → "Guardar imagen como"')
+      }
+    }catch(e){setMsg('No se pudo exportar. Intenta captura de pantalla.')}
+  }
+
+  function updateMatch(phase,idx,field,value){
+    if(locked&&!hasBeenEdited) setHasBeenEdited(true)
+    setBracket(prev=>{
+      const next={...prev}
+      if(phase==='third'||phase==='final'){
+        next[phase]={...next[phase],[field]:value}
+        if(field==='winner'&&phase==='final') next.champion=value
+      } else {
+        next[phase]=[...next[phase]]
+        next[phase][idx]={...next[phase][idx],[field]:value}
+      }
+      return next
+    })
+  }
+
+  if(loading) return <div className="page"><Nav/><div className="loading">⚽</div></div>
+
+  return(
+    <div className="page">
+      <Nav/>
+      <div className="container pad">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem',flexWrap:'wrap',gap:'8px'}}>
+          <div>
+            <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.1rem'}}>🏆 MI BRACKET DEL MUNDIAL 2026</h2>
+            <p className="text-muted text-xs">
+              {locked?(hasBeenEdited?'✏️ Editado — si aciertas: +10 pts':'🔒 Confirmado — si aciertas el path: +100 pts'):'Confirma tu bracket para optar por 100 pts · Editable fase a fase'}
+            </p>
+          </div>
+          <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+            <button className="btn btn-outline btn-sm" onClick={exportPNG}>📸 Descargar PNG</button>
+            {!locked?(
+              <>
+                <button className="btn btn-outline btn-sm" onClick={()=>saveBracket(false)} disabled={saving}>💾 Guardar</button>
+                <button className="btn btn-gold btn-sm" onClick={()=>saveBracket(true)} disabled={saving}>🔒 Confirmar (+100 pts)</button>
+              </>
+            ):(
+              <button className="btn btn-outline btn-sm" onClick={()=>saveBracket(false)} disabled={saving}>✏️ Guardar edición (+10 pts)</button>
+            )}
+          </div>
+        </div>
+
+        {err&&<div className="alert alert-error mb1">{err}</div>}
+        {msg&&<div className="alert alert-info mb1">{msg}</div>}
+
+        {/* Tabs */}
+        <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1rem'}}>
+          {[['view','🏆 Ver Bracket'],['setup','🤖 Configurar con IA']].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{flex:1,padding:'.5rem',fontWeight:700,fontSize:'12px',border:'none',cursor:'pointer',
+                background:tab===k?'var(--ink)':'transparent',
+                color:tab===k?'var(--cream)':'var(--ink3)',borderRadius:'6px',transition:'all .2s'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {tab==='setup'&&(
+          <div className="card mb2">
+            <div style={{fontWeight:700,fontSize:'13px',marginBottom:'.75rem'}}>🤖 Generar bracket con Pelé IA</div>
+            <p className="text-muted text-sm mb2">Elige el campeón y Pelé IA propone el bracket completo usando análisis de fútbol real. Luego puedes editarlo.</p>
+            <div className="form-group">
+              <label>¿Quién será el Campeón del Mundial 2026?</label>
+              <select className="inp" value={champion} onChange={e=>setChampion(e.target.value)}>
+                <option value="">— Selecciona el campeón —</option>
+                {BRACKET_TEAMS_ALL.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
+              </select>
+            </div>
+            <button className="btn btn-gold btn-full" onClick={generateWithAI} disabled={generating||!champion}>
+              {generating?'⏳ Pelé IA está generando tu bracket...':'🤖 Generar bracket completo con IA'}
+            </button>
+            {generating&&<p className="text-muted text-xs mt1 text-center">Esto puede tardar 10-15 segundos...</p>}
+          </div>
+        )}
+
+        {tab==='view'&&bracket&&(
+          <div ref={bracketRef} style={{overflowX:'auto'}}>
+            <BracketViz bracket={bracket} onUpdate={updateMatch} locked={locked}/>
+            {bracket.champion&&(
+              <div style={{textAlign:'center',marginTop:'1rem',padding:'1rem',
+                background:'linear-gradient(135deg,rgba(246,201,14,.15),rgba(246,201,14,.05))',
+                border:'2px solid var(--gold)',borderRadius:'var(--r-lg)'}}>
+                <div style={{fontSize:'1.5rem',marginBottom:'.25rem'}}>🏆</div>
+                <div style={{fontFamily:'Bebas Neue',fontSize:'1.4rem',color:'var(--gold)'}}>
+                  CAMPEÓN: {f(bracket.champion)} {es(bracket.champion)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BracketViz({bracket,onUpdate,locked}){
+  const phases=[
+    {key:'round32',label:'Round of 32',count:32},
+    {key:'round16',label:'Round of 16',count:16},
+    {key:'quarters',label:'Cuartos de Final',count:8},
+    {key:'semis',label:'Semifinales',count:4},
+  ]
+
+  function MatchSlot({phase,idx,match,single}){
+    const isLocked=locked
+    return(
+      <div style={{background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:'6px',
+        padding:'4px 6px',marginBottom:'3px',minWidth:'140px'}}>
+        <TeamSlot team={match?.home||''} score={match?.home_score??''} isWinner={match?.winner===match?.home}
+          onChange={v=>onUpdate(phase,idx,'home',v)} onScoreChange={v=>onUpdate(phase,idx,'home_score',+v)}
+          onWin={()=>onUpdate(phase,idx,'winner',match?.home)} locked={isLocked}/>
+        <div style={{height:'1px',background:'var(--border)',margin:'2px 0'}}/>
+        <TeamSlot team={match?.away||''} score={match?.away_score??''} isWinner={match?.winner===match?.away}
+          onChange={v=>onUpdate(phase,idx,'away',v)} onScoreChange={v=>onUpdate(phase,idx,'away_score',+v)}
+          onWin={()=>onUpdate(phase,idx,'winner',match?.away)} locked={isLocked}/>
+      </div>
+    )
+  }
+
+  function TeamSlot({team,score,isWinner,onChange,onScoreChange,onWin,locked}){
+    return(
+      <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'2px 0'}}>
+        <button onClick={onWin} title="Marcar como ganador"
+          style={{width:'14px',height:'14px',borderRadius:'50%',border:'none',cursor:'pointer',flexShrink:0,
+            background:isWinner?'var(--gold)':'var(--border)',transition:'all .15s'}}/>
+        <span style={{fontSize:'11px',flexShrink:0}}>{team?f(team):'❓'}</span>
+        <select value={team} onChange={e=>onChange(e.target.value)}
+          style={{flex:1,fontSize:'9px',border:'none',background:'transparent',color:'var(--ink)',
+            cursor:'pointer',minWidth:0,overflow:'hidden',textOverflow:'ellipsis'}}>
+          <option value="">— Equipo —</option>
+          {BRACKET_TEAMS_ALL.map(t=><option key={t} value={t}>{es(t)}</option>)}
+        </select>
+        <input type="number" min="0" max="20" value={score} onChange={e=>onScoreChange(e.target.value)}
+          style={{width:'24px',fontSize:'10px',fontWeight:700,textAlign:'center',border:'none',
+            background:isWinner?'rgba(246,201,14,.15)':'transparent',borderRadius:'3px',color:'var(--ink)'}}/>
+      </div>
+    )
+  }
+
+  return(
+    <div style={{display:'flex',gap:'8px',alignItems:'flex-start',minWidth:'900px'}}>
+      {phases.map(({key,label,count})=>(
+        <div key={key} style={{flex:1,minWidth:'155px'}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'11px',color:'var(--gold)',
+            textAlign:'center',marginBottom:'6px',letterSpacing:1}}>{label}</div>
+          <div style={{display:'flex',flexDirection:'column',gap:'4px',
+            justifyContent:'space-around',height:'100%'}}>
+            {Array.from({length:count},(_,i)=>(
+              <MatchSlot key={i} phase={key} idx={i} match={bracket?.[key]?.[i]}/>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div style={{minWidth:'155px'}}>
+        <div style={{fontFamily:'Bebas Neue',fontSize:'11px',color:'var(--gold)',textAlign:'center',marginBottom:'6px',letterSpacing:1}}>Final</div>
+        <div style={{marginBottom:'8px'}}>
+          <div style={{fontSize:'9px',color:'var(--ink3)',marginBottom:'3px'}}>3er Puesto</div>
+          <MatchSlot phase="third" idx={0} match={bracket?.third}/>
+        </div>
+        <div style={{border:'2px solid var(--gold)',borderRadius:'8px',padding:'4px'}}>
+          <div style={{fontSize:'9px',color:'var(--gold)',fontWeight:700,marginBottom:'3px',textAlign:'center'}}>🏆 GRAN FINAL</div>
+          <MatchSlot phase="final" idx={0} match={bracket?.final}/>
+        </div>
       </div>
     </div>
   )
@@ -2407,6 +2784,7 @@ function AppRoot(){
       {/* Authenticated views */}
       {view==='avatars'&&<DashboardPage/>}
       {view==='special'&&<SpecialPredictionsPage/>}
+      {view==='bracket'&&<BracketPage/>}
       {view==='dashboard'&&<DashboardPage/>}
       {view==='chat'&&<ChatPage/>}
       {view==='pele_chat'&&<PeleFreeChatPage/>}

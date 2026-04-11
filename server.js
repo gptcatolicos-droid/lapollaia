@@ -18,6 +18,33 @@ const SUPER_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@lapollaia.com'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const TEAM_STATS_SERVER={
+  'Brazil':{rank:1,notes:'Vinícius Jr., Rodrygo'},'France':{rank:2,notes:'Mbappé, campeón 2018'},
+  'Argentina':{rank:3,notes:'Messi, campeón 2022'},'England':{rank:4,notes:'Bellingham, Saka'},
+  'Spain':{rank:5,notes:'Yamal, Pedri'},'Portugal':{rank:6,notes:'Cristiano Ronaldo'},
+  'Germany':{rank:7,notes:'Wirtz, renovados'},'Netherlands':{rank:8,notes:'De Jong, Gakpo'},
+  'Belgium':{rank:9,notes:'Lukaku, De Bruyne'},'Croatia':{rank:10,notes:'Modrić, Kovačić'},
+  'USA':{rank:11,notes:'Pulisic, anfitrión'},'Colombia':{rank:12,notes:'Luis Díaz, James'},
+  'Morocco':{rank:13,notes:'Hakimi, semifinalistas 2022'},'Switzerland':{rank:14,notes:'Shaqiri, Xhaka'},
+  'Mexico':{rank:15,notes:'Lozano, abre el torneo'},'Japan':{rank:16,notes:'Doan, Mitoma'},
+  'Uruguay':{rank:18,notes:'Núñez, De Arrascaeta'},'Korea Republic':{rank:19,notes:'Son Heung-min'},
+  'Senegal':{rank:20,notes:'Mané, Sarr'},'Austria':{rank:22,notes:'Sabitzer'},
+  'IR Iran':{rank:22,notes:'Taremi'},'Norway':{rank:23,notes:'Haaland'},
+  'Australia':{rank:24,notes:'Leckie, Rowles'},'Sweden':{rank:25,notes:'Isak, Kulusevski'},
+  'Algeria':{rank:33,notes:'Mahrez'},'Tunisia':{rank:32,notes:'Msakni'},
+  'Egypt':{rank:35,notes:'Salah'},'Czechia':{rank:36,notes:'Schick'},
+  'Scotland':{rank:37,notes:'McTominay, Robertson'},'Canada':{rank:38,notes:'Davies'},
+  'Ivory Coast':{rank:41,notes:'Haller, Zaha'},'DR Congo':{rank:44,notes:'debutante'},
+  'Bosnia and Herzegovina':{rank:49,notes:'Džeko'},'Qatar':{rank:58,notes:'anfitrión 2022'},
+  'Saudi Arabia':{rank:56,notes:'Al-Dawsari'},'Ecuador':{rank:31,notes:'Valencia, Caicedo'},
+  'Ghana':{rank:60,notes:'Kudus'},'Iraq':{rank:62,notes:'debutante'},
+  'Uzbekistan':{rank:67,notes:'debutante'},'South Africa':{rank:68,notes:'Bafana'},
+  'Panama':{rank:70,notes:'segundo Mundial'},'Cape Verde':{rank:73,notes:'debutante'},
+  'Jordan':{rank:74,notes:'debutante'},'Curaçao':{rank:81,notes:'debutante'},
+  'Haiti':{rank:88,notes:'debutante'},'New Zealand':{rank:93,notes:'portería sólida'},
+  'Turkey':{rank:29,notes:'Güler, Çalhanoğlu'},
+}
+
 const mp = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN || '' })
 
 // ─── EMAIL SETUP ──────────────────────────────────────────────────────────────
@@ -164,6 +191,18 @@ async function initDb() {
         champion_pts INTEGER DEFAULT 0, surprise_pts INTEGER DEFAULT 0,
         balon_pts INTEGER DEFAULT 0, guante_pts INTEGER DEFAULT 0,
         bota_pts INTEGER DEFAULT 0,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS bracket_predictions(
+        id TEXT PRIMARY KEY,
+        avatar_id TEXT UNIQUE REFERENCES avatars(id) ON DELETE CASCADE,
+        bracket JSONB NOT NULL DEFAULT '{}',
+        is_ai_generated BOOLEAN DEFAULT FALSE,
+        has_been_edited BOOLEAN DEFAULT FALSE,
+        pts_earned INTEGER DEFAULT 0,
+        locked_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `)
@@ -828,6 +867,153 @@ app.post('/api/special', auth, async(req,res)=>{
       [id,avatarId,champion||null,surprise||null,balonDeOro||null,guanteDeOro||null,botaDeOro||null])
     res.json({success:true})
   }catch(e){ res.status(500).json({error:'Error'}) }
+})
+
+// ─── AUTO-FILL PREDICTIONS ────────────────────────────────────────────────────
+app.post('/api/autofill', auth, async(req,res)=>{
+  const {avatarId, groupFilter} = req.body  // groupFilter: null=all, 'A'=group A only, matchId=single
+  try{
+    const tid = req.user.tournamentId
+    const now = new Date()
+
+    // Get matches to fill
+    let matchQuery = 'SELECT m.* FROM matches m WHERE 1=1'
+    const qparams = []
+    if(groupFilter && groupFilter.length===1){
+      qparams.push(groupFilter)
+      matchQuery += ` AND m.phase='group' AND m.group_name=$${qparams.length}`
+    }
+    const {rows:matchesToFill} = await pool.query(matchQuery + ' ORDER BY m.match_num', qparams)
+
+    // Filter to only unlocked matches without predictions
+    const {rows:existing} = await pool.query(
+      'SELECT match_id FROM predictions WHERE avatar_id=$1', [avatarId])
+    const existingIds = new Set(existing.map(r=>r.match_id))
+
+    const {rows:locks} = await pool.query(
+      'SELECT phase,is_locked,auto_lock_hours FROM phase_locks WHERE tournament_id=$1',[tid])
+    const lockMap = {}
+    locks.forEach(l=>{ lockMap[l.phase]={isLocked:l.is_locked, hours:l.auto_lock_hours||2} })
+
+    const pending = matchesToFill.filter(m=>{
+      if(existingIds.has(m.id)) return false
+      const lock = lockMap[m.phase]||{isLocked:false,hours:2}
+      if(lock.isLocked) return false
+      if(!m.match_date) return false
+      const lockTime = new Date(m.match_date).getTime() - lock.hours*3600000
+      return Date.now() < lockTime
+    })
+
+    if(pending.length===0) return res.json({filled:0, message:'No hay partidos disponibles para llenar'})
+
+    // Call AI for each match (batch, up to 20 to avoid timeout)
+    const toProcess = pending.slice(0, 20)
+    const results = []
+
+    for(const m of toProcess){
+      const t1stats = TEAM_STATS_SERVER[m.team1]||{rank:50,notes:'Datos no disponibles'}
+      const t2stats = TEAM_STATS_SERVER[m.team2]||{rank:50,notes:'Datos no disponibles'}
+      try{
+        const msg = await anthropic.messages.create({
+          model:'claude-sonnet-4-20250514', max_tokens:150,
+          system:`Eres un analista de fútbol. Responde SOLO JSON válido sin markdown: {"home":N,"away":N}`,
+          messages:[{role:'user',content:`${m.team1}(#${t1stats.rank},${t1stats.notes}) vs ${m.team2}(#${t2stats.rank},${t2stats.notes}). Fase:${m.phase}. Grupo:${m.group_name||''}. Sede:${m.venue||''}. Marcador más probable:`}]
+        })
+        const text = msg.content[0].text.trim().replace(/```json|```/g,'').trim()
+        const parsed = JSON.parse(text)
+        const h = Math.max(0,Math.min(9,parseInt(parsed.home)||0))
+        const a = Math.max(0,Math.min(9,parseInt(parsed.away)||0))
+        results.push({matchId:m.id, home:h, away:a})
+      } catch(e){
+        // Fallback: use ranking logic
+        const r1 = t1stats.rank||50, r2 = t2stats.rank||50
+        results.push({matchId:m.id, home:r1<r2?2:r1>r2?1:1, away:r1<r2?0:r1>r2?2:1})
+      }
+    }
+
+    // Save all predictions
+    let saved = 0
+    for(const r of results){
+      const id = 'p-'+crypto.randomBytes(8).toString('hex')
+      await pool.query(`
+        INSERT INTO predictions(id,avatar_id,match_id,score_home,score_away)
+        VALUES($1,$2,$3,$4,$5)
+        ON CONFLICT(avatar_id,match_id) DO UPDATE SET score_home=$4,score_away=$5,updated_at=NOW()
+      `,[id,avatarId,r.matchId,r.home,r.away])
+      saved++
+    }
+
+    res.json({filled:saved, total:pending.length, predictions:results})
+  }catch(e){ console.error('autofill:',e); res.status(500).json({error:'Error en auto-fill'}) }
+})
+
+// ─── BRACKET PREDICTIONS ─────────────────────────────────────────────────────
+app.get('/api/bracket/:avatarId', auth, async(req,res)=>{
+  try{
+    const {rows:[bp]} = await pool.query(
+      'SELECT * FROM bracket_predictions WHERE avatar_id=$1',[req.params.avatarId])
+    res.json(bp||null)
+  }catch(e){ res.status(500).json({error:'Error'}) }
+})
+
+app.post('/api/bracket', auth, async(req,res)=>{
+  const {avatarId, bracket, isAiGenerated} = req.body
+  if(!avatarId||!bracket) return res.status(400).json({error:'Datos incompletos'})
+  try{
+    const {rows:[existing]} = await pool.query(
+      'SELECT id,has_been_edited,locked_at FROM bracket_predictions WHERE avatar_id=$1',[avatarId])
+    const id = existing?.id || 'br-'+crypto.randomBytes(10).toString('hex')
+    const hasBeenEdited = existing ? (!existing.locked_at ? false : true) : false
+
+    await pool.query(`
+      INSERT INTO bracket_predictions(id,avatar_id,bracket,is_ai_generated,has_been_edited,updated_at)
+      VALUES($1,$2,$3,$4,$5,NOW())
+      ON CONFLICT(avatar_id) DO UPDATE SET bracket=$3,is_ai_generated=$4,has_been_edited=$5,updated_at=NOW()
+    `,[id, avatarId, JSON.stringify(bracket), !!isAiGenerated, hasBeenEdited])
+
+    res.json({success:true, id, hasBeenEdited})
+  }catch(e){ console.error('bracket save:',e); res.status(500).json({error:'Error guardando bracket'}) }
+})
+
+// Lock bracket (user confirms - start earning 100pts potential)
+app.post('/api/bracket/lock', auth, async(req,res)=>{
+  const {avatarId} = req.body
+  try{
+    await pool.query(
+      'UPDATE bracket_predictions SET locked_at=NOW(),updated_at=NOW() WHERE avatar_id=$1',[avatarId])
+    res.json({success:true})
+  }catch(e){ res.status(500).json({error:'Error'}) }
+})
+
+// AI bracket suggestion based on champion
+app.post('/api/bracket/suggest', auth, async(req,res)=>{
+  const {champion, avatarId} = req.body
+  if(!champion) return res.status(400).json({error:'Selecciona un campeón'})
+  try{
+    const msg = await anthropic.messages.create({
+      model:'claude-sonnet-4-20250514', max_tokens:2000,
+      system:`Eres un experto en fútbol. Debes generar un bracket completo del Mundial FIFA 2026 basado en el campeón elegido.
+El torneo tiene: 16 grupos (A-L, 4 equipos c/u), Round of 32 (32 partidos), Round of 16, Quarters, Semis, Final.
+Responde SOLO en JSON válido sin markdown con esta estructura exacta:
+{
+  "round32": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...32 partidos],
+  "round16": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...16 partidos],
+  "quarters": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...8 partidos],
+  "semis": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...4 partidos],
+  "third": {"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N},
+  "final": {"home":"TEAM","away":"TEAM","winner":"CHAMPION","home_score":N,"away_score":N},
+  "champion": "CHAMPION"
+}
+Usa nombres en inglés exactos de los equipos del Mundial 2026: Brazil, France, Argentina, England, Spain, Portugal, Germany, Netherlands, Belgium, Colombia, Morocco, Japan, USA, Mexico, Uruguay, Croatia, Korea Republic, Senegal, Ecuador, Norway, Australia, Switzerland, Turkey, Sweden, Austria, Ghana, IR Iran, Saudi Arabia, Ivory Coast, Iraq, DR Congo, Uzbekistan, Curaçao, Panama, Jordan, New Zealand, Scotland, Cape Verde, Haiti, Algeria, Tunisia, Bosnia and Herzegovina, Czechia, Egypt, Qatar, South Africa, Canada.`,
+      messages:[{role:'user',content:`Genera el bracket completo del Mundial 2026 donde ${champion} es el campeón. Sé consistente: los ganadores de cada ronda avanzan a la siguiente. El bracket del Round of 32 alimenta el Round of 16, etc. Usa análisis real de fútbol para los otros resultados.`}]
+    })
+    const text = msg.content[0].text.trim().replace(/```json|```/g,'').trim()
+    const bracket = JSON.parse(text)
+    res.json({bracket})
+  }catch(e){
+    console.error('bracket suggest:',e)
+    res.status(500).json({error:'No pude generar el bracket. Intenta de nuevo.'})
+  }
 })
 
 // ─── RESULTS ─────────────────────────────────────────────────────────────────
