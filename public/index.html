@@ -286,6 +286,7 @@ footer img{width:34px;opacity:.3;margin:0 auto .5rem;display:block}
 footer p{color:rgba(255,255,255,.18);font-size:11px}
 .spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--ink);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:5px}
 @keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:700px){.pele-cta-grid{grid-template-columns:1fr!important}.pele-mockup{display:none!important}}
 @media(max-width:600px){.nav-enter{display:none}.carousel-slide{flex:0 0 300px}.carousel-track{padding:0 calc(50% - 150px)}.hcd{padding:.55rem .7rem;min-width:48px}.hcd-n{font-size:1.6rem}.hero-proof{gap:.75rem}}
 </style>
 </head>
@@ -301,7 +302,7 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
       <input type="text" id="navSlug" placeholder="nombre de tu polla..." onkeypress="if(event.key==='Enter')go('navSlug')"/>
       <button onclick="go('navSlug')">Entrar</button>
     </div>
-    <button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
+    <a href="/pele" target="_blank" style="font-size:11px;color:rgba(255,255,255,.5);text-decoration:none;white-space:nowrap;display:flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid rgba(255,255,255,.1);border-radius:7px;transition:all .15s" onmouseover="this.style.borderColor='rgba(246,201,14,.35)';this.style.color='#F6C90E'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)';this.style.color='rgba(255,255,255,.5)'">&#129302; Pelé IA</a><button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
     <button class="nav-cta" onclick="showCreate();document.getElementById('crear').scrollIntoView({behavior:'smooth'})">Crear mi Polla</button>
   </div>
 </nav>
@@ -554,6 +555,109 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
     </div>
   </div>
 </div></div>
+
+
+<!-- PELE IA CTA SECTION -->
+<section style="padding:5rem 1.5rem;background:linear-gradient(135deg,#0d1117 0%,#111827 50%,#0d1117 100%);border-top:1px solid rgba(246,201,14,.08);border-bottom:1px solid rgba(246,201,14,.08)">
+  <div style="max-width:900px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center">
+
+      <!-- Left: copy -->
+      <div>
+        <div style="display:inline-block;background:rgba(246,201,14,.1);border:1px solid rgba(246,201,14,.25);color:#F6C90E;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:3px 12px;margin-bottom:1rem">GRATIS &middot; SIN REGISTRO</div>
+        <h2 style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,4vw,3rem);letter-spacing:2px;line-height:.95;margin-bottom:1rem;color:#fff">
+          HABLA CON<br/><span style="color:#F6C90E">PEL&Eacute; IA</span><br/>AHORA
+        </h2>
+        <p style="font-size:15px;color:rgba(255,255,255,.5);line-height:1.7;margin-bottom:1.5rem">
+          El experto en f&uacute;tbol m&aacute;s apasionado de internet. Gr&aacute;tis, sin registro, sin l&iacute;mites.<br/>
+          Estad&iacute;sticas, t&aacute;cticas, historia, an&aacute;lisis, jugadores &mdash; todo el f&uacute;tbol en una conversaci&oacute;n.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1.75rem">
+          <div style="display:flex;align-items:center;gap:.6rem;font-size:13px;color:rgba(255,255,255,.6)">
+            <span style="color:#F6C90E;font-size:1rem">&#9917;</span> Cualquier pregunta de f&uacute;tbol
+          </div>
+          <div style="display:flex;align-items:center;gap:.6rem;font-size:13px;color:rgba(255,255,255,.6)">
+            <span style="color:#F6C90E;font-size:1rem">&#128200;</span> Estad&iacute;sticas y datos reales
+          </div>
+          <div style="display:flex;align-items:center;gap:.6rem;font-size:13px;color:rgba(255,255,255,.6)">
+            <span style="color:#F6C90E;font-size:1rem">&#129302;</span> An&aacute;lisis t&aacute;ctico con IA
+          </div>
+          <div style="display:flex;align-items:center;gap:.6rem;font-size:13px;color:rgba(255,255,255,.6)">
+            <span style="color:#F6C90E;font-size:1rem">&#127775;</span> Sin registro ni instalaci&oacute;n
+          </div>
+        </div>
+        <a href="/pele" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:#F6C90E;color:#0d1117;border:none;border-radius:12px;padding:1rem 2rem;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;transition:all .2s;box-shadow:0 8px 24px rgba(246,201,14,.3)"
+          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 32px rgba(246,201,14,.45)'"
+          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 8px 24px rgba(246,201,14,.3)'">
+          &#129302; Hablar con Pel&eacute; IA &rarr;
+        </a>
+        <div style="font-size:10px;color:rgba(255,255,255,.2);margin-top:.75rem">
+          Gratis &middot; 25 preguntas por sesi&oacute;n &middot; Se abre en nueva pesta&ntilde;a
+        </div>
+      </div>
+
+      <!-- Right: chat preview mockup -->
+      <div style="background:#111827;border:1px solid rgba(246,201,14,.2);border-radius:20px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6)">
+        <!-- Bar -->
+        <div style="background:rgba(13,17,23,.9);padding:.7rem 1rem;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.07)">
+          <div style="width:7px;height:7px;border-radius:50%;background:#ff5f57"></div>
+          <div style="width:7px;height:7px;border-radius:50%;background:#ffbd2e"></div>
+          <div style="width:7px;height:7px;border-radius:50%;background:#28c840"></div>
+          <div style="font-size:9px;color:rgba(255,255,255,.3);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-left:6px">Pel&eacute; IA &mdash; Chat de F&uacute;tbol</div>
+        </div>
+        <!-- Messages -->
+        <div style="padding:14px;display:flex;flex-direction:column;gap:10px;min-height:280px">
+          <div style="display:flex;gap:7px;align-items:flex-start">
+            <div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #F6C90E"><img src="/pele.jpg" style="width:100%;height:100%;object-fit:cover;object-position:top" alt="Pele"/></div>
+            <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:4px 14px 14px 14px;padding:9px 12px;font-size:11px;color:rgba(255,255,255,.8);line-height:1.6;max-width:78%">
+              Hola! Soy <strong style="color:#F6C90E">Pel&eacute; IA</strong> &#9917;&#127942;<br/>
+              &iquest;Sobre qu&eacute; quieres hablar hoy?
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end">
+            <div style="background:#F6C90E;color:#0d1117;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:11px;font-weight:600;max-width:75%">
+              &iquest;Messi o Cristiano, qui&eacute;n es mejor?
+            </div>
+          </div>
+          <div style="display:flex;gap:7px;align-items:flex-start">
+            <div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #F6C90E"><img src="/pele.jpg" style="width:100%;height:100%;object-fit:cover;object-position:top" alt="Pele"/></div>
+            <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:4px 14px 14px 14px;padding:9px 12px;font-size:11px;color:rgba(255,255,255,.8);line-height:1.6;max-width:78%">
+              &iexcl;La pregunta del mill&oacute;n! &#127942; Messi tiene <strong style="color:#F6C90E">8 Balones de Oro</strong> y un t&iacute;tulo mondial. Cristiano tiene 5 Champions. Son los dos mejores de la historia...
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end">
+            <div style="background:#F6C90E;color:#0d1117;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:11px;font-weight:600;max-width:75%">
+              &iquest;Qu&eacute; equipo crees que gana el torneo 2026?
+            </div>
+          </div>
+          <div style="display:flex;gap:7px;align-items:flex-start">
+            <div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #F6C90E"><img src="/pele.jpg" style="width:100%;height:100%;object-fit:cover;object-position:top" alt="Pele"/></div>
+            <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:4px 14px 14px 14px;padding:9px 12px;font-size:11px;color:rgba(255,255,255,.8);line-height:1.6;max-width:78%">
+              Mi an&aacute;lisis apunta a <strong style="color:#F6C90E">Brasil o Francia</strong>. Brasil tiene la generaci&oacute;n m&aacute;s talentosa en a&ntilde;os con Vini Jr... &#127463;&#127479;
+            </div>
+          </div>
+          <!-- Typing indicator -->
+          <div style="display:flex;gap:7px;align-items:center">
+            <div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #F6C90E"><img src="/pele.jpg" style="width:100%;height:100%;object-fit:cover;object-position:top" alt="Pele"/></div>
+            <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:4px 14px 14px 14px;padding:9px 14px;display:flex;gap:4px;align-items:center">
+              <span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.4);animation:b .9s infinite"></span>
+              <span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.4);animation:b .9s .15s infinite"></span>
+              <span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.4);animation:b .9s .3s infinite"></span>
+            </div>
+          </div>
+        </div>
+        <!-- CTA bottom -->
+        <div style="background:rgba(246,201,14,.06);border-top:1px solid rgba(246,201,14,.15);padding:.7rem 1rem;text-align:center">
+          <a href="/pele" target="_blank" style="font-size:11px;font-weight:700;color:#F6C90E;text-decoration:none">
+            &#128071; Haz clic aqu&iacute; para chatear &rarr;
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+<style>@keyframes b{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}</style>
 
 <div class="faq-sec">
   <div class="faq-inner">

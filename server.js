@@ -350,6 +350,7 @@ function getWinner(h,a){ return +h>+a?'home':+h<+a?'away':'draw' }
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 // Marketing home
 app.get('/', (req,res) => res.sendFile(path.join(__dirname,'public','index.html')))
+app.get('/pele', (req,res) => res.sendFile(path.join(__dirname,'public','pele.html')))
 
 // Game SPA — serve app.html for all /t/:slug routes
 app.get('/t/:slug', (req,res) => res.sendFile(path.join(__dirname,'public','app.html')))
@@ -811,6 +812,41 @@ Responde SOLO en JSON válido (sin markdown): {"home":NUMERO,"away":NUMERO,"reas
     }catch(pe){ console.error('suggest parse:',pe.message) }
     res.json(result)
   }catch(e){ res.json({home:1,away:0,reason:'No pude conectarme al análisis en este momento.'}) }
+})
+
+// ─── PELÉ IA — PÚBLICO (sin auth, para home page) ────────────────────────────
+app.post('/api/pele/public', async(req,res)=>{
+  const {message,history=[]}=req.body
+  if(!message||message.trim().length<2) return res.status(400).json({error:'Mensaje vacío'})
+  // Rate limit: max 20 messages per IP per hour (simple in-memory)
+  const ip=req.ip||req.connection.remoteAddress||'unknown'
+  if(!global._pelePublicRate) global._pelePublicRate={}
+  const now=Date.now()
+  const key=ip+':'+Math.floor(now/3600000)
+  global._pelePublicRate[key]=(global._pelePublicRate[key]||0)+1
+  if(global._pelePublicRate[key]>25) return res.status(429).json({error:'Límite de mensajes alcanzado. ¡Crea tu polla para acceso ilimitado!'})
+  try{
+    const msgs=[
+      ...history.slice(-6).map(m=>({role:m.role,content:m.content})),
+      {role:'user',content:message}
+    ]
+    const resp=await anthropic.messages.create({
+      model:'claude-sonnet-4-20250514', max_tokens:600,
+      system:`Eres Pelé IA, el mayor experto en fútbol del mundo. Hablas en español con pasión y conocimiento profundo. Respondes sobre estadísticas, jugadores, equipos, tácticas, historia y análisis del fútbol internacional.
+
+REGLAS:
+- Solo respondes sobre fútbol y deportes relacionados
+- Si te preguntan algo fuera del fútbol, dices amablemente que solo sabes de fútbol
+- Eres apasionado, usas emojis de fútbol ocasionalmente ⚽🏆
+- Máximo 3 párrafos por respuesta
+- Al final de cada respuesta, si es pertinente, menciona que pueden crear su propia polla de pronósticos en lapollaia.com`,
+      messages:msgs
+    })
+    res.json({response:resp.content[0].text})
+  }catch(e){
+    console.error('pele/public:',e.message)
+    res.status(500).json({error:'Error conectando con Pelé IA'})
+  }
 })
 
 // ─── PELÉ IA — MODO LIBRE (cualquier pregunta de fútbol) ─────────────────────
