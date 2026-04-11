@@ -430,7 +430,7 @@ function TermsPage(){
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>3. Pronósticos y Edición</strong>
             Puedes editar tus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>4. Sistema de Puntos</strong>
-            Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u. Bracket del Mundial: +100 pts si aciertas el path completo sin editar, +10 pts si editas y aciertas.
+            Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u. Pronóstico General: +100 pts si aciertas el path completo sin editar, +10 pts si editas y aciertas.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Conducta</strong>
             Queda prohibido utilizar la plataforma para apuestas, captación de dinero o cualquier actividad económica entre participantes. El uso es exclusivamente recreativo.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>6. Privacidad</strong>
@@ -472,7 +472,7 @@ function GuidePage(){
     {n:1,icon:'💬',title:'Llena tus pronósticos — tú o con IA',
       desc:'Pelé IA te pregunta si quieres que llene toda tu polla automáticamente, un grupo específico, o hacerlo tú partido por partido con su ayuda. Puedes editar hasta 2 horas antes de cada partido.',
       badges:['🤖 Auto-fill IA','✍️ Manual con ayuda','Guardado automático']},
-    {n:2,icon:'🏆',title:'Mi Bracket del Mundial — hasta 100 pts',
+    {n:2,icon:'🏆',title:'Mi Pronóstico General — hasta 100 pts',
       desc:'Define el camino al título: quién avanza en cada fase hasta el campeón. Pelé IA puede generarlo por ti. Si aciertas sin editar: +100 pts. Si editas y aciertas: +10 pts. ¡Descárgalo como imagen!',
       badges:['🏆 100 pts sin editar','✏️ 10 pts si editas','📸 Exportar PNG']},
     {n:3,icon:'⭐',title:'Extra Points — puntos adicionales',
@@ -741,8 +741,8 @@ function DashboardPage(){
           </div>
           <div className="action-card action-card-dark" onClick={()=>setView('bracket')} style={{gridColumn:'span 2',background:'linear-gradient(135deg,#1a1a2a,#0f1923)',border:'1.5px solid var(--gold)'}}>
             <div className="ac-icon">🏆</div>
-            <div className="ac-label ac-label-w">Mi Bracket del Mundial</div>
-            <div className="ac-desc ac-desc-w">Define el camino al título · 100 pts si aciertas · Comparte tu bracket</div>
+            <div className="ac-label ac-label-w">Mi Pronóstico General</div>
+            <div className="ac-desc ac-desc-w">Define el camino al título · 100 pts si aciertas · Comparte tu pronóstico general</div>
           </div>
 
         </div>
@@ -1491,14 +1491,14 @@ function ChatPage(){
       {/* Quick replies */}
       {chatPhase==='mode_select'&&!autofilling&&(
         <div className="qr-row">
-          <div className="qr qr-gold" onClick={()=>setView('bracket')}>🏆 Definir mi bracket</div>
+          <div className="qr qr-gold" onClick={()=>setView('bracket')}>🏆 Mi Pronóstico General</div>
           <div className="qr" onClick={()=>setView('dashboard')}>🏠 Inicio</div>
         </div>
       )}
       {chatPhase==='group_select'&&(
         <div className="qr-row">
           <div className="qr qr-gold" onClick={()=>setView('board')}>📋 Ver tablero general</div>
-          <div className="qr" onClick={()=>setView('bracket')}>🏆 Mi bracket</div>
+          <div className="qr" onClick={()=>setView('bracket')}>🏆 Mi Pronóstico General</div>
           <div className="qr" onClick={()=>setView('dashboard')}>🏠 Inicio</div>
         </div>
       )}
@@ -1704,7 +1704,7 @@ function BracketPage(){
       const data=await api('/api/bracket/suggest','POST',{champion,avatarId:activeAvatar.id})
       setBracket(data.bracket)
       setChampion(data.bracket.champion||champion)
-      setMsg('¡Bracket generado por Pelé IA! Revísalo y guárdalo cuando estés listo.')
+      setMsg('¡Pronóstico general generado por Pelé IA! Revísalo y guárdalo cuando estés listo.')
       setTab('view')
     }catch(e){setErr(e.message)}
     setGenerating(false)
@@ -1723,10 +1723,10 @@ function BracketPage(){
       if(lock&&!wasLocked){
         await api('/api/bracket/lock','POST',{avatarId:activeAvatar.id})
         setLocked(true)
-        setMsg('🔒 Bracket confirmado y guardado. ¡Si aciertas el campeón y el path completo sin editar, ganas 100 puntos!')
+        setMsg('🔒 Pronóstico general confirmado y guardado. ¡Si aciertas el campeón y el path completo sin editar, ganas 100 puntos!')
       } else {
         if(wasLocked) setHasBeenEdited(true)
-        setMsg('✅ Bracket guardado. ' + (wasLocked?'Has editado tu bracket — si aciertas ganarás 10 pts.':'Confírmalo cuando estés seguro para optar por los 100 pts.'))
+        setMsg('✅ Pronóstico general guardado. ' + (wasLocked?'Has editado tu pronóstico general — si aciertas ganarás 10 pts.':'Confírmalo cuando estés seguro para optar por los 100 pts.'))
       }
       setSavedBracket(bracket)
     }catch(e){setErr(e.message)}
@@ -1746,7 +1746,7 @@ function BracketPage(){
         link.click()
         setMsg('✅ Imagen descargada')
       } else {
-        setMsg('Para descargar: haz clic derecho en el bracket → "Guardar imagen como"')
+        setMsg('Para descargar: haz clic derecho en el pronóstico general → "Guardar imagen como"')
       }
     }catch(e){setMsg('No se pudo exportar. Intenta captura de pantalla.')}
   }
@@ -1774,9 +1774,9 @@ function BracketPage(){
       <div className="container pad">
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem',flexWrap:'wrap',gap:'8px'}}>
           <div>
-            <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.1rem'}}>🏆 MI BRACKET DEL MUNDIAL 2026</h2>
+            <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.1rem'}}>🏆 MI PRONÓSTICO GENERAL 2026</h2>
             <p className="text-muted text-xs">
-              {locked?(hasBeenEdited?'✏️ Editado — si aciertas: +10 pts':'🔒 Confirmado — si aciertas el path: +100 pts'):'Confirma tu bracket para optar por 100 pts · Editable fase a fase'}
+              {locked?(hasBeenEdited?'✏️ Editado — si aciertas: +10 pts':'🔒 Confirmado — si aciertas el path: +100 pts'):'Confirma tu pronóstico general para optar por 100 pts · Editable fase a fase'}
             </p>
           </div>
           <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
@@ -1797,7 +1797,7 @@ function BracketPage(){
 
         {/* Tabs */}
         <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1rem'}}>
-          {[['view','🏆 Ver Bracket'],['setup','🤖 Configurar con IA']].map(([k,l])=>(
+          {[['view','🏆 Ver Pronóstico'],['setup','🤖 Generar con IA']].map(([k,l])=>(
             <button key={k} onClick={()=>setTab(k)}
               style={{flex:1,padding:'.5rem',fontWeight:700,fontSize:'12px',border:'none',cursor:'pointer',
                 background:tab===k?'var(--ink)':'transparent',
@@ -1810,7 +1810,7 @@ function BracketPage(){
         {tab==='setup'&&(
           <div className="card mb2">
             <div style={{fontWeight:700,fontSize:'13px',marginBottom:'.75rem'}}>🤖 Generar bracket con Pelé IA</div>
-            <p className="text-muted text-sm mb2">Elige el campeón y Pelé IA propone el bracket completo usando análisis de fútbol real. Luego puedes editarlo.</p>
+            <p className="text-muted text-sm mb2">Elige el campeón y Pelé IA propone el pronóstico general completo usando análisis de fútbol real. Luego puedes editarlo.</p>
             <div className="form-group">
               <label>¿Quién será el Campeón del Mundial 2026?</label>
               <select className="inp" value={champion} onChange={e=>setChampion(e.target.value)}>
@@ -1819,7 +1819,7 @@ function BracketPage(){
               </select>
             </div>
             <button className="btn btn-gold btn-full" onClick={generateWithAI} disabled={generating||!champion}>
-              {generating?'⏳ Pelé IA está generando tu bracket...':'🤖 Generar bracket completo con IA'}
+              {generating?'⏳ Pelé IA está generando el pronóstico...':'🤖 Generar pronóstico general completo con IA'}
             </button>
             {generating&&<p className="text-muted text-xs mt1 text-center">Esto puede tardar 10-15 segundos...</p>}
           </div>
@@ -1846,77 +1846,120 @@ function BracketPage(){
 }
 
 function BracketViz({bracket,onUpdate,locked}){
-  const phases=[
-    {key:'round32',label:'Round of 32',count:32},
-    {key:'round16',label:'Round of 16',count:16},
-    {key:'quarters',label:'Cuartos de Final',count:8},
-    {key:'semis',label:'Semifinales',count:4},
-  ]
+  const r32 = bracket?.round32 || Array(32).fill(null)
+  const r16 = bracket?.round16 || Array(16).fill(null)
+  const qf  = bracket?.quarters || Array(8).fill(null)
+  const sf  = bracket?.semis    || Array(4).fill(null)
+  const fin = bracket?.final    || {}
+  const trd = bracket?.third    || {}
 
-  function MatchSlot({phase,idx,match,single}){
-    const isLocked=locked
+  function TeamRow({team,score,isWinner,onWin,onChange,onScoreChange}){
     return(
-      <div style={{background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:'6px',
-        padding:'4px 6px',marginBottom:'3px',minWidth:'140px'}}>
-        <TeamSlot team={match?.home||''} score={match?.home_score??''} isWinner={match?.winner===match?.home}
-          onChange={v=>onUpdate(phase,idx,'home',v)} onScoreChange={v=>onUpdate(phase,idx,'home_score',+v)}
-          onWin={()=>onUpdate(phase,idx,'winner',match?.home)} locked={isLocked}/>
-        <div style={{height:'1px',background:'var(--border)',margin:'2px 0'}}/>
-        <TeamSlot team={match?.away||''} score={match?.away_score??''} isWinner={match?.winner===match?.away}
-          onChange={v=>onUpdate(phase,idx,'away',v)} onScoreChange={v=>onUpdate(phase,idx,'away_score',+v)}
-          onWin={()=>onUpdate(phase,idx,'winner',match?.away)} locked={isLocked}/>
-      </div>
-    )
-  }
-
-  function TeamSlot({team,score,isWinner,onChange,onScoreChange,onWin,locked}){
-    return(
-      <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'2px 0'}}>
-        <button onClick={onWin} title="Marcar como ganador"
-          style={{width:'14px',height:'14px',borderRadius:'50%',border:'none',cursor:'pointer',flexShrink:0,
-            background:isWinner?'var(--gold)':'var(--border)',transition:'all .15s'}}/>
-        <span style={{fontSize:'11px',flexShrink:0}}>{team?f(team):'❓'}</span>
-        <select value={team} onChange={e=>onChange(e.target.value)}
-          style={{flex:1,fontSize:'9px',border:'none',background:'transparent',color:'var(--ink)',
-            cursor:'pointer',minWidth:0,overflow:'hidden',textOverflow:'ellipsis'}}>
-          <option value="">— Equipo —</option>
+      <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'3px 5px',
+        background:isWinner?'rgba(246,201,14,.1)':'transparent',
+        borderLeft:isWinner?'2.5px solid var(--gold)':'2.5px solid transparent',
+        minHeight:'22px',transition:'all .15s'}}>
+        <button onClick={onWin} style={{width:'10px',height:'10px',borderRadius:'50%',border:'none',
+          cursor:'pointer',flexShrink:0,background:isWinner?'var(--gold)':'rgba(0,0,0,.12)',transition:'all .15s'}}/>
+        <span style={{fontSize:'11px',flexShrink:0,lineHeight:1}}>{team?f(team):String.fromCodePoint(0x2753)}</span>
+        <select value={team||''} onChange={e=>onChange(e.target.value)}
+          style={{flex:1,fontSize:'9px',border:'none',background:'transparent',
+            color:isWinner?'var(--gold)':'var(--ink)',fontWeight:isWinner?700:400,cursor:'pointer',minWidth:0}}>
+          <option value=''>Equipo</option>
           {BRACKET_TEAMS_ALL.map(t=><option key={t} value={t}>{es(t)}</option>)}
         </select>
-        <input type="number" min="0" max="20" value={score} onChange={e=>onScoreChange(e.target.value)}
-          style={{width:'24px',fontSize:'10px',fontWeight:700,textAlign:'center',border:'none',
-            background:isWinner?'rgba(246,201,14,.15)':'transparent',borderRadius:'3px',color:'var(--ink)'}}/>
+        <input type='number' min='0' max='20' value={score!=null?score:''}
+          onChange={e=>onScoreChange(+e.target.value)}
+          style={{width:'20px',fontSize:'10px',fontWeight:700,textAlign:'center',padding:'1px 2px',
+            border:'1px solid rgba(0,0,0,.1)',borderRadius:'3px',
+            background:isWinner?'rgba(246,201,14,.2)':'rgba(0,0,0,.06)',color:'var(--ink)'}}/>
       </div>
     )
   }
 
+  function MatchCard({phase,idx,match}){
+    const m=match||{}
+    return(
+      <div style={{background:'var(--cream)',border:'1px solid var(--border)',borderRadius:'6px',
+        overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,.08)',width:'100%'}}>
+        <TeamRow team={m.home} score={m.home_score} isWinner={!!(m.winner&&m.winner===m.home)}
+          onWin={()=>onUpdate(phase,idx,'winner',m.home)}
+          onChange={v=>onUpdate(phase,idx,'home',v)}
+          onScoreChange={v=>onUpdate(phase,idx,'home_score',v)}/>
+        <div style={{height:'1px',background:'var(--border)'}}/>
+        <TeamRow team={m.away} score={m.away_score} isWinner={!!(m.winner&&m.winner===m.away)}
+          onWin={()=>onUpdate(phase,idx,'winner',m.away)}
+          onChange={v=>onUpdate(phase,idx,'away',v)}
+          onScoreChange={v=>onUpdate(phase,idx,'away_score',v)}/>
+      </div>
+    )
+  }
+
+  function PhaseCol({label,matches,phase,startIdx}){
+    return(
+      <div style={{display:'flex',flexDirection:'column',minWidth:'155px',width:'155px'}}>
+        <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
+          textAlign:'center',marginBottom:'6px',textTransform:'uppercase',padding:'3px 0',
+          background:'rgba(246,201,14,.06)',borderRadius:'4px'}}>{label}</div>
+        <div style={{display:'flex',flexDirection:'column',justifyContent:'space-around',
+          gap:'6px',flex:1}}>
+          {matches.map((m,i)=>(
+            <MatchCard key={i} phase={phase} idx={startIdx+i} match={m}/>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const gap = '10px'
+
   return(
-    <div style={{display:'flex',gap:'8px',alignItems:'flex-start',minWidth:'900px'}}>
-      {phases.map(({key,label,count})=>(
-        <div key={key} style={{flex:1,minWidth:'155px'}}>
-          <div style={{fontFamily:'Bebas Neue',fontSize:'11px',color:'var(--gold)',
-            textAlign:'center',marginBottom:'6px',letterSpacing:1}}>{label}</div>
-          <div style={{display:'flex',flexDirection:'column',gap:'4px',
-            justifyContent:'space-around',height:'100%'}}>
-            {Array.from({length:count},(_,i)=>(
-              <MatchSlot key={i} phase={key} idx={i} match={bracket?.[key]?.[i]}/>
-            ))}
+    <div style={{overflowX:'auto',overflowY:'auto',maxHeight:'82vh',
+      background:'var(--cream2)',borderRadius:'var(--r)',padding:'12px',
+      border:'1px solid var(--border)'}}>
+      <div style={{display:'flex',gap:gap,alignItems:'stretch',minWidth:'1200px'}}>
+        <PhaseCol label='Round of 32' matches={r32.slice(0,16)} phase='round32' startIdx={0}/>
+        <PhaseCol label='Round of 16' matches={r16.slice(0,8)} phase='round16' startIdx={0}/>
+        <PhaseCol label='Cuartos' matches={qf.slice(0,4)} phase='quarters' startIdx={0}/>
+        <PhaseCol label='Semifinales' matches={sf.slice(0,2)} phase='semis' startIdx={0}/>
+
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:'160px',
+          width:'160px',justifyContent:'center',gap:'10px'}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
+            textAlign:'center',padding:'3px 0',width:'100%',
+            background:'rgba(246,201,14,.06)',borderRadius:'4px'}}>GRAN FINAL</div>
+          <MatchCard phase='final' idx={0} match={fin}/>
+          {fin.winner?(
+            <div style={{background:'linear-gradient(135deg,rgba(246,201,14,.18),rgba(246,201,14,.06))',
+              border:'2px solid var(--gold)',borderRadius:'8px',padding:'6px 8px',textAlign:'center',width:'100%'}}>
+              <div style={{fontSize:'10px',fontWeight:700,color:'var(--gold)'}}>CAMPEON</div>
+              <div style={{fontSize:'12px',fontWeight:700,color:'var(--ink)',marginTop:'2px'}}>
+                {f(fin.winner)} {es(fin.winner)}
+              </div>
+            </div>
+          ):(
+            <div style={{background:'rgba(246,201,14,.05)',border:'1.5px dashed rgba(246,201,14,.3)',
+              borderRadius:'8px',padding:'8px',textAlign:'center',width:'100%'}}>
+              <div style={{fontSize:'1.5rem'}}>🏆</div>
+              <div style={{fontSize:'9px',color:'rgba(246,201,14,.6)',marginTop:'2px'}}>Por definir</div>
+            </div>
+          )}
+          <div style={{width:'100%'}}>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'9px',color:'var(--ink3)',letterSpacing:1,
+              textAlign:'center',marginBottom:'4px'}}>3ER PUESTO</div>
+            <MatchCard phase='third' idx={0} match={trd}/>
           </div>
         </div>
-      ))}
-      <div style={{minWidth:'155px'}}>
-        <div style={{fontFamily:'Bebas Neue',fontSize:'11px',color:'var(--gold)',textAlign:'center',marginBottom:'6px',letterSpacing:1}}>Final</div>
-        <div style={{marginBottom:'8px'}}>
-          <div style={{fontSize:'9px',color:'var(--ink3)',marginBottom:'3px'}}>3er Puesto</div>
-          <MatchSlot phase="third" idx={0} match={bracket?.third}/>
-        </div>
-        <div style={{border:'2px solid var(--gold)',borderRadius:'8px',padding:'4px'}}>
-          <div style={{fontSize:'9px',color:'var(--gold)',fontWeight:700,marginBottom:'3px',textAlign:'center'}}>🏆 GRAN FINAL</div>
-          <MatchSlot phase="final" idx={0} match={bracket?.final}/>
-        </div>
+
+        <PhaseCol label='Semifinales' matches={sf.slice(2,4)} phase='semis' startIdx={2}/>
+        <PhaseCol label='Cuartos' matches={qf.slice(4,8)} phase='quarters' startIdx={4}/>
+        <PhaseCol label='Round of 16' matches={r16.slice(8,16)} phase='round16' startIdx={8}/>
+        <PhaseCol label='Round of 32' matches={r32.slice(16,32)} phase='round32' startIdx={16}/>
       </div>
     </div>
   )
 }
+
 
 // ─── BOARD PAGE ───────────────────────────────────────────────────────────────
 function BoardPage(){
