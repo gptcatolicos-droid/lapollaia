@@ -1697,17 +1697,42 @@ function BracketPage(){
     }).catch(()=>setBracket(emptyBracket())).finally(()=>setLoading(false))
   },[activeAvatar])
 
+  // Only these 9 teams are valid champions
+  const VALID_CHAMPIONS=['Brazil','France','Argentina','England','Spain','Portugal','Germany','Uruguay','Colombia']
+  const [genStep,setGenStep]=React.useState(0) // animation steps
+
   async function generateWithAI(){
     if(!champion){setErr('Elige un campeón primero');return}
-    setGenerating(true); setErr('')
+
+    // Validate champion
+    if(!VALID_CHAMPIONS.includes(champion)){
+      setErr(`❌ La IA considera que ${es(champion)} no tiene posibilidades reales de ser campeón. Los equipos opcionados son: ${VALID_CHAMPIONS.map(t=>es(t)).join(', ')}.`)
+      return
+    }
+
+    setGenerating(true); setErr(''); setGenStep(0)
+
+    // Animated steps during generation
+    const steps=['Analizando historial de equipos...','Calculando probabilidades con IA...','Simulando cruces eliminatorios...','Definiendo marcadores probables...','Ajustando el path al campeón...']
+    let stepIdx=0
+    const stepInterval=setInterval(()=>{
+      stepIdx=Math.min(stepIdx+1, steps.length-1)
+      setGenStep(stepIdx)
+    },2200)
+
     try{
       const data=await api('/api/bracket/suggest','POST',{champion,avatarId:activeAvatar.id})
+      clearInterval(stepInterval)
       setBracket(data.bracket)
       setChampion(data.bracket.champion||champion)
-      setMsg('¡Pronóstico general generado por Pelé IA! Revísalo y guárdalo cuando estés listo.')
+      setMsg('¡Pronóstico general generado por Pelé IA! Revísalo, edita lo que quieras y guárdalo cuando estés listo.')
       setTab('view')
-    }catch(e){setErr(e.message)}
+    }catch(e){
+      clearInterval(stepInterval)
+      setErr(e.message)
+    }
     setGenerating(false)
+    setGenStep(0)
   }
 
   async function saveBracket(lock=false){
@@ -1815,18 +1840,43 @@ function BracketPage(){
         <div style={{maxWidth:'520px',margin:'2rem auto',padding:'0 1rem'}}>
           <div style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'var(--r-lg)',padding:'1.5rem'}}>
             <div style={{fontWeight:700,fontSize:'14px',marginBottom:'.75rem',color:'#fff'}}>🤖 Generar con Pelé IA</div>
-            <p style={{fontSize:'13px',color:'rgba(255,255,255,.45)',marginBottom:'1rem'}}>Elige el campeón y Pelé IA propone el pronóstico completo con análisis real de fútbol. Luego puedes editarlo.</p>
-            <div style={{marginBottom:'1rem'}}>
-              <label style={{display:'block',fontSize:'10px',fontWeight:700,letterSpacing:'.8px',textTransform:'uppercase',color:'rgba(255,255,255,.35)',marginBottom:'5px'}}>¿Quién será el Campeón 2026?</label>
-              <select style={{width:'100%',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.12)',borderRadius:'8px',padding:'.65rem .9rem',color:'#fff',fontSize:'13px'}} value={champion} onChange={e=>setChampion(e.target.value)}>
-                <option value="">— Selecciona el campeón —</option>
-                {BRACKET_TEAMS_ALL.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
-              </select>
-            </div>
-            <button style={{width:'100%',background:'var(--gold)',color:'#0d1117',border:'none',borderRadius:'8px',padding:'.8rem',fontSize:'14px',fontWeight:700,cursor:'pointer'}} onClick={generateWithAI} disabled={generating||!champion}>
-              {generating?'⏳ Generando pronóstico...':'🤖 Generar pronóstico general con IA'}
-            </button>
-            {generating&&<p style={{textAlign:'center',fontSize:'11px',color:'rgba(255,255,255,.3)',marginTop:'.5rem'}}>Esto puede tardar 10-15 segundos...</p>}
+            <p style={{fontSize:'13px',color:'rgba(255,255,255,.45)',marginBottom:'1rem'}}>Elige el campeón y Pelé IA propone el pronóstico completo con análisis real de fútbol. Luego puedes editarlo libremente.</p>
+            {!generating?(
+              <>
+                <div style={{marginBottom:'1rem'}}>
+                  <label style={{display:'block',fontSize:'10px',fontWeight:700,letterSpacing:'.8px',textTransform:'uppercase',color:'rgba(255,255,255,.35)',marginBottom:'5px'}}>¿Quién será el Campeón 2026?</label>
+                  <select style={{width:'100%',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.12)',borderRadius:'8px',padding:'.65rem .9rem',color:'#fff',fontSize:'13px'}} value={champion} onChange={e=>{setChampion(e.target.value);setErr('')}}>
+                    <option value="">— Selecciona el campeón —</option>
+                    {VALID_CHAMPIONS.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
+                  </select>
+                  <p style={{fontSize:'11px',color:'rgba(255,255,255,.25)',marginTop:'5px'}}>Solo se aceptan los 9 equipos con posibilidades reales según la IA</p>
+                </div>
+                <button style={{width:'100%',background:champion?'var(--gold)':'rgba(255,255,255,.1)',color:champion?'#0d1117':'rgba(255,255,255,.3)',border:'none',borderRadius:'8px',padding:'.8rem',fontSize:'14px',fontWeight:700,cursor:champion?'pointer':'not-allowed',transition:'all .2s'}} onClick={generateWithAI} disabled={!champion}>
+                  🤖 Generar pronóstico general con IA
+                </button>
+              </>
+            ):(
+              <div style={{textAlign:'center',padding:'2rem 1rem'}}>
+                {/* Animated generating state */}
+                <div style={{position:'relative',width:'80px',height:'80px',margin:'0 auto 1.25rem'}}>
+                  <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'3px solid rgba(246,201,14,.15)'}}/>
+                  <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'3px solid transparent',borderTopColor:'var(--gold)',animation:'spin 1s linear infinite'}}/>
+                  <div style={{position:'absolute',inset:'8px',borderRadius:'50%',border:'2px solid rgba(246,201,14,.1)'}}/>
+                  <div style={{position:'absolute',inset:'8px',borderRadius:'50%',border:'2px solid transparent',borderTopColor:'rgba(246,201,14,.5)',animation:'spin .6s linear infinite reverse'}}/>
+                  <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}>🤖</div>
+                </div>
+                <div style={{fontFamily:'Bebas Neue',fontSize:'1.3rem',color:'var(--gold)',letterSpacing:2,marginBottom:'.5rem'}}>CALCULANDO CON IA</div>
+                <div style={{fontSize:'13px',color:'rgba(255,255,255,.5)',marginBottom:'1rem',minHeight:'20px',transition:'all .3s'}}>
+                  {['Analizando historial de equipos...','Calculando probabilidades con IA...','Simulando cruces eliminatorios...','Definiendo marcadores probables...','Ajustando el path al campeón...'][genStep]}
+                </div>
+                <div style={{display:'flex',justifyContent:'center',gap:'4px'}}>
+                  {[0,1,2,3,4].map(i=>(
+                    <div key={i} style={{width:'6px',height:'6px',borderRadius:'50%',background:i===genStep?'var(--gold)':'rgba(255,255,255,.15)',transition:'all .3s'}}/>
+                  ))}
+                </div>
+                <p style={{fontSize:'11px',color:'rgba(255,255,255,.2)',marginTop:'1rem'}}>Esto puede tardar 15-20 segundos...</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1859,27 +1909,32 @@ function BracketViz({bracket,onUpdate,locked}){
   const fin = bracket?.final    || {}
   const trd = bracket?.third    || {}
 
+  // Each match card is ~52px tall, gap between cards scales by round
+  const CARD_H = 52  // px per match card (2 teams)
+  const CARD_GAP = [8, 68, 148, 308]  // gap between match pairs per round (R32,R16,QF,SF)
+
   function TeamRow({team,score,isWinner,onWin,onChange,onScoreChange}){
     return(
       <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'3px 5px',
-        background:isWinner?'rgba(246,201,14,.12)':'transparent',
+        background:isWinner?'rgba(246,201,14,.14)':'transparent',
         borderLeft:isWinner?'2.5px solid var(--gold)':'2.5px solid transparent',
-        minHeight:'22px',transition:'all .15s'}}>
-        <button onClick={onWin} style={{width:'10px',height:'10px',borderRadius:'50%',border:'none',
-          cursor:'pointer',flexShrink:0,background:isWinner?'var(--gold)':'rgba(255,255,255,.15)',transition:'all .15s'}}/>
-        <span style={{fontSize:'11px',flexShrink:0,lineHeight:1}}>{team?f(team):'❓'}</span>
+        minHeight:'24px',transition:'all .15s'}}>
+        <button onClick={onWin} title="Marcar ganador" style={{width:'10px',height:'10px',borderRadius:'50%',border:'none',
+          cursor:'pointer',flexShrink:0,background:isWinner?'var(--gold)':'rgba(255,255,255,.18)',transition:'all .15s'}}/>
+        <span style={{fontSize:'11px',flexShrink:0,lineHeight:1,width:'16px'}}>{team?f(team):'❓'}</span>
         <select value={team||''} onChange={e=>onChange(e.target.value)}
           style={{flex:1,fontSize:'9px',border:'none',background:'transparent',
-            color:isWinner?'var(--gold)':'rgba(255,255,255,.75)',fontWeight:isWinner?700:400,cursor:'pointer',minWidth:0}}>
-          <option value=''>Equipo</option>
+            color:isWinner?'var(--gold)':'rgba(255,255,255,.78)',fontWeight:isWinner?700:400,cursor:'pointer',minWidth:0}}>
+          <option value=''>— Equipo —</option>
           {BRACKET_TEAMS_ALL.map(t=><option key={t} value={t}>{es(t)}</option>)}
         </select>
-        <input type='number' min='0' max='20' value={score!=null?score:''}
-          onChange={e=>onScoreChange(+e.target.value)}
-          style={{width:'20px',fontSize:'10px',fontWeight:700,textAlign:'center',padding:'1px 2px',
-            border:'1px solid rgba(255,255,255,.15)',borderRadius:'3px',
-            background:isWinner?'rgba(246,201,14,.2)':'rgba(255,255,255,.07)',
-            color:isWinner?'var(--gold)':'rgba(255,255,255,.8)'}}/>
+        <input type='number' min='0' max='20' value={score!=null&&score!==''?score:''}
+          onChange={e=>onScoreChange(e.target.value===''?null:+e.target.value)}
+          placeholder='-'
+          style={{width:'22px',fontSize:'11px',fontWeight:700,textAlign:'center',padding:'1px 2px',
+            border:'1px solid rgba(255,255,255,.18)',borderRadius:'3px',
+            background:isWinner?'rgba(246,201,14,.22)':'rgba(255,255,255,.07)',
+            color:isWinner?'var(--gold)':'rgba(255,255,255,.8)',outline:'none'}}/>
       </div>
     )
   }
@@ -1887,13 +1942,13 @@ function BracketViz({bracket,onUpdate,locked}){
   function MatchCard({phase,idx,match}){
     const m=match||{}
     return(
-      <div style={{background:'#1a1f2e',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',
-        overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,.4)',width:'100%'}}>
+      <div style={{background:'#1a1f2e',border:'1px solid rgba(255,255,255,.12)',borderRadius:'6px',
+        overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,.5)',width:'100%',minWidth:'150px'}}>
         <TeamRow team={m.home} score={m.home_score} isWinner={!!(m.winner&&m.winner===m.home)}
           onWin={()=>onUpdate(phase,idx,'winner',m.home)}
           onChange={v=>onUpdate(phase,idx,'home',v)}
           onScoreChange={v=>onUpdate(phase,idx,'home_score',v)}/>
-        <div style={{height:'1px',background:'rgba(255,255,255,.07)'}}/>
+        <div style={{height:'1px',background:'rgba(255,255,255,.08)'}}/>
         <TeamRow team={m.away} score={m.away_score} isWinner={!!(m.winner&&m.winner===m.away)}
           onWin={()=>onUpdate(phase,idx,'winner',m.away)}
           onChange={v=>onUpdate(phase,idx,'away',v)}
@@ -1902,64 +1957,94 @@ function BracketViz({bracket,onUpdate,locked}){
     )
   }
 
-  function PhaseCol({label,matches,phase,startIdx}){
+  // PhaseCol with connector lines between matches going to the next round
+  function PhaseColWithConnectors({label,matches,phase,startIdx,side}){
+    // side: 'left' connectors go right, 'right' connectors go left
+    const isRight = side==='right'
     return(
-      <div style={{display:'flex',flexDirection:'column',minWidth:'155px',width:'155px'}}>
+      <div style={{display:'flex',flexDirection:'column',minWidth:'158px',width:'158px',position:'relative'}}>
         <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
-          textAlign:'center',marginBottom:'6px',textTransform:'uppercase',padding:'3px 0',
-          background:'rgba(246,201,14,.08)',borderRadius:'4px',border:'1px solid rgba(246,201,14,.15)'}}>{label}</div>
-        <div style={{display:'flex',flexDirection:'column',justifyContent:'space-around',
-          gap:'6px',flex:1}}>
+          textAlign:'center',marginBottom:'8px',textTransform:'uppercase',padding:'3px 0',
+          background:'rgba(246,201,14,.08)',borderRadius:'4px',border:'1px solid rgba(246,201,14,.18)'}}>
+          {label}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',justifyContent:'space-around',gap:'8px',flex:1,position:'relative'}}>
           {matches.map((m,i)=>(
-            <MatchCard key={i} phase={phase} idx={startIdx+i} match={m}/>
+            <div key={i} style={{position:'relative'}}>
+              <MatchCard phase={phase} idx={startIdx+i} match={m}/>
+              {/* Connector: horizontal line from card edge */}
+              <div style={{
+                position:'absolute',
+                top:'50%',
+                [isRight?'left':'right']:'-18px',
+                width:'18px',
+                height:'1px',
+                background:'rgba(246,201,14,.45)',
+                transform:'translateY(-50%)',
+              }}/>
+              {/* Vertical bracket line: connects pairs */}
+              {i%2===0&&matches[i+1]&&(
+                <div style={{
+                  position:'absolute',
+                  top:'50%',
+                  [isRight?'left':'right']:'-18px',
+                  width:'1px',
+                  // Height from center of this card to center of next card
+                  height:'calc(100% + 8px + 100%)',
+                  background:'rgba(246,201,14,.45)',
+                }}/>
+              )}
+            </div>
           ))}
         </div>
       </div>
     )
   }
 
-  const gap = '10px'
+  const gap = '18px'  // wider to fit connectors
 
   return(
     <div style={{overflowX:'auto',width:'100%'}}>
-      <div style={{display:'flex',gap:gap,alignItems:'stretch',minWidth:'1200px',padding:'4px 0'}}>
-        <PhaseCol label='Round of 32' matches={r32.slice(0,16)} phase='round32' startIdx={0}/>
-        <PhaseCol label='Round of 16' matches={r16.slice(0,8)} phase='round16' startIdx={0}/>
-        <PhaseCol label='Cuartos' matches={qf.slice(0,4)} phase='quarters' startIdx={0}/>
-        <PhaseCol label='Semifinales' matches={sf.slice(0,2)} phase='semis' startIdx={0}/>
+      <div style={{display:'flex',gap:gap,alignItems:'stretch',minWidth:'1280px',padding:'4px 8px'}}>
+        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(0,16)} phase='round32' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(0,8)} phase='round16' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(0,4)} phase='quarters' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(0,2)} phase='semis' startIdx={0} side='left'/>
 
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:'160px',
-          width:'160px',justifyContent:'center',gap:'10px'}}>
+        {/* CENTER: Final */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:'165px',
+          width:'165px',justifyContent:'center',gap:'12px'}}>
           <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
             textAlign:'center',padding:'3px 0',width:'100%',
             background:'rgba(246,201,14,.08)',borderRadius:'4px',border:'1px solid rgba(246,201,14,.2)'}}>GRAN FINAL</div>
           <MatchCard phase='final' idx={0} match={fin}/>
           {fin.winner?(
-            <div style={{background:'linear-gradient(135deg,rgba(246,201,14,.2),rgba(246,201,14,.08))',
-              border:'2px solid var(--gold)',borderRadius:'8px',padding:'6px 8px',textAlign:'center',width:'100%'}}>
-              <div style={{fontSize:'10px',fontWeight:700,color:'var(--gold)'}}>CAMPEON</div>
-              <div style={{fontSize:'12px',fontWeight:700,color:'#fff',marginTop:'2px'}}>
+            <div style={{background:'linear-gradient(135deg,rgba(246,201,14,.22),rgba(246,201,14,.08))',
+              border:'2px solid var(--gold)',borderRadius:'10px',padding:'8px 10px',textAlign:'center',width:'100%',
+              boxShadow:'0 0 20px rgba(246,201,14,.2)'}}>
+              <div style={{fontSize:'10px',fontWeight:700,color:'var(--gold)',letterSpacing:1}}>🏆 CAMPEÓN</div>
+              <div style={{fontSize:'13px',fontWeight:700,color:'#fff',marginTop:'3px'}}>
                 {f(fin.winner)} {es(fin.winner)}
               </div>
             </div>
           ):(
-            <div style={{background:'rgba(246,201,14,.05)',border:'1.5px dashed rgba(246,201,14,.3)',
-              borderRadius:'8px',padding:'8px',textAlign:'center',width:'100%'}}>
+            <div style={{background:'rgba(246,201,14,.04)',border:'1.5px dashed rgba(246,201,14,.3)',
+              borderRadius:'8px',padding:'10px',textAlign:'center',width:'100%'}}>
               <div style={{fontSize:'1.5rem'}}>🏆</div>
-              <div style={{fontSize:'9px',color:'rgba(246,201,14,.6)',marginTop:'2px'}}>Por definir</div>
+              <div style={{fontSize:'9px',color:'rgba(246,201,14,.5)',marginTop:'3px'}}>Por definir</div>
             </div>
           )}
           <div style={{width:'100%'}}>
-            <div style={{fontFamily:'Bebas Neue',fontSize:'9px',color:'rgba(255,255,255,.35)',letterSpacing:1,
-              textAlign:'center',marginBottom:'4px'}}>3ER PUESTO</div>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'9px',color:'rgba(255,255,255,.3)',letterSpacing:1,
+              textAlign:'center',marginBottom:'5px'}}>3ER PUESTO</div>
             <MatchCard phase='third' idx={0} match={trd}/>
           </div>
         </div>
 
-        <PhaseCol label='Semifinales' matches={sf.slice(2,4)} phase='semis' startIdx={2}/>
-        <PhaseCol label='Cuartos' matches={qf.slice(4,8)} phase='quarters' startIdx={4}/>
-        <PhaseCol label='Round of 16' matches={r16.slice(8,16)} phase='round16' startIdx={8}/>
-        <PhaseCol label='Round of 32' matches={r32.slice(16,32)} phase='round32' startIdx={16}/>
+        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(2,4)} phase='semis' startIdx={2} side='right'/>
+        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(4,8)} phase='quarters' startIdx={4} side='right'/>
+        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(8,16)} phase='round16' startIdx={8} side='right'/>
+        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(16,32)} phase='round32' startIdx={16} side='right'/>
       </div>
     </div>
   )
@@ -2150,12 +2235,15 @@ function ResultsPage(){
     Promise.all([
       activeAvatar?.id?api(`/api/results/${activeAvatar.id}`):Promise.resolve([]),
       activeAvatar?.id?api(`/api/special/${activeAvatar.id}`):Promise.resolve([])
-    ]).then(([r,s])=>{setResults(r);setSpecial(s)}).catch(()=>{}).finally(()=>setLoading(false))
+    ]).then(([r,s])=>{
+      setResults(Array.isArray(r)?r:[])
+      setSpecial(s&&typeof s==='object'&&!Array.isArray(s)?s:null)
+    }).catch(()=>{setResults([]);setSpecial(null)}).finally(()=>setLoading(false))
   },[activeAvatar])
 
   if(loading) return <div className="page"><Nav/><Spinner/></div>
 
-  const totalPts=results.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0)
+  const totalPts=Array.isArray(results)?results.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0):0
   const specPts=special?(special.champion_pts||0)+(special.surprise_pts||0)+(special.balon_pts||0)+(special.guante_pts||0)+(special.bota_pts||0):0
 
   return(
@@ -2191,7 +2279,7 @@ function ResultsPage(){
           </div>
         )}
 
-        {results.length===0&&(
+        {(!results||results.length===0)&&(
           <div className="card text-center">
             <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>⚽</div>
             <div className="text-muted">Aún no hay partidos con resultado oficial.</div>
@@ -2199,7 +2287,7 @@ function ResultsPage(){
           </div>
         )}
 
-        {results.map(r=>{
+        {(results||[]).map(r=>{
           const pts=(r.points_earned||0)+(r.extra_pts||0)
           const exact=r.points_earned>=PHASE_PTS[r.phase]?.exact
           return(
@@ -2810,7 +2898,8 @@ function AppRoot(){
 
   // Animated chat bounce keyframes
   const bounceStyle=`.bounce-dot{width:6px;height:6px;border-radius:50%;background:var(--ink3);}
-@keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}`
+@keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+@keyframes spin{to{transform:rotate(360deg)}}`
 
   return(
     <AppCtx.Provider value={ctx}>
