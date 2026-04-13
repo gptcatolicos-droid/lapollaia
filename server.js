@@ -1040,31 +1040,104 @@ app.post('/api/bracket/suggest', auth, async(req,res)=>{
   const {champion, avatarId} = req.body
   if(!champion) return res.status(400).json({error:'Selecciona un campeón'})
   try{
+    // FIFA 2026 oficial R32 seeding structure (16 matches, 8 per side)
+    const R32_LABELS = [
+      '2do A vs 2do B','1ro C vs 2do F','1ro E vs Mejor 3ro','1ro F vs 2do C',
+      '2do E vs 2do I','1ro I vs Mejor 3ro','1ro A vs Mejor 3ro','1ro L vs Mejor 3ro',
+      '1ro G vs Mejor 3ro','1ro D vs Mejor 3ro','1ro H vs 2do J','2do K vs 2do L',
+      '1ro B vs Mejor 3ro','2do D vs 2do G','1ro J vs 2do H','1ro K vs Mejor 3ro'
+    ]
+    // Each group's teams for reference
+    const GROUPS = {
+      A:['Mexico','South Africa','Korea Republic','Czechia'],
+      B:['Canada','Bosnia and Herzegovina','Qatar','Switzerland'],
+      C:['Brazil','Morocco','Haiti','Scotland'],
+      D:['USA','Paraguay','Australia','Turkey'],
+      E:['Germany','Curaçao','Ivory Coast','Ecuador'],
+      F:['Netherlands','Japan','Sweden','Tunisia'],
+      G:['Belgium','Egypt','IR Iran','New Zealand'],
+      H:['Spain','Cape Verde','Saudi Arabia','Uruguay'],
+      I:['France','Senegal','Iraq','Norway'],
+      J:['Argentina','Algeria','Austria','Jordan'],
+      K:['Portugal','DR Congo','Uzbekistan','Colombia'],
+      L:['England','Croatia','Ghana','Panama']
+    }
+    const groupsJson = JSON.stringify(GROUPS)
+    const r32json = JSON.stringify(R32_LABELS)
     const msg = await anthropic.messages.create({
-      model:'claude-sonnet-4-20250514', max_tokens:2000,
-      system:`Eres un experto en fútbol. Debes generar un bracket completo del Mundial FIFA 2026 basado en el campeón elegido.
-El torneo tiene: 16 grupos (A-L, 4 equipos c/u), Round of 32 (32 partidos), Round of 16, Quarters, Semis, Final.
-Responde SOLO en JSON válido sin markdown con esta estructura exacta:
-{
-  "round32": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...32 partidos],
-  "round16": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...16 partidos],
-  "quarters": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...8 partidos],
-  "semis": [{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N}, ...4 partidos],
-  "third": {"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N},
-  "final": {"home":"TEAM","away":"TEAM","winner":"CHAMPION","home_score":N,"away_score":N},
-  "champion": "CHAMPION"
-}
-Usa nombres en inglés exactos de los equipos del Mundial 2026: Brazil, France, Argentina, England, Spain, Portugal, Germany, Netherlands, Belgium, Colombia, Morocco, Japan, USA, Mexico, Uruguay, Croatia, Korea Republic, Senegal, Ecuador, Norway, Australia, Switzerland, Turkey, Sweden, Austria, Ghana, IR Iran, Saudi Arabia, Ivory Coast, Iraq, DR Congo, Uzbekistan, Curaçao, Panama, Jordan, New Zealand, Scotland, Cape Verde, Haiti, Algeria, Tunisia, Bosnia and Herzegovina, Czechia, Egypt, Qatar, South Africa, Canada.`,
-      messages:[{role:'user',content:`Genera el bracket completo del Mundial 2026 donde ${champion} es el campeón. Sé consistente: los ganadores de cada ronda avanzan a la siguiente. El bracket del Round of 32 alimenta el Round of 16, etc. Usa análisis real de fútbol para los otros resultados.`}]
+      model:'claude-sonnet-4-6', max_tokens:3200,
+      system:`Eres un experto en fútbol. Genera un bracket completo del Mundial FIFA 2026 donde ${champion} es CAMPEÓN.
+
+ESTRUCTURA DEL TORNEO FIFA 2026:
+- 12 Grupos (A-L), 4 equipos c/u, clasifican 1ro y 2do de cada grupo + 8 mejores 3ros = 32 equipos al Round of 32
+- Round of 32: 16 partidos (8 izquierda del bracket, 8 derecha)
+- Round of 16: 8 partidos
+- Cuartos: 4 partidos  
+- Semifinales: 2 partidos
+- Final + 3er Puesto: 1 partido cada uno
+
+GRUPOS: ${groupsJson}
+EMPAREJAMIENTOS R32 (en orden): ${r32json}
+
+REGLAS:
+1. Para R32: asigna al home/away el equipo real de ese grupo que crees que clasificó (1ro, 2do o 3ro)
+2. El winner debe avanzar consistentemente: ganadores R32→R16→QF→SF→Final
+3. ${champion} DEBE llegar y ganar la final
+4. Los marcadores deben ser realistas (0-0 a 4-0 típico, penales si necesario)
+5. Usa nombres en inglés EXACTOS: Brazil, France, Argentina, England, Spain, Portugal, Germany, Netherlands, Belgium, Colombia, Morocco, Japan, USA, Mexico, Uruguay, Croatia, Korea Republic, Senegal, Ecuador, Norway, Australia, Switzerland, Turkey, Sweden, Austria, Ghana, IR Iran, Saudi Arabia, Ivory Coast, Iraq, DR Congo, Uzbekistan, Curaçao, Panama, Jordan, New Zealand, Scotland, Cape Verde, Haiti, Algeria, Tunisia, Bosnia and Herzegovina, Czechia, Egypt, Qatar, South Africa, Canada
+
+Responde SOLO con JSON válido, sin markdown, sin texto extra:
+{"round32":[{"match":1,"home":"TEAM","away":"TEAM","winner":"TEAM","home_score":N,"away_score":N},...16 items],"round16":[...8 items],"quarters":[...4 items],"semis":[...2 items],"third":{"home":"T","away":"T","winner":"T","home_score":N,"away_score":N},"final":{"home":"T","away":"T","winner":"CHAMPION","home_score":N,"away_score":N},"champion":"CHAMPION"}`,
+      messages:[{role:'user',content:`Genera el bracket completo del Mundial 2026. Campeón: ${champion}. Asegúrate de tener exactamente 16 partidos en round32, 8 en round16, 4 en quarters, 2 en semis. Los ganadores de cada ronda deben aparecer como home o away en la ronda siguiente. Responde solo JSON.`}]
     })
-    const text = msg.content[0].text.trim().replace(/```json|```/g,'').trim()
+    let text = msg.content[0].text.trim()
+    // Robust JSON extraction — strip markdown fences or surrounding text
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if(jsonMatch) text = jsonMatch[0]
+    text = text.replace(/```json|```/g,'').trim()
     const bracket = JSON.parse(text)
+    // Normalize — pad arrays to required sizes instead of throwing
+    const emptyM=(i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null,penalties:false})
+    const pad=(arr,len)=>{ if(!Array.isArray(arr)) arr=[]; while(arr.length<len) arr.push(emptyM(arr.length)); return arr.slice(0,len) }
+    bracket.round32  = pad(bracket.round32,16)
+    bracket.round16  = pad(bracket.round16,8)
+    bracket.quarters = pad(bracket.quarters,4)
+    bracket.semis    = pad(bracket.semis,2)
+    if(!bracket.third) bracket.third={home:'',away:'',winner:'',home_score:null,away_score:null,penalties:false}
+    if(!bracket.final) bracket.final={home:'',away:'',winner:champion,home_score:null,away_score:null,penalties:false}
+    bracket.champion = champion
+    bracket.final.winner = champion
     res.json({bracket})
   }catch(e){
     console.error('bracket suggest:',e)
-    res.status(500).json({error:'No pude generar el bracket. Intenta de nuevo.'})
+    res.status(500).json({error:'No pude generar el bracket. Intenta de nuevo: '+e.message})
   }
 })
+
+
+// ─── DEMO 24H AUTO-CLEANUP ────────────────────────────────────────────────────
+// Every 30 min delete registrations older than 24h in demo tournaments
+setInterval(async()=>{
+  try{
+    const {rows:[demo]}=await pool.query("SELECT id FROM tournaments WHERE slug='demo' LIMIT 1")
+    if(!demo) return
+    const tid=demo.id
+    // Delete predictions, extra_predictions, brackets for old demo avatars
+    await pool.query(`DELETE FROM extra_predictions WHERE avatar_id IN (
+      SELECT av.id FROM avatars av JOIN users u ON u.id=av.user_id
+      WHERE u.tournament_id=$1 AND u.is_admin=FALSE AND u.created_at < NOW()-INTERVAL '24 hours')`,[tid])
+    await pool.query(`DELETE FROM predictions WHERE avatar_id IN (
+      SELECT av.id FROM avatars av JOIN users u ON u.id=av.user_id
+      WHERE u.tournament_id=$1 AND u.is_admin=FALSE AND u.created_at < NOW()-INTERVAL '24 hours')`,[tid])
+    await pool.query(`DELETE FROM bracket_predictions WHERE avatar_id IN (
+      SELECT av.id FROM avatars av JOIN users u ON u.id=av.user_id
+      WHERE u.tournament_id=$1 AND u.is_admin=FALSE AND u.created_at < NOW()-INTERVAL '24 hours')`,[tid])
+    await pool.query(`DELETE FROM avatars WHERE user_id IN (
+      SELECT id FROM users WHERE tournament_id=$1 AND is_admin=FALSE AND created_at < NOW()-INTERVAL '24 hours')`,[tid])
+    const {rowCount}=await pool.query(`DELETE FROM users WHERE tournament_id=$1 AND is_admin=FALSE AND created_at < NOW()-INTERVAL '24 hours'`,[tid])
+    if(rowCount>0) console.log(`🧹 Demo cleanup: ${rowCount} usuarios eliminados`)
+  }catch(e){ console.error('Demo cleanup error:',e.message) }
+},30*60*1000)
 
 // ─── RESULTS ─────────────────────────────────────────────────────────────────
 // Results by user (across all their avatars in this tournament)

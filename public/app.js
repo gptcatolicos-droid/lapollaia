@@ -272,6 +272,20 @@ function LandingPage(){
   return(
     <div className="page">
       <Nav/>
+      {tournament?.is_demo&&(
+        <div style={{background:'linear-gradient(135deg,#0f2310,#112011)',borderBottom:'2px solid rgba(34,197,94,.3)',
+          padding:'10px 1.25rem',display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap',zIndex:5,position:'relative'}}>
+          <span style={{fontSize:'1.3rem'}}>⚡</span>
+          <div style={{flex:1,minWidth:180}}>
+            <div style={{fontWeight:700,color:'#4ade80',fontSize:'13px',lineHeight:1.3}}>Modo Demo — Todo dura 24 horas</div>
+            <div style={{fontSize:'11px',color:'rgba(74,222,128,.6)',marginTop:'2px'}}>
+              Lo que ingreses aquí se borra automáticamente. Es para explorar sin compromiso.
+            </div>
+          </div>
+          <a href="/" style={{background:'#16a34a',color:'#fff',textDecoration:'none',fontWeight:700,fontSize:'11px',
+            padding:'6px 12px',borderRadius:'6px',whiteSpace:'nowrap',boxShadow:'0 0 12px rgba(22,163,74,.4)'}}>🏆 Crear mi Polla Real ($3.99)</a>
+        </div>
+      )}
       <div className="hero">
         <div className="hero-bg" style={{backgroundImage:`url('/bg.jpg')`}}/>
         <div className="hero-content">
@@ -698,9 +712,15 @@ function DashboardPage(){
             Hola, {user?.name?.split(' ')[0]}! 👋
           </div>
           {tournament?.is_demo&&(
-            <div style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(34,197,94,.1)',
-              border:'1px solid rgba(34,197,94,.25)',borderRadius:'20px',padding:'3px 10px',marginTop:'4px'}}>
-              <span style={{fontSize:'10px',color:'#4ade80',fontWeight:600}}>⚡ Demo gratuita — explora sin límites</span>
+            <div style={{marginTop:'8px',background:'linear-gradient(135deg,#0f2310,#112011)',border:'1.5px solid rgba(34,197,94,.3)',
+              borderRadius:'10px',padding:'10px 14px',display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+              <span style={{fontSize:'1.3rem'}}>⚡</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,color:'#4ade80',fontSize:'12px'}}>Modo Demo — los datos duran 24 horas</div>
+                <div style={{fontSize:'10px',color:'rgba(74,222,128,.55)',marginTop:'2px'}}>Todo lo que hagas aquí se borra automáticamente. ¡Anímate y crea tu polla real!</div>
+              </div>
+              <a href="/" style={{background:'#16a34a',color:'#fff',textDecoration:'none',fontWeight:700,fontSize:'10px',
+                padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap'}}>Crear Polla Real →</a>
             </div>
           )}
         </div>
@@ -1673,10 +1693,10 @@ function BracketPage(){
 
   // Empty bracket structure
   const emptyBracket=()=>({
-    round32:Array.from({length:32},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
-    round16:Array.from({length:16},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
-    quarters:Array.from({length:8},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
-    semis:Array.from({length:4},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:0,away_score:0})),
+    round32:Array.from({length:16},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
+    round16:Array.from({length:8},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
+    quarters:Array.from({length:4},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
+    semis:Array.from({length:2},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
     third:{home:'',away:'',winner:'',home_score:0,away_score:0},
     final:{home:'',away:'',winner:'',home_score:0,away_score:0},
     champion:''
@@ -1779,16 +1799,62 @@ function BracketPage(){
   function updateMatch(phase,idx,field,value){
     if(locked&&!hasBeenEdited) setHasBeenEdited(true)
     setBracket(prev=>{
-      const next={...prev}
+      const next=JSON.parse(JSON.stringify(prev))
       if(phase==='third'||phase==='final'){
         next[phase]={...next[phase],[field]:value}
+        // Auto-detect winner from score
+        if(field==='home_score'||field==='away_score'){
+          const hs=field==='home_score'?+value:+(next[phase].home_score??-1)
+          const as=field==='away_score'?+value:+(next[phase].away_score??-1)
+          if(hs>=0&&as>=0&&hs!==as){
+            const w=hs>as?next[phase].home:next[phase].away
+            next[phase].winner=w
+            if(phase==='final') next.champion=w
+          }
+        }
         if(field==='winner'&&phase==='final') next.champion=value
       } else {
-        next[phase]=[...next[phase]]
         next[phase][idx]={...next[phase][idx],[field]:value}
+        // Auto-detect winner from score change
+        if(field==='home_score'||field==='away_score'){
+          const m=next[phase][idx]
+          const hs=+(m.home_score??-1), as=+(m.away_score??-1)
+          if(hs>=0&&as>=0&&hs!==as&&!m.penalties){
+            const w=hs>as?m.home:m.away
+            next[phase][idx].winner=w
+            cascadeWinner(next,phase,idx,w)
+          }
+        }
+        // Explicit winner change — cascade downstream
+        if(field==='winner') cascadeWinner(next,phase,idx,value)
       }
       return next
     })
+  }
+
+  function cascadeWinner(bracket,phase,idx,winner){
+    const NEXT={round32:'round16',round16:'quarters',quarters:'semis'}
+    const nextPhase=NEXT[phase]
+    if(nextPhase){
+      const nextIdx=Math.floor(idx/2)
+      const slot=idx%2===0?'home':'away'
+      if(bracket[nextPhase]&&bracket[nextPhase][nextIdx]){
+        const old=bracket[nextPhase][nextIdx][slot]
+        bracket[nextPhase][nextIdx][slot]=winner
+        // If the old occupant was the current winner, clear winner downstream too
+        if(bracket[nextPhase][nextIdx].winner===old){
+          bracket[nextPhase][nextIdx].winner=''
+          cascadeWinner(bracket,nextPhase,nextIdx,'')
+        }
+      }
+    } else if(phase==='semis'){
+      const slot=idx===0?'home':'away'
+      if(bracket.final){
+        const old=bracket.final[slot]
+        bracket.final[slot]=winner
+        if(bracket.final.winner===old){ bracket.final.winner=''; bracket.champion='' }
+      }
+    }
   }
 
   if(loading) return <div className="page"><Nav/><div className="loading">⚽</div></div>
@@ -1809,17 +1875,22 @@ function BracketPage(){
           </div>
         </div>
         <div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center'}}>
-          {/* Tabs inline */}
-          <div style={{display:'flex',background:'rgba(255,255,255,.06)',borderRadius:'8px',padding:'2px',border:'1px solid rgba(255,255,255,.1)'}}>
-            {[['view','🏆 Ver'],['setup','🤖 Generar IA']].map(([k,l])=>(
-              <button key={k} onClick={()=>setTab(k)}
-                style={{padding:'5px 12px',fontWeight:700,fontSize:'11px',border:'none',cursor:'pointer',
-                  background:tab===k?'var(--gold)':'transparent',
-                  color:tab===k?'#0d1117':'rgba(255,255,255,.5)',borderRadius:'6px',transition:'all .2s'}}>
-                {l}
-              </button>
-            ))}
-          </div>
+          {/* Ver tab */}
+          <button onClick={()=>setTab('view')}
+            style={{padding:'5px 12px',fontWeight:700,fontSize:'11px',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',borderRadius:'6px',transition:'all .2s',
+              background:tab==='view'?'var(--gold)':'rgba(255,255,255,.06)',
+              color:tab==='view'?'#0d1117':'rgba(255,255,255,.7)'}}>
+            🏆 Ver
+          </button>
+          {/* Big green Pelé IA button */}
+          <button onClick={()=>setTab('setup')}
+            style={{padding:'6px 14px',fontWeight:700,fontSize:'12px',border:'none',cursor:'pointer',
+              borderRadius:'8px',display:'flex',alignItems:'center',gap:'7px',transition:'all .2s',
+              background:tab==='setup'?'#15803d':'#16a34a',
+              color:'#fff',boxShadow:'0 0 14px rgba(22,163,74,.4)'}}>
+            <img src='/pele.jpg' style={{width:'20px',height:'20px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1.5px solid rgba(255,255,255,.4)'}}/>
+            Generar con Pelé IA
+          </button>
           <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 10px',fontSize:'11px',cursor:'pointer'}} onClick={exportPNG}>📸 PNG</button>
           {!locked?(
             <>
@@ -1852,7 +1923,7 @@ function BracketPage(){
                   <p style={{fontSize:'11px',color:'rgba(255,255,255,.25)',marginTop:'5px'}}>Solo se aceptan los 9 equipos con posibilidades reales según la IA</p>
                 </div>
                 <button style={{width:'100%',background:champion?'var(--gold)':'rgba(255,255,255,.1)',color:champion?'#0d1117':'rgba(255,255,255,.3)',border:'none',borderRadius:'8px',padding:'.8rem',fontSize:'14px',fontWeight:700,cursor:champion?'pointer':'not-allowed',transition:'all .2s'}} onClick={generateWithAI} disabled={!champion}>
-                  🤖 Generar pronóstico general con IA
+                  <img src='/pele.jpg' style={{width:'20px',height:'20px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',marginRight:'6px'}}/> Generar con Pelé IA
                 </button>
               </>
             ):(
@@ -1863,9 +1934,9 @@ function BracketPage(){
                   <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'3px solid transparent',borderTopColor:'var(--gold)',animation:'spin 1s linear infinite'}}/>
                   <div style={{position:'absolute',inset:'8px',borderRadius:'50%',border:'2px solid rgba(246,201,14,.1)'}}/>
                   <div style={{position:'absolute',inset:'8px',borderRadius:'50%',border:'2px solid transparent',borderTopColor:'rgba(246,201,14,.5)',animation:'spin .6s linear infinite reverse'}}/>
-                  <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem'}}>🤖</div>
+                  <div style={{position:'absolute',inset:'6px',borderRadius:'50%',overflow:'hidden'}}><img src='/pele.jpg' style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}}/></div>
                 </div>
-                <div style={{fontFamily:'Bebas Neue',fontSize:'1.3rem',color:'var(--gold)',letterSpacing:2,marginBottom:'.5rem'}}>CALCULANDO CON IA</div>
+                <div style={{fontFamily:'Bebas Neue',fontSize:'1.3rem',color:'var(--gold)',letterSpacing:2,marginBottom:'.5rem'}}>ANALIZANDO CON PELÉ IA</div>
                 <div style={{fontSize:'13px',color:'rgba(255,255,255,.5)',marginBottom:'1rem',minHeight:'20px',transition:'all .3s'}}>
                   {['Analizando historial de equipos...','Calculando probabilidades con IA...','Simulando cruces eliminatorios...','Definiendo marcadores probables...','Ajustando el path al campeón...'][genStep]}
                 </div>
@@ -1902,10 +1973,10 @@ function BracketPage(){
 }
 
 function BracketViz({bracket,onUpdate,locked}){
-  const r32 = bracket?.round32 || Array(32).fill(null)
-  const r16 = bracket?.round16 || Array(16).fill(null)
-  const qf  = bracket?.quarters || Array(8).fill(null)
-  const sf  = bracket?.semis    || Array(4).fill(null)
+  const r32 = bracket?.round32 || Array(16).fill(null)
+  const r16 = bracket?.round16 || Array(8).fill(null)
+  const qf  = bracket?.quarters || Array(4).fill(null)
+  const sf  = bracket?.semis    || Array(2).fill(null)
   const fin = bracket?.final    || {}
   const trd = bracket?.third    || {}
 
@@ -1915,10 +1986,10 @@ function BracketViz({bracket,onUpdate,locked}){
 
   function TeamRow({team,score,isWinner,onWin,onChange,onScoreChange}){
     return(
-      <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'3px 5px',
-        background:isWinner?'rgba(246,201,14,.14)':'transparent',
-        borderLeft:isWinner?'2.5px solid var(--gold)':'2.5px solid transparent',
-        minHeight:'24px',transition:'all .15s'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'4px 6px',
+        background:isWinner?'rgba(246,201,14,.16)':'transparent',
+        borderLeft:isWinner?'3px solid var(--gold)':'3px solid transparent',
+        minHeight:'26px',transition:'all .15s'}}>
         <button onClick={onWin} title="Marcar ganador" style={{width:'10px',height:'10px',borderRadius:'50%',border:'none',
           cursor:'pointer',flexShrink:0,background:isWinner?'var(--gold)':'rgba(255,255,255,.18)',transition:'all .15s'}}/>
         <span style={{fontSize:'11px',flexShrink:0,lineHeight:1,width:'16px'}}>{team?f(team):'❓'}</span>
@@ -1930,20 +2001,21 @@ function BracketViz({bracket,onUpdate,locked}){
         </select>
         <input type='number' min='0' max='20' value={score!=null&&score!==''?score:''}
           onChange={e=>onScoreChange(e.target.value===''?null:+e.target.value)}
-          placeholder='-'
-          style={{width:'22px',fontSize:'11px',fontWeight:700,textAlign:'center',padding:'1px 2px',
-            border:'1px solid rgba(255,255,255,.18)',borderRadius:'3px',
-            background:isWinner?'rgba(246,201,14,.22)':'rgba(255,255,255,.07)',
-            color:isWinner?'var(--gold)':'rgba(255,255,255,.8)',outline:'none'}}/>
+          placeholder='—'
+          style={{width:'26px',fontSize:'13px',fontWeight:700,textAlign:'center',padding:'2px 1px',
+            border:'1px solid '+(isWinner?'rgba(246,201,14,.5)':'rgba(255,255,255,.2)'),borderRadius:'4px',
+            background:isWinner?'rgba(246,201,14,.25)':'rgba(255,255,255,.08)',
+            color:isWinner?'var(--gold)':'rgba(255,255,255,.9)',outline:'none'}}/>
       </div>
     )
   }
 
   function MatchCard({phase,idx,match}){
     const m=match||{}
+    const hasPen=!!(m.penalties)
     return(
       <div style={{background:'#1a1f2e',border:'1px solid rgba(255,255,255,.12)',borderRadius:'6px',
-        overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,.5)',width:'100%',minWidth:'150px'}}>
+        overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,.5)',width:'100%',minWidth:'155px'}}>
         <TeamRow team={m.home} score={m.home_score} isWinner={!!(m.winner&&m.winner===m.home)}
           onWin={()=>onUpdate(phase,idx,'winner',m.home)}
           onChange={v=>onUpdate(phase,idx,'home',v)}
@@ -1953,6 +2025,19 @@ function BracketViz({bracket,onUpdate,locked}){
           onWin={()=>onUpdate(phase,idx,'winner',m.away)}
           onChange={v=>onUpdate(phase,idx,'away',v)}
           onScoreChange={v=>onUpdate(phase,idx,'away_score',v)}/>
+        {/* Penalty toggle for knockout rounds */}
+        {(phase!=='group')&&(
+          <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'2px 6px',
+            background:'rgba(255,255,255,.03)',borderTop:'1px solid rgba(255,255,255,.05)'}}>
+            <button onClick={()=>onUpdate(phase,idx,'penalties',!hasPen)}
+              style={{fontSize:'8px',fontWeight:700,padding:'1px 5px',border:'none',cursor:'pointer',borderRadius:'3px',
+                background:hasPen?'rgba(251,146,60,.25)':'rgba(255,255,255,.08)',
+                color:hasPen?'#fb923c':'rgba(255,255,255,.3)',transition:'all .15s'}}>
+              {hasPen?'⚽ PENS':'+ PEN'}
+            </button>
+            {hasPen&&<span style={{fontSize:'8px',color:'rgba(251,146,60,.7)',letterSpacing:.5}}>Definido por penaltis</span>}
+          </div>
+        )}
       </div>
     )
   }
@@ -1962,7 +2047,7 @@ function BracketViz({bracket,onUpdate,locked}){
     // side: 'left' connectors go right, 'right' connectors go left
     const isRight = side==='right'
     return(
-      <div style={{display:'flex',flexDirection:'column',minWidth:'158px',width:'158px',position:'relative'}}>
+      <div style={{display:'flex',flexDirection:'column',flex:1,minWidth:'140px',position:'relative'}}>
         <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
           textAlign:'center',marginBottom:'8px',textTransform:'uppercase',padding:'3px 0',
           background:'rgba(246,201,14,.08)',borderRadius:'4px',border:'1px solid rgba(246,201,14,.18)'}}>
@@ -2004,16 +2089,16 @@ function BracketViz({bracket,onUpdate,locked}){
   const gap = '18px'  // wider to fit connectors
 
   return(
-    <div style={{overflowX:'auto',width:'100%'}}>
-      <div style={{display:'flex',gap:gap,alignItems:'stretch',minWidth:'1280px',padding:'4px 8px'}}>
-        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(0,16)} phase='round32' startIdx={0} side='left'/>
-        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(0,8)} phase='round16' startIdx={0} side='left'/>
-        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(0,4)} phase='quarters' startIdx={0} side='left'/>
-        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(0,2)} phase='semis' startIdx={0} side='left'/>
+    <div style={{overflowX:'auto',width:'100%',minWidth:0}}>
+      <div style={{display:'flex',gap:gap,alignItems:'stretch',width:'100%',padding:'4px 8px'}}>
+        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(0,8)} phase='round32' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(0,4)} phase='round16' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(0,2)} phase='quarters' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(0,1)} phase='semis' startIdx={0} side='left'/>
 
         {/* CENTER: Final */}
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:'165px',
-          width:'165px',justifyContent:'center',gap:'12px'}}>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:'170px',
+          width:'170px',justifyContent:'center',gap:'12px'}}>
           <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
             textAlign:'center',padding:'3px 0',width:'100%',
             background:'rgba(246,201,14,.08)',borderRadius:'4px',border:'1px solid rgba(246,201,14,.2)'}}>GRAN FINAL</div>
@@ -2041,10 +2126,10 @@ function BracketViz({bracket,onUpdate,locked}){
           </div>
         </div>
 
-        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(2,4)} phase='semis' startIdx={2} side='right'/>
-        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(4,8)} phase='quarters' startIdx={4} side='right'/>
-        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(8,16)} phase='round16' startIdx={8} side='right'/>
-        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(16,32)} phase='round32' startIdx={16} side='right'/>
+        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(1,2)} phase='semis' startIdx={1} side='right'/>
+        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(2,4)} phase='quarters' startIdx={2} side='right'/>
+        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(4,8)} phase='round16' startIdx={4} side='right'/>
+        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(8,16)} phase='round32' startIdx={8} side='right'/>
       </div>
     </div>
   )
