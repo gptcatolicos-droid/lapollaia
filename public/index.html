@@ -755,7 +755,6 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
   <p>&copy; 2026 La Polla IA &middot; <a href="/terminos.html" style="color:rgba(246,201,14,.4);text-decoration:none">Terminos</a> &middot; <a href="/privacidad.html" style="color:rgba(246,201,14,.4);text-decoration:none">Privacidad</a></p>
 </footer>
 
-<script src="https://www.paypal.com/sdk/js?client-id=BAA2SPZO21xJDONctODZwR8t_iI70Upycs0uuhcbRe8YBNKyDjioG9s1xHKfKyIIVG287EUlrp-7u5M8ZU&currency=USD&disable-funding=venmo" async></script>
 <script>
 const SLIDE_LABELS=['Chat con Pele IA - Elige como jugar','Ingreso de Marcadores - Partido a partido','Pronostico General - Bracket completo con IA','Ranking en Tiempo Real - Se actualiza solo','Panel de Administrador - Tu tienes el control','Predicciones Especiales - Mas formas de ganar']
 let curSlide=0;const nSlides=6
@@ -846,62 +845,23 @@ async function showPayPalBtn(){
   const ppBtn=document.getElementById('ppShowBtn')
   ppBtn.disabled=true;ppBtn.innerHTML='<span class="spinner"></span>Preparando PayPal...'
 
+  // Step 1: create pending tournament record
+  let tid='',slug=''
   try{
     const r=await fetch('/api/tournaments/create-paypal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
     const d=await r.json()
     if(!r.ok) throw new Error(d.error||'Error creando torneo')
-    _ppTournamentId=d.tournamentId; _ppSlug=d.slug
+    tid=d.tournamentId; slug=d.slug
   }catch(e){
     errEl.textContent=e.message;errEl.style.display='block'
     ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
     return
   }
 
-  ppBtn.style.display='none'
-  const container=document.getElementById('paypal-btn-container')
-  container.style.display='block'; container.innerHTML=''
-
-  if(typeof paypal==='undefined'){
-    errEl.textContent='PayPal no disponible. Por favor usa MercadoPago o recarga la pagina.';errEl.style.display='block'
-    ppBtn.style.display='block';ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
-    return
-  }
-
-  paypal.Buttons({
-    style:{color:'blue',shape:'rect',label:'pay',height:44},
-    createOrder:function(data,actions){
-      return actions.order.create({
-        purchase_units:[{
-          custom_id:_ppTournamentId,
-          description:'La Polla IA — Torneo Mundial 2026',
-          amount:{currency_code:'USD',value:'3.99'}
-        }],
-        application_context:{brand_name:'La Polla IA',shipping_preference:'NO_SHIPPING'}
-      })
-    },
-    onApprove:function(data,actions){
-      container.innerHTML='<div style="text-align:center;padding:12px;font-size:13px;color:#4ade80">Procesando tu pago...</div>'
-      return actions.order.capture().then(async function(captureData){
-        const orderId=captureData.id||data.orderID
-        try{
-          const r=await fetch('/api/paypal/capture-order',{method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({orderId,tournamentId:_ppTournamentId})})
-          const result=await r.json()
-          if(result.success) window.location.href='/confirmacionpagopaypal?slug='+(_ppSlug||'')+'&orderId='+orderId
-          else{errEl.textContent='Error activando polla: '+(result.error||'');errEl.style.display='block';container.innerHTML=''}
-        }catch(fetchErr){errEl.textContent='Error de red. Contacta soporte con tu ID: '+orderId;errEl.style.display='block';container.innerHTML=''}
-      }).catch(function(err){errEl.textContent='Error al capturar pago.';errEl.style.display='block';container.innerHTML=''})
-    },
-    onError:function(err){
-      errEl.textContent='Error PayPal. Intenta de nuevo o usa MercadoPago.';errEl.style.display='block'
-      ppBtn.style.display='block';ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
-      container.innerHTML=''
-    },
-    onCancel:function(){
-      ppBtn.style.display='block';ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
-      container.innerHTML=''
-    }
-  }).render('#paypal-btn-container')
+  // Step 2: redirect to PayPal hosted button page
+  // tournamentId is stored in a server-side httpOnly cookie (set by /api/tournaments/create-paypal)
+  // The confirmation page reads it directly from the cookie — no sessionStorage needed
+  window.location.href='https://www.paypal.com/ncp/payment/DJZW6QYLR5BH6'
 }
 
 function toggleLang(){const btn=document.getElementById('langBtn');btn.textContent=btn.textContent==='EN'?'ES':'EN'}

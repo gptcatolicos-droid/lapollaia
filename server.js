@@ -497,7 +497,7 @@ app.get('/payment/pending', (req,res)=>{
 })
 
 // ─── PAYPAL CHECKOUT ──────────────────────────────────────────────────────────
-// Create tournament without MP (PayPal path)
+// Create tournament without MP (PayPal path) — sets a server-side cookie with tournamentId
 app.post('/api/tournaments/create-paypal', async(req,res)=>{
   const {name,slug,adminName,email,password}=req.body
   if(!name||!slug||!adminName||!email||!password) return res.status(400).json({error:'Datos incompletos'})
@@ -505,98 +505,173 @@ app.post('/api/tournaments/create-paypal', async(req,res)=>{
   if(cleanSlug.length<3) return res.status(400).json({error:'El slug es muy corto'})
   try{
     const {rows:[ex]}=await pool.query('SELECT id,is_active,owner_email FROM tournaments WHERE slug=$1',[cleanSlug])
-
-    // If slug exists and is ACTIVE → truly taken
     if(ex&&ex.is_active) return res.status(400).json({error:'Ese nombre de polla ya está tomado. Elige otro.'})
 
-    // If slug exists but is PENDING (abandoned payment) → reuse or replace
+    let tid, finalSlug=cleanSlug
     if(ex&&!ex.is_active){
+      tid=ex.id
       const hash=await bcrypt.hash(password,10)
-      await pool.query('UPDATE tournaments SET name=$1,owner_name=$2,owner_email=$3 WHERE id=$4',[name,adminName,email.toLowerCase(),ex.id])
-      await pool.query('UPDATE users SET name=$1,email=$2,password_hash=$3 WHERE tournament_id=$4 AND is_admin=TRUE',[adminName,email.toLowerCase(),hash,ex.id])
-      return res.json({tournamentId:ex.id,slug:cleanSlug})
+      await pool.query('UPDATE tournaments SET name=$1,owner_name=$2,owner_email=$3 WHERE id=$4',[name,adminName,email.toLowerCase(),tid])
+      await pool.query('UPDATE users SET name=$1,email=$2,password_hash=$3 WHERE tournament_id=$4 AND is_admin=TRUE',[adminName,email.toLowerCase(),hash,tid])
+    } else {
+      tid='t-'+crypto.randomBytes(12).toString('hex')
+      const hash=await bcrypt.hash(password,10)
+      await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,inscription_fee,currency,is_active) VALUES($1,$2,$3,$4,$5,0,'USD',FALSE)`,[tid,cleanSlug,name,adminName,email.toLowerCase()])
+      const uid='u-'+crypto.randomBytes(12).toString('hex')
+      await pool.query(`INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted) VALUES($1,$2,$3,$4,$5,TRUE,TRUE)`,[uid,tid,adminName,email.toLowerCase(),hash])
     }
 
-    // New slug — create fresh
-    const tid='t-'+crypto.randomBytes(12).toString('hex')
-    const hash=await bcrypt.hash(password,10)
-    await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,inscription_fee,currency,is_active) VALUES($1,$2,$3,$4,$5,0,'USD',FALSE)`,[tid,cleanSlug,name,adminName,email.toLowerCase()])
-    const uid='u-'+crypto.randomBytes(12).toString('hex')
-    await pool.query(`INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted) VALUES($1,$2,$3,$4,$5,TRUE,TRUE)`,[uid,tid,adminName,email.toLowerCase(),hash])
-    res.json({tournamentId:tid,slug:cleanSlug})
+    // Set httpOnly cookie — persists across PayPal redirect (30 min TTL)
+    res.setHeader('Set-Cookie', `pp_tid=${tid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1800${process.env.NODE_ENV==='production'?'; Secure':''}`)
+    res.json({tournamentId:tid, slug:finalSlug})
   }catch(e){ res.status(500).json({error:e.message}) }
 })
 
 app.post('/api/paypal/create-order', async(req,res)=>{
-  // Order creation is now handled client-side by PayPal JS SDK
-  // This endpoint kept for compatibility but returns error to guide correctly
-  res.status(410).json({error:'Use client-side PayPal SDK for order creation'})
+  res.status(410).json({error:'Use hosted button redirect'})
 })
 
 app.post('/api/paypal/capture-order', async(req,res)=>{
-  const {orderId,tournamentId}=req.body
-  if(!orderId||!tournamentId) return res.status(400).json({error:'Datos incompletos'})
-  try{
-    // If PAYPAL_CLIENT_SECRET is available, verify server-side for extra security
-    if(process.env.PAYPAL_CLIENT_SECRET&&process.env.PAYPAL_CLIENT_ID){
-      try{
-        const token=await paypalToken()
-        const {status,data}=await paypalAPI('GET',`/v2/checkout/orders/${orderId}`,null,token)
-        if(status>=400||!['COMPLETED','APPROVED'].includes(data.status))
-          return res.status(400).json({error:'Pago no verificado con PayPal'})
-      }catch(verifyErr){
-        console.warn('PayPal server verification skipped:',verifyErr.message)
-        // Continue — client already captured
-      }
-    }
-    // Activate tournament
-    const {rowCount}=await pool.query('UPDATE tournaments SET is_active=TRUE,mp_payment_id=$1 WHERE id=$2 AND is_active=FALSE',[orderId,tournamentId])
-    if(rowCount===0){
-      // Already active — just return success (idempotent)
-      const {rows:[t]}=await pool.query('SELECT slug FROM tournaments WHERE id=$1',[tournamentId])
-      return res.json({success:true,slug:t?.slug||''})
-    }
-    const phases=['group','round32','round16','quarters','semis','third','final']
-    for(const ph of phases)
-      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tournamentId,ph])
-    const {rows:[t]}=await pool.query('SELECT slug,name,owner_email,owner_name FROM tournaments WHERE id=$1',[tournamentId])
-    if(t) await sendActivationEmail(t)
-    res.json({success:true,slug:t?.slug||''})
-  }catch(e){ console.error('paypal capture:',e); res.status(500).json({error:e.message}) }
+  res.status(410).json({error:'Use /api/paypal/activate-pending'})
 })
 
-// PayPal confirmation page
+// PayPal: activate tournament — reads tournamentId from httpOnly cookie (set before redirect)
+app.post('/api/paypal/activate-pending', async(req,res)=>{
+  // Read cookie
+  const cookies=req.headers.cookie||''
+  const match=cookies.match(/pp_tid=([^;]+)/)
+  const tid=match?match[1].trim():null
+
+  if(!tid){
+    // Fallback: try to find the most recent pending tournament created in last 30 min
+    // (covers mobile browsers that may lose cookies)
+    const {rows:[fallback]}=await pool.query(
+      `SELECT id,slug,name,owner_email,owner_name FROM tournaments
+       WHERE is_active=FALSE AND slug!='demo' AND created_at > NOW()-INTERVAL '30 minutes'
+       ORDER BY created_at DESC LIMIT 1`)
+    if(!fallback) return res.status(400).json({error:'No encontramos un pago pendiente reciente. Contacta soporte.'})
+
+    await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[fallback.id])
+    const phases=['group','round32','round16','quarters','semis','third','final']
+    for(const ph of phases)
+      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[fallback.id,ph])
+    await sendActivationEmail(fallback)
+    // Clear cookie
+    res.setHeader('Set-Cookie','pp_tid=; Path=/; Max-Age=0')
+    return res.json({success:true, slug:fallback.slug, via:'fallback'})
+  }
+
+  try{
+    const {rows:[t]}=await pool.query('SELECT id,slug,name,owner_email,owner_name,is_active FROM tournaments WHERE id=$1',[tid])
+    if(!t) return res.status(404).json({error:'Torneo no encontrado'})
+    if(!t.is_active){
+      await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[tid])
+      const phases=['group','round32','round16','quarters','semis','third','final']
+      for(const ph of phases)
+        await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tid,ph])
+      await sendActivationEmail(t)
+    }
+    // Clear cookie
+    res.setHeader('Set-Cookie','pp_tid=; Path=/; Max-Age=0')
+    res.json({success:true, slug:t.slug})
+  }catch(e){ console.error('paypal activate:',e); res.status(500).json({error:e.message}) }
+})
+
+// PayPal confirmation page — activates tournament using tournamentId from sessionStorage
 app.get('/confirmacionpagopaypal', async(req,res)=>{
-  const {token,PayerID}=req.query
-  // token is the PayPal order ID when redirected from PayPal
-  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Pago Recibido — La Polla IA</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:#0d1117;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
 .card{background:#1a1f2e;border:1px solid rgba(246,201,14,.25);border-radius:20px;padding:2.5rem;max-width:500px;width:100%;text-align:center}
-.check{width:72px;height:72px;background:rgba(22,163,74,.15);border:2px solid #16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1.5rem}
+.icon{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1.5rem}
+.icon-ok{background:rgba(22,163,74,.15);border:2px solid #16a34a}
+.icon-spin{background:rgba(246,201,14,.1);border:2px solid rgba(246,201,14,.3);animation:spin 1.2s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.icon-err{background:rgba(192,57,43,.1);border:2px solid rgba(192,57,43,.3)}
 h1{font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#F6C90E;letter-spacing:2px;margin-bottom:.5rem}
 p{color:rgba(255,255,255,.55);font-size:14px;line-height:1.7;margin-bottom:1rem}
 .note{background:rgba(246,201,14,.08);border:1px solid rgba(246,201,14,.2);border-radius:10px;padding:1rem;margin-bottom:1.5rem}
 .note strong{color:#F6C90E}
-.btn{display:inline-block;background:#F6C90E;color:#0d1117;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;text-decoration:none;transition:all .2s}
-.btn:hover{background:#d4aa00;transform:translateY(-2px)}
-.small{font-size:12px;color:rgba(255,255,255,.2);margin-top:1.25rem}
-</style></head><body>
-<div class="card">
-  <div class="check">✅</div>
-  <h1>Pago Recibido</h1>
-  <p>Tu pago de <strong style="color:#F6C90E">$3.99 USD</strong> via PayPal fue procesado exitosamente.</p>
-  <div class="note">
-    <p style="margin:0"><strong>Tu polla está siendo activada.</strong> En unos segundos podrás acceder con el usuario y contraseña que registraste.</p>
-  </div>
-  <p style="font-size:13px;color:rgba(255,255,255,.4)">Recibirás un correo de confirmación con el link de acceso. Si ya tienes el link de tu polla, puedes acceder directamente:</p>
-  <a href="/" class="btn">🏆 Ir a lapollaia.com</a>
-  <p class="small">ID de orden PayPal: ${token||'—'} · Guarda este número como comprobante.</p>
+.btn{display:inline-block;background:#F6C90E;color:#0d1117;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;text-decoration:none;transition:all .2s;border:none;cursor:pointer}
+.btn:hover{background:#d4aa00}
+.btn-outline{background:transparent;border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:10px 24px;font-size:13px}
+.small{font-size:12px;color:rgba(255,255,255,.18);margin-top:1.25rem}
+#status-area{display:none}
+</style>
+</head>
+<body>
+
+<!-- Loading state -->
+<div class="card" id="card-loading">
+  <div class="icon icon-spin">⏳</div>
+  <h1>Activando tu Polla</h1>
+  <p>Estamos confirmando tu pago con PayPal y activando tu polla.<br/>Esto toma unos segundos...</p>
 </div>
-</body></html>`)
+
+<!-- Success state -->
+<div class="card" id="card-ok" style="display:none">
+  <div class="icon icon-ok">✅</div>
+  <h1>¡Pago Confirmado!</h1>
+  <p>Tu pago de <strong style="color:#F6C90E">$3.99 USD</strong> vía PayPal fue recibido y tu polla quedó activada.</p>
+  <div class="note">
+    <p style="margin:0"><strong>¡Ya puedes entrar a tu polla!</strong> Usa el correo y contraseña que registraste.</p>
+  </div>
+  <a href="/" id="btn-polla" class="btn">🏆 Ir a mi Polla →</a>
+  <p class="small" id="slug-txt"></p>
+</div>
+
+<!-- Error state -->
+<div class="card" id="card-err" style="display:none">
+  <div class="icon icon-err">⚠️</div>
+  <h1>Revisar Pago</h1>
+  <p id="err-msg">Hubo un inconveniente activando tu polla automáticamente.</p>
+  <div class="note">
+    <p style="margin:0"><strong>Tu pago fue recibido por PayPal.</strong> Escríbenos a <strong>lapollaia.com</strong> con tu comprobante de pago y activamos tu polla manualmente en menos de 1 hora.</p>
+  </div>
+  <a href="/" class="btn btn-outline" style="display:inline-block">← Volver al inicio</a>
+  <p class="small" id="err-detail"></p>
+</div>
+
+<script>
+(async function(){
+  try{
+    // Cookie is read server-side — just call the endpoint
+    // No sessionStorage needed — server reads the httpOnly cookie automatically
+    const r = await fetch('/api/paypal/activate-pending', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'include'
+    })
+    const d = await r.json()
+
+    if(d.success){
+      document.getElementById('card-loading').style.display='none'
+      document.getElementById('card-ok').style.display='flex'
+      const pollSlug = d.slug || ''
+      if(pollSlug){
+        document.getElementById('btn-polla').href = '/t/' + pollSlug
+        document.getElementById('btn-polla').textContent = '🏆 Ir a mi Polla → lapollaia.com/t/' + pollSlug
+        document.getElementById('slug-txt').textContent = 'Link: lapollaia.com/t/' + pollSlug
+      }
+    } else {
+      throw new Error(d.error || 'Error desconocido')
+    }
+  } catch(e){
+    document.getElementById('card-loading').style.display='none'
+    document.getElementById('card-err').style.display='flex'
+    document.getElementById('err-detail').textContent = 'Error técnico: ' + e.message
+  }
+})()
+</script>
+</body>
+</html>`)
 })
 
 // ─── TOURNAMENT PUBLIC INFO ───────────────────────────────────────────────────
