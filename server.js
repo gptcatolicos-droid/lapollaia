@@ -399,21 +399,27 @@ app.post('/api/tournaments/create', async(req,res)=>{
   const cleanSlug=slug.toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')
   if(cleanSlug.length<3) return res.status(400).json({error:'El slug debe tener al menos 3 caracteres'})
   try{
-    const {rows:[ex]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[cleanSlug])
-    if(ex) return res.status(400).json({error:'Ese nombre de polla ya está tomado. Elige otro.'})
-    // Create tournament as pending (not active until payment)
-    const tid='t-'+crypto.randomBytes(12).toString('hex')
-    const hash=await bcrypt.hash(password,10)
-    await pool.query(`
-      INSERT INTO tournaments(id,slug,name,owner_name,owner_email,inscription_fee,currency,is_active)
-      VALUES($1,$2,$3,$4,$5,$6,$7,FALSE)
-    `,[tid,cleanSlug,name,adminName,email.toLowerCase(),parseFloat(inscriptionFee)||0,currency||'USD'])
-    // Store admin user as pending too
-    const uid='u-'+crypto.randomBytes(12).toString('hex')
-    await pool.query(`
-      INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted)
-      VALUES($1,$2,$3,$4,$5,TRUE,TRUE)
-    `,[uid,tid,adminName,email.toLowerCase(),hash])
+    const {rows:[ex]}=await pool.query('SELECT id,is_active FROM tournaments WHERE slug=$1',[cleanSlug])
+    // If active → truly taken
+    if(ex&&ex.is_active) return res.status(400).json({error:'Ese nombre de polla ya está tomado. Elige otro.'})
+
+    let tid
+    if(ex&&!ex.is_active){
+      // Pending slug — reuse it
+      tid=ex.id
+      const hash=await bcrypt.hash(password,10)
+      await pool.query('UPDATE tournaments SET name=$1,owner_name=$2,owner_email=$3 WHERE id=$4',[name,adminName,email.toLowerCase(),tid])
+      await pool.query('UPDATE users SET name=$1,email=$2,password_hash=$3 WHERE tournament_id=$4 AND is_admin=TRUE',[adminName,email.toLowerCase(),hash,tid])
+    } else {
+      // New slug
+      tid='t-'+crypto.randomBytes(12).toString('hex')
+      const hash=await bcrypt.hash(password,10)
+      await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,inscription_fee,currency,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,FALSE)`,
+        [tid,cleanSlug,name,adminName,email.toLowerCase(),parseFloat(inscriptionFee)||0,currency||'USD'])
+      const uid='u-'+crypto.randomBytes(12).toString('hex')
+      await pool.query(`INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted) VALUES($1,$2,$3,$4,$5,TRUE,TRUE)`,
+        [uid,tid,adminName,email.toLowerCase(),hash])
+    }
 
     // Create MercadoPago preference
     const preference = new Preference(mp)
@@ -498,8 +504,20 @@ app.post('/api/tournaments/create-paypal', async(req,res)=>{
   const cleanSlug=slug.toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')
   if(cleanSlug.length<3) return res.status(400).json({error:'El slug es muy corto'})
   try{
-    const {rows:[ex]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[cleanSlug])
-    if(ex) return res.status(400).json({error:'Ese nombre de polla ya está tomado. Elige otro.'})
+    const {rows:[ex]}=await pool.query('SELECT id,is_active,owner_email FROM tournaments WHERE slug=$1',[cleanSlug])
+
+    // If slug exists and is ACTIVE → truly taken
+    if(ex&&ex.is_active) return res.status(400).json({error:'Ese nombre de polla ya está tomado. Elige otro.'})
+
+    // If slug exists but is PENDING (abandoned payment) → reuse or replace
+    if(ex&&!ex.is_active){
+      const hash=await bcrypt.hash(password,10)
+      await pool.query('UPDATE tournaments SET name=$1,owner_name=$2,owner_email=$3 WHERE id=$4',[name,adminName,email.toLowerCase(),ex.id])
+      await pool.query('UPDATE users SET name=$1,email=$2,password_hash=$3 WHERE tournament_id=$4 AND is_admin=TRUE',[adminName,email.toLowerCase(),hash,ex.id])
+      return res.json({tournamentId:ex.id,slug:cleanSlug})
+    }
+
+    // New slug — create fresh
     const tid='t-'+crypto.randomBytes(12).toString('hex')
     const hash=await bcrypt.hash(password,10)
     await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,inscription_fee,currency,is_active) VALUES($1,$2,$3,$4,$5,0,'USD',FALSE)`,[tid,cleanSlug,name,adminName,email.toLowerCase()])
@@ -1485,70 +1503,318 @@ app.delete('/superadmin/tournaments/:id', superAdmin, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message})}
 })
 
+// Super admin: get users of a tournament
+app.get('/superadmin/tournaments/:id/users', superAdmin, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT u.id,u.name,u.email,u.created_at,u.is_admin,
+        COALESCE(json_agg(json_build_object('id',av.id,'nickname',av.nickname,'is_active',av.is_active)
+          ORDER BY av.created_at) FILTER(WHERE av.id IS NOT NULL),'[]') as avatars
+      FROM users u LEFT JOIN avatars av ON u.id=av.user_id
+      WHERE u.tournament_id=$1 GROUP BY u.id ORDER BY u.is_admin DESC, u.created_at ASC`,
+      [req.params.id])
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Super admin: delete a user
+app.delete('/superadmin/users/:uid', superAdmin, async(req,res)=>{
+  try{
+    const uid=req.params.uid
+    await pool.query('DELETE FROM extra_predictions WHERE avatar_id IN (SELECT id FROM avatars WHERE user_id=$1)',[uid])
+    await pool.query('DELETE FROM predictions WHERE avatar_id IN (SELECT id FROM avatars WHERE user_id=$1)',[uid])
+    await pool.query('DELETE FROM bracket_predictions WHERE avatar_id IN (SELECT id FROM avatars WHERE user_id=$1)',[uid])
+    await pool.query('DELETE FROM special_predictions WHERE avatar_id IN (SELECT id FROM avatars WHERE user_id=$1)',[uid])
+    await pool.query('DELETE FROM avatars WHERE user_id=$1',[uid])
+    await pool.query('DELETE FROM users WHERE id=$1',[uid])
+    res.json({success:true})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
 // Panel HTML del super admin
 app.get('/superadmin', superAdmin, async(req,res)=>{
   const key=req.query.key||''
   try{
     const {rows}=await pool.query(`
-      SELECT t.id,t.slug,t.name,t.owner_name,t.owner_email,t.is_active,t.created_at,
+      SELECT t.id,t.slug,t.name,t.owner_name,t.owner_email,t.is_active,t.mp_payment_id,t.created_at,
         COUNT(DISTINCT u.id) as user_count
       FROM tournaments t LEFT JOIN users u ON u.tournament_id=t.id
       GROUP BY t.id ORDER BY t.created_at DESC`)
-    const active=rows.filter(r=>r.is_active).length
+    const active=rows.filter(r=>r.is_active&&r.slug!=='demo').length
+    const pendingPay=rows.filter(r=>!r.is_active&&r.slug!=='demo').length
     const revenue=(active*3.99).toFixed(2)
-    const rows_html=rows.map(t=>`
-      <tr style="border-bottom:1px solid #222">
-        <td style="padding:.6rem">${t.name}</td>
-        <td style="padding:.6rem;font-family:monospace;font-size:11px">/t/${t.slug}</td>
-        <td style="padding:.6rem">${t.owner_name}<br/><span style="font-size:11px;color:#888">${t.owner_email}</span></td>
-        <td style="padding:.6rem;text-align:center">
-          <span style="background:${t.is_active?'#16a34a':'#dc2626'};color:#fff;padding:2px 8px;border-radius:20px;font-size:11px">
-            ${t.is_active?'Activa':'Inactiva'}
-          </span>
-        </td>
-        <td style="padding:.6rem;text-align:center">${t.user_count}</td>
-        <td style="padding:.6rem;font-size:11px;color:#888">${new Date(t.created_at).toLocaleDateString('es-CO')}</td>
-        <td style="padding:.6rem">
-          ${!t.is_active?`<button onclick="activate('${t.id}')" style="background:#F6C90E;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;margin-right:4px">Activar</button>`:''}
-          <button onclick="del('${t.id}','${t.name}')" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">Eliminar</button>
-        </td>
-      </tr>`).join('')
-    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+
+    const safeStr=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')
+
+    const rows_html=rows.map(t=>{
+      const paid=t.is_active
+      const isDemo=t.slug==='demo'
+      const statusBadge=isDemo
+        ?`<span class="badge badge-blue">⚡ Demo</span>`
+        :paid
+          ?`<span class="badge badge-green">✅ Pagada</span>`
+          :`<span class="badge badge-amber">⏳ Pend. pago</span>`
+      return `
+      <div class="t-row" onclick="viewTournament('${safeStr(t.id)}','${safeStr(t.name)}','${safeStr(t.slug)}')">
+        <div class="t-cell">
+          <div class="t-name">${t.name}</div>
+          <div class="t-slug">/t/${t.slug}</div>
+        </div>
+        <div class="t-cell">
+          <div class="t-admin">${t.owner_name}</div>
+          <div class="t-email">${t.owner_email}</div>
+        </div>
+        <div class="t-cell">${statusBadge}</div>
+        <div class="t-cell t-center"><strong>${t.user_count}</strong></div>
+        <div class="t-cell t-date">${new Date(t.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'2-digit'})}</div>
+        <div class="t-cell t-actions" onclick="event.stopPropagation()">
+          <button class="btn-act btn-view-t" onclick="viewTournament('${safeStr(t.id)}','${safeStr(t.name)}','${safeStr(t.slug)}')">Ver →</button>
+          <button class="btn-act btn-del" onclick="delTournament('${safeStr(t.id)}','${safeStr(t.name)}')">Eliminar</button>
+        </div>
+      </div>`}).join('')
+
+    res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Super Admin — La Polla IA</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:sans-serif;background:#0d1117;color:#fff;padding:2rem}
-h1{color:#F6C90E;margin-bottom:1.5rem;font-size:1.5rem}
-.stats{display:flex;gap:1rem;margin-bottom:2rem}
-.stat{background:#1a1f2e;border:1px solid #333;border-radius:10px;padding:1rem 1.5rem;text-align:center}
-.stat-n{font-size:2rem;font-weight:700;color:#F6C90E}
-.stat-l{font-size:11px;color:#888;margin-top:2px}
-table{width:100%;background:#1a1f2e;border-radius:10px;overflow:hidden;border-collapse:collapse}
-th{background:#111;padding:.6rem;text-align:left;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px}
-</style></head><body>
-<h1>🏆 Super Admin — La Polla IA</h1>
-<div class="stats">
-  <div class="stat"><div class="stat-n">${rows.length}</div><div class="stat-l">Pollas totales</div></div>
-  <div class="stat"><div class="stat-n">${active}</div><div class="stat-l">Activas</div></div>
-  <div class="stat"><div class="stat-n">$${revenue}</div><div class="stat-l">Ingresos USD</div></div>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Bebas+Neue&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814;min-height:100vh}
+:root{
+  --cream:#F7F4EE;--cream2:#EFEBE3;--cream3:#E5E0D5;
+  --ink:#1A1814;--ink2:#3D3A35;--ink3:#7A7570;
+  --gold:#C8A84B;--gold-bg:rgba(200,168,75,.1);--gold-border:rgba(200,168,75,.28);
+  --green:#2D7D4A;--green-bg:rgba(45,125,74,.08);--green-border:rgba(45,125,74,.22);
+  --red:#C0392B;--red-bg:rgba(192,57,43,.07);--red-border:rgba(192,57,43,.18);
+  --amber:#B45309;--amber-bg:rgba(180,83,9,.08);--amber-border:rgba(180,83,9,.2);
+  --blue:#1d4ed8;--blue-bg:rgba(29,78,216,.07);--blue-border:rgba(29,78,216,.2);
+  --border:rgba(26,24,20,.07);--border2:rgba(26,24,20,.13);
+  --r:12px;--r-lg:18px;
+}
+.nav{background:rgba(247,244,238,.96);backdrop-filter:blur(20px);padding:.7rem 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:100;box-shadow:0 1px 8px rgba(26,24,20,.05)}
+.nav-l{display:flex;align-items:center;gap:10px}
+.nav-icon{width:32px;height:32px;background:var(--gold-bg);border:1px solid var(--gold-border);
+  border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.nav-title{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1.5px;color:var(--ink)}
+.nav-sub{font-size:10px;color:var(--ink3);letter-spacing:.3px}
+.nav-key{font-size:10px;font-family:monospace;background:var(--cream3);border:1px solid var(--border2);border-radius:6px;padding:3px 9px;color:var(--ink3)}
+.wrap{max-width:1100px;margin:0 auto;padding:1.5rem}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem}
+.stat{background:var(--cream);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem}
+.stat-n{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;line-height:1}
+.stat-n.gold{color:var(--gold)}.stat-n.green{color:var(--green)}.stat-n.amber{color:var(--amber)}
+.stat-l{font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+.sec-label{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:.6rem}
+.t-table{background:var(--cream);border:1px solid var(--border2);border-radius:var(--r-lg);overflow:hidden}
+.t-head{display:grid;grid-template-columns:2.2fr 1.8fr .85fr .45fr .7fr 1fr;
+  background:var(--cream2);border-bottom:1px solid var(--border)}
+.t-th{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.6px;padding:.65rem 1rem}
+.t-row{display:grid;grid-template-columns:2.2fr 1.8fr .85fr .45fr .7fr 1fr;
+  border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;align-items:center}
+.t-row:last-child{border-bottom:none}
+.t-row:hover{background:#f0ece3}
+.t-cell{padding:.75rem 1rem}
+.t-name{font-size:13px;font-weight:700;color:var(--ink)}
+.t-slug{font-family:monospace;font-size:10px;color:var(--ink3);margin-top:2px}
+.t-admin{font-size:12px;font-weight:600;color:var(--ink)}
+.t-email{font-size:10px;color:var(--ink3);margin-top:1px}
+.t-center{text-align:center;font-size:14px;font-weight:700}
+.t-date{font-size:11px;color:var(--ink3)}
+.t-actions{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:50px;font-size:10px;font-weight:700;white-space:nowrap}
+.badge-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.badge-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.badge-blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+.badge-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.btn-act{border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;transition:all .12s;white-space:nowrap}
+.btn-view-t{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border)}
+.btn-view-t:hover{background:var(--gold);color:#fff}
+.btn-del{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.btn-del:hover{background:var(--red);color:#fff}
+.btn-del-u{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer}
+.btn-del-u:hover{background:var(--red);color:#fff}
+.btn-back{background:transparent;border:1.5px solid var(--border2);border-radius:50px;
+  padding:6px 16px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.btn-back:hover{background:var(--cream2)}
+.detail-header{background:var(--cream);border:1px solid var(--border2);border-radius:var(--r-lg);
+  padding:1.25rem 1.5rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.detail-icon{width:44px;height:44px;background:var(--gold-bg);border:1px solid var(--gold-border);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
+.detail-title{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:1px}
+.detail-meta{font-size:11px;color:var(--ink3);margin-top:2px}
+.detail-url{font-family:monospace;font-size:11px;background:var(--cream2);border:1px solid var(--border);
+  border-radius:6px;padding:2px 8px;color:var(--gold);display:inline-block;margin-top:4px}
+.u-table{background:var(--cream);border:1px solid var(--border2);border-radius:var(--r-lg);overflow:hidden}
+.u-head{display:grid;grid-template-columns:2fr 2fr .9fr 1fr .8fr;
+  background:var(--cream2);border-bottom:1px solid var(--border)}
+.u-th{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;padding:.6rem 1rem}
+.u-row{display:grid;grid-template-columns:2fr 2fr .9fr 1fr .8fr;
+  border-bottom:1px solid var(--border);align-items:center}
+.u-row:last-child{border-bottom:none}
+.u-cell{padding:.65rem 1rem;font-size:12px;color:var(--ink2)}
+.u-name{font-weight:700;color:var(--ink)}
+.u-sub{font-size:10px;color:var(--ink3);margin-top:1px}
+.empty{text-align:center;padding:2.5rem;color:var(--ink3);font-size:13px}
+.spinner-txt{text-align:center;padding:2rem;color:var(--ink3);font-size:13px}
+.list-view{display:block}.list-view.hidden{display:none}
+.detail-view{display:none}.detail-view.on{display:block}
+@media(max-width:800px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .t-head,.t-row{grid-template-columns:1fr auto}
+  .t-cell:nth-child(n+3):not(:nth-child(6)){display:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-l">
+    <div class="nav-icon">🏆</div>
+    <div>
+      <div class="nav-title">Super Admin — La Polla IA</div>
+      <div class="nav-sub">Panel de control global de la plataforma</div>
+    </div>
+  </div>
+  <div class="nav-key">key: ${key.substring(0,4)}****</div>
+</nav>
+
+<div class="wrap">
+
+<!-- LIST VIEW -->
+<div class="list-view" id="list-view">
+  <div class="stats">
+    <div class="stat"><div class="stat-n">${rows.length}</div><div class="stat-l">Pollas totales</div></div>
+    <div class="stat"><div class="stat-n green">${active}</div><div class="stat-l">Pagadas y activas</div></div>
+    <div class="stat"><div class="stat-n amber">${pendingPay}</div><div class="stat-l">Pendientes de pago</div></div>
+    <div class="stat"><div class="stat-n gold">$${revenue}</div><div class="stat-l">Ingresos USD</div></div>
+  </div>
+
+  <div class="sec-label">Todas las pollas</div>
+  <div class="t-table">
+    <div class="t-head">
+      <div class="t-th">Nombre / Slug</div>
+      <div class="t-th">Administrador</div>
+      <div class="t-th">Estado</div>
+      <div class="t-th">Usuarios</div>
+      <div class="t-th">Fecha</div>
+      <div class="t-th">Acciones</div>
+    </div>
+    ${rows_html}
+  </div>
 </div>
-<table><thead><tr><th>Nombre</th><th>Slug</th><th>Admin</th><th>Estado</th><th>Usuarios</th><th>Fecha</th><th>Acciones</th></tr></thead>
-<tbody>${rows_html}</tbody></table>
+
+<!-- DETAIL VIEW -->
+<div class="detail-view" id="detail-view">
+  <button class="btn-back" onclick="backToList()" style="margin-bottom:1rem">← Volver a todas las pollas</button>
+  <div class="detail-header" id="detail-header"></div>
+  <div class="sec-label">Participantes</div>
+  <div id="users-container"></div>
+</div>
+
+</div><!-- /wrap -->
+
 <script>
 const KEY='${key}'
-async function activate(id){
-  if(!confirm('¿Activar esta polla?'))return
-  const r=await fetch('/superadmin/activate/'+id,{method:'POST',headers:{'x-super-key':KEY}})
-  const d=await r.json()
-  if(d.success)location.reload(); else alert(d.error)
-}
-async function del(id,name){
-  if(!confirm('¿ELIMINAR "'+name+'" y todos sus datos? Esto no se puede deshacer.'))return
+
+async function delTournament(id,name){
+  if(!confirm('¿ELIMINAR "'+name+'" y TODOS sus datos? Esto no se puede deshacer.'))return
   const r=await fetch('/superadmin/tournaments/'+id,{method:'DELETE',headers:{'x-super-key':KEY}})
   const d=await r.json()
-  if(d.success)location.reload(); else alert(d.error)
+  if(d.success)location.reload(); else alert('Error: '+d.error)
 }
-</script></body></html>`)
+
+async function viewTournament(id,name,slug){
+  document.getElementById('list-view').classList.add('hidden')
+  const dv=document.getElementById('detail-view')
+  dv.classList.add('on')
+  document.getElementById('detail-header').innerHTML=\`
+    <div style="width:44px;height:44px;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🏆</div>
+    <div style="flex:1">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:1px">\${name}</div>
+      <div style="font-size:11px;color:var(--ink3);margin-top:2px">ID: \${id}</div>
+      <div style="font-family:monospace;font-size:11px;background:var(--cream2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--gold);display:inline-block;margin-top:4px">lapollaia.com/t/\${slug}</div>
+    </div>
+    <button class="btn-act btn-del" onclick="delTournament('\${id}','\${name}')">Eliminar polla completa</button>
+  \`
+  const uc=document.getElementById('users-container')
+  uc.innerHTML='<div class="spinner-txt">Cargando participantes...</div>'
+  try{
+    const r=await fetch('/superadmin/tournaments/'+id+'/users',{headers:{'x-super-key':KEY}})
+    const users=await r.json()
+    if(!Array.isArray(users)||users.length===0){
+      uc.innerHTML='<div class="u-table"><div class="empty">No hay participantes aún.</div></div>'
+      return
+    }
+    const rows=users.map(u=>{
+      const av=(u.avatars||[])[0]
+      const approved=av?.is_active
+      const isAdmin=u.is_admin
+      return \`<div class="u-row">
+        <div class="u-cell"><div class="u-name">\${u.name}\${isAdmin?' <span style="font-size:9px;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:4px;padding:1px 5px;margin-left:4px">Admin</span>':''}</div></div>
+        <div class="u-cell"><div class="u-sub">\${u.email}</div></div>
+        <div class="u-cell">
+          \${approved
+            ?'<span class="badge badge-green" style="font-size:9px">✅ Aprobado</span>'
+            :'<span class="badge badge-amber" style="font-size:9px">⏳ Pendiente</span>'}
+        </div>
+        <div class="u-cell u-sub">\${new Date(u.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="u-cell">
+          \${!isAdmin
+            ?'<button class="btn-del-u" onclick="delUser(\\\''+u.id+'\\\',\\\''+u.name.replace(/'/g,"\\\\'")+'\\\')">Eliminar</button>'
+            :'<span style="font-size:10px;color:var(--ink3)">—</span>'}
+        </div>
+      </div>\`
+    }).join('')
+    uc.innerHTML=\`<div class="u-table">
+      <div class="u-head">
+        <div class="u-th">Nombre</div>
+        <div class="u-th">Correo</div>
+        <div class="u-th">Estado</div>
+        <div class="u-th">Se unió</div>
+        <div class="u-th">Acción</div>
+      </div>
+      \${rows}
+    </div>\`
+  }catch(e){ uc.innerHTML='<div class="empty">Error cargando: '+e.message+'</div>' }
+}
+
+window._currentTournamentId=null
+async function delUser(uid,name){
+  if(!confirm('¿Eliminar a "'+name+'" y todos sus pronósticos?'))return
+  const r=await fetch('/superadmin/users/'+uid,{method:'DELETE',headers:{'x-super-key':KEY}})
+  const d=await r.json()
+  if(d.success){
+    document.querySelectorAll('.u-row').forEach(row=>{
+      if(row.innerHTML.includes(uid)) row.remove()
+    })
+    // reload detail to refresh counts
+    const header=document.getElementById('detail-header')
+    const titleEl=header.querySelector('[style*="Bebas"]')
+    const slugEl=header.querySelector('[style*="lapollaia.com"]')
+    if(titleEl&&slugEl){
+      const tournamentName=titleEl.textContent
+      const slug=slugEl.textContent.replace('lapollaia.com/t/','')
+      // just refresh users section
+      location.reload()
+    }
+  } else alert('Error: '+d.error)
+}
+
+function backToList(){
+  document.getElementById('list-view').classList.remove('hidden')
+  document.getElementById('detail-view').classList.remove('on')
+}
+</script>
+</body>
+</html>`)
   }catch(e){res.status(500).send('Error: '+e.message)}
 })
+
 
 // ─── START ────────────────────────────────────────────────────────────────────
 initDb().then(()=>{
