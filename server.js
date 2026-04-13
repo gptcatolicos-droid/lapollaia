@@ -2148,56 +2148,60 @@ function backToList(){
   document.getElementById('detail-view').classList.remove('on')
 }
 
-// ── Courtesy tournaments ──────────────────────────────────────────────────────
+// ── Courtesy tournaments ─────────────────────────────────────────────────────
 async function loadCourtesy(){
   try{
     const r=await fetch('/superadmin/courtesy',{headers:{'x-super-key':KEY}})
     const rows=await r.json()
     const el=document.getElementById('courtesy-list')
-    if(!rows.length){el.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay pollas de cortesía aún.</div>';return}
-    el.innerHTML=rows.map(t=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:700;color:var(--ink)">\${t.name}</div>
-          <div style="font-family:monospace;font-size:10px;color:var(--gold)">lapollaia.com/t/\${t.slug}</div>
-        </div>
-        <div style="font-size:11px;color:var(--ink3);\${t.user_count>0?'color:var(--green);font-weight:700':''}">\${t.user_count} participantes</div>
-        <button onclick="copyLink('https://lapollaia.onrender.com/t/\${t.slug}')" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">📋 Copiar link</button>
-        <button onclick="delTournament('\${t.id}','\${t.name}')" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Eliminar</button>
-      </div>`).join('')
+    if(!rows.length){el.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay pollas de cortesia aun.</div>';return}
+    el.innerHTML=rows.map(function(t){
+      var uc=t.user_count||0
+      var link='https://lapollaia.onrender.com/t/'+t.slug
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:12px;font-weight:700;color:var(--ink)">'+t.name+'</div>'+
+          '<div style="font-family:monospace;font-size:10px;color:var(--gold)">lapollaia.com/t/'+t.slug+'</div>'+
+        '</div>'+
+        '<div style="font-size:11px;'+(uc>0?'color:var(--green);font-weight:700':'color:var(--ink3)')+'">'+uc+' participantes</div>'+
+        '<button onclick="copyCourtesyLink(\''+link+'\')" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Copiar link</button>'+
+        '<button onclick="delTournament(\''+t.id+'\',\''+t.name+'\')" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Eliminar</button>'+
+      '</div>'
+    }).join('')
   }catch(e){document.getElementById('courtesy-list').innerHTML='<div style="font-size:12px;color:red">Error: '+e.message+'</div>'}
 }
 
 async function createCourtesy(){
-  const name=document.getElementById('c-name').value.trim()
-  const slug=document.getElementById('c-slug').value.trim()
-  const ownerName=document.getElementById('c-owner').value.trim()
-  const ownerEmail=document.getElementById('c-email').value.trim()
-  const res_el=document.getElementById('courtesy-result')
+  var name=document.getElementById('c-name').value.trim()
+  var slug=document.getElementById('c-slug').value.trim()
+  var ownerName=document.getElementById('c-owner').value.trim()
+  var ownerEmail=document.getElementById('c-email').value.trim()
+  var res_el=document.getElementById('courtesy-result')
   if(!name||!ownerName||!ownerEmail){res_el.innerHTML='<div style="color:red;font-size:12px">Completa todos los campos requeridos</div>';return}
   res_el.innerHTML='<div style="font-size:12px;color:var(--ink3)">Creando...</div>'
   try{
-    const r=await fetch('/superadmin/courtesy',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},body:JSON.stringify({name,slug,ownerName,ownerEmail})})
-    const d=await r.json()
+    var r=await fetch('/superadmin/courtesy',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},body:JSON.stringify({name:name,slug:slug,ownerName:ownerName,ownerEmail:ownerEmail})})
+    var d=await r.json()
     if(!r.ok){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+d.error+'</div>';return}
-    const link=d.link||('https://lapollaia.onrender.com/t/'+d.slug)
-    res_el.innerHTML=\`<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:.75rem 1rem">
-      <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">✅ Polla creada exitosamente</div>
-      <div style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:8px">\${link}</div>
-      <button onclick="copyLink('\${link}')" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📋 Copiar link</button>
-    </div>\`
-    // Reset form
-    ['c-name','c-slug','c-owner','c-email'].forEach(id=>document.getElementById(id).value='')
+    var link=d.link||('https://lapollaia.onrender.com/t/'+d.slug)
+    res_el.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:.75rem 1rem">'+
+      '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">Polla creada exitosamente</div>'+
+      '<div id="courtesy-link-box" style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:8px">'+link+'</div>'+
+      '<button onclick="copyCourtesyLink(\''+link+'\')" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">Copiar link</button>'+
+    '</div>'
+    document.getElementById('c-name').value=''
+    document.getElementById('c-slug').value=''
+    document.getElementById('c-owner').value=''
+    document.getElementById('c-email').value=''
     loadCourtesy()
   }catch(e){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+e.message+'</div>'}
 }
 
-function copyLink(url){
-  navigator.clipboard.writeText(url).then(()=>{
-    const btn=event.target
-    const orig=btn.textContent
-    btn.textContent='✅ Copiado'
-    setTimeout(()=>btn.textContent=orig,2000)
+function copyCourtesyLink(url){
+  navigator.clipboard.writeText(url).then(function(){
+    alert('Link copiado: '+url)
+  }).catch(function(){
+    prompt('Copia este link:',url)
   })
 }
 
