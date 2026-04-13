@@ -240,6 +240,43 @@ async function initDb() {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- Trivia questions created by admin (Pelé IA assisted)
+      CREATE TABLE IF NOT EXISTS trivia_questions(
+        id TEXT PRIMARY KEY,
+        tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+        question TEXT NOT NULL,
+        options JSONB NOT NULL DEFAULT '[]',
+        correct_answer INTEGER NOT NULL,
+        difficulty TEXT NOT NULL DEFAULT 'easy',
+        points INTEGER NOT NULL DEFAULT 2,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_by TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Trivia answers by users
+      CREATE TABLE IF NOT EXISTS trivia_answers(
+        id TEXT PRIMARY KEY,
+        trivia_id TEXT NOT NULL REFERENCES trivia_questions(id) ON DELETE CASCADE,
+        avatar_id TEXT NOT NULL REFERENCES avatars(id) ON DELETE CASCADE,
+        answer_idx INTEGER NOT NULL,
+        is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+        points_earned INTEGER NOT NULL DEFAULT 0,
+        answered_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(trivia_id, avatar_id)
+      );
+
+      -- Registration bonus tracking
+      CREATE TABLE IF NOT EXISTS registration_bonus(
+        id TEXT PRIMARY KEY,
+        avatar_id TEXT UNIQUE REFERENCES avatars(id) ON DELETE CASCADE,
+        points INTEGER NOT NULL DEFAULT 20,
+        awarded_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Courtesy tournaments (created by superadmin, no payment required)
+      ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS is_courtesy BOOLEAN DEFAULT FALSE;
     `)
 
     const {rows:[{count}]} = await c.query('SELECT COUNT(*) FROM matches')
@@ -724,6 +761,10 @@ app.post('/api/auth/register', async(req,res)=>{
       'INSERT INTO avatars(id,user_id,tournament_id,nickname,is_paid,is_active) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',
       [avId,user.id,tournamentId,finalNick,true,false])
 
+    // Award 20pt registration bonus
+    const bonusId='bonus-'+crypto.randomBytes(8).toString('hex')
+    await pool.query('INSERT INTO registration_bonus(id,avatar_id,points) VALUES($1,$2,20) ON CONFLICT DO NOTHING',[bonusId,avId])
+
     res.json({token,user:{id:user.id,name:user.name,email:user.email,isAdmin:false,termsAccepted:false},avatars:[autoAv]})
   }catch(e){ console.error('register:',e.message); res.status(500).json({error:'Error del servidor'}) }
 })
@@ -874,15 +915,18 @@ app.get('/api/ranking', auth, async(req,res)=>{
       SELECT av.id,av.nickname,av.photo_url,u.name as user_name,
         COALESCE(SUM(p.points_earned),0)+COALESCE(SUM(ep.points_earned),0)+
         COALESCE(sp.champion_pts,0)+COALESCE(sp.surprise_pts,0)+
-        COALESCE(sp.balon_pts,0)+COALESCE(sp.guante_pts,0)+COALESCE(sp.bota_pts,0) as total_points,
+        COALESCE(sp.balon_pts,0)+COALESCE(sp.guante_pts,0)+COALESCE(sp.bota_pts,0)+
+        COALESCE(rb.points,0)+COALESCE(SUM(ta.points_earned),0) as total_points,
         COUNT(DISTINCT p.match_id) FILTER(WHERE p.score_home IS NOT NULL) as matches_predicted
       FROM avatars av
       JOIN users u ON u.id=av.user_id
       LEFT JOIN predictions p ON p.avatar_id=av.id
       LEFT JOIN extra_predictions ep ON ep.avatar_id=av.id
       LEFT JOIN special_predictions sp ON sp.avatar_id=av.id
+      LEFT JOIN registration_bonus rb ON rb.avatar_id=av.id
+      LEFT JOIN trivia_answers ta ON ta.avatar_id=av.id AND ta.is_correct=TRUE
       WHERE av.tournament_id=$1 AND av.is_active=TRUE
-      GROUP BY av.id,av.nickname,av.photo_url,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts
+      GROUP BY av.id,av.nickname,av.photo_url,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts,rb.points
       ORDER BY total_points DESC,matches_predicted ASC`,[tid])
     res.json(rows.map((r,i)=>({...r,rank:i+1})))
   }catch(e){ res.status(500).json({error:'Error'}) }
@@ -960,8 +1004,9 @@ h1{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:2px;color
     <h3>Próximos pasos</h3>
     <div class="step-item"><div class="step-n">1</div><div>Entra con tu correo y contraseña para configurar tu polla</div></div>
     <div class="step-item"><div class="step-n">2</div><div>Sube tu logo y elige tus colores en Admin → Configuración</div></div>
-    <div class="step-item"><div class="step-n">3</div><div>Copia tu link y mándalo por WhatsApp al grupo</div></div>
-    <div class="step-item"><div class="step-n">4</div><div>Cuando un jugador se registre, confirma su pago en el panel de admin</div></div>
+    <div class="step-item"><div class="step-n">3</div><div>Copia tu link y mándalo por WhatsApp al grupo — cada jugador recibe <strong>🎁 20 pts de bienvenida</strong> al registrarse</div></div>
+    <div class="step-item"><div class="step-n">4</div><div>Cuando un jugador se registre, confirma su participación en Admin → Participantes</div></div>
+    <div class="step-item"><div class="step-n">5</div><div>Crea preguntas de trivia en Admin → Extra Points con ayuda de Pelé IA — aparecen automáticamente en el tablero de todos 🧠</div></div>
   </div>
   <a href="${url}" class="btn">🏆 Ir a configurar mi Polla →</a>
   <p class="note">📧 También te enviamos un correo de confirmación con todos los detalles</p>
@@ -1553,6 +1598,120 @@ app.post('/api/admin/results', auth, tournamentAdmin, async(req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:'Error'}) }
 })
 
+// ─── TRIVIA ────────────────────────────────────────────────────────────────────
+
+// Get all trivia for tournament (admin view)
+app.get('/api/admin/trivia', auth, async(req,res)=>{
+  try{
+    const tid=req.user.tournamentId
+    const {rows}=await pool.query(`
+      SELECT tq.*,
+        COUNT(ta.id) as answer_count,
+        COUNT(ta.id) FILTER(WHERE ta.is_correct) as correct_count
+      FROM trivia_questions tq
+      LEFT JOIN trivia_answers ta ON ta.trivia_id=tq.id
+      WHERE tq.tournament_id=$1
+      GROUP BY tq.id ORDER BY tq.created_at DESC`,[tid])
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Create trivia question (admin)
+app.post('/api/admin/trivia', auth, async(req,res)=>{
+  if(!req.user.isAdmin) return res.status(403).json({error:'Solo admin'})
+  const {question,options,correct_answer,difficulty}=req.body
+  if(!question||!options||options.length<2||correct_answer==null) return res.status(400).json({error:'Datos incompletos'})
+  const pts={easy:2,medium:3,hard:4}[difficulty]||2
+  try{
+    const id='trv-'+crypto.randomBytes(8).toString('hex')
+    const {rows:[q]}=await pool.query(`
+      INSERT INTO trivia_questions(id,tournament_id,question,options,correct_answer,difficulty,points,created_by)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [id,req.user.tournamentId,question,JSON.stringify(options),correct_answer,difficulty||'easy',pts,req.user.id])
+    res.json(q)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Delete trivia question (admin)
+app.delete('/api/admin/trivia/:id', auth, async(req,res)=>{
+  if(!req.user.isAdmin) return res.status(403).json({error:'Solo admin'})
+  try{
+    await pool.query('DELETE FROM trivia_questions WHERE id=$1 AND tournament_id=$2',[req.params.id,req.user.tournamentId])
+    res.json({success:true})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Toggle trivia active/inactive
+app.put('/api/admin/trivia/:id/toggle', auth, async(req,res)=>{
+  if(!req.user.isAdmin) return res.status(403).json({error:'Solo admin'})
+  try{
+    const {rows:[q]}=await pool.query('SELECT is_active FROM trivia_questions WHERE id=$1',[req.params.id])
+    if(!q) return res.status(404).json({error:'No encontrada'})
+    await pool.query('UPDATE trivia_questions SET is_active=$1 WHERE id=$2',[!q.is_active,req.params.id])
+    res.json({is_active:!q.is_active})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Pele IA: generate trivia question suggestion
+app.post('/api/admin/trivia/generate', auth, async(req,res)=>{
+  if(!req.user.isAdmin) return res.status(403).json({error:'Solo admin'})
+  const diff=req.body.difficulty||'easy'
+  const topicHint=req.body.topic||'futbol del Mundial 2026'
+  try{
+    const msg=await anthropic.messages.create({
+      model:'claude-sonnet-4-6',max_tokens:400,
+      system:'Eres Pele IA. Genera una pregunta de trivia de futbol en espanol. Responde SOLO JSON: {"question":"...","options":["A","B","C","D"],"correct_answer":0,"explanation":"..."} correct_answer es el indice 0-3 de la correcta. Sin markdown.',
+      messages:[{role:'user',content:'Genera pregunta de trivia. Dificultad: '+diff+'. Tema: '+topicHint+'. SOLO JSON.'}]
+    })
+    let text=msg.content[0].text.trim().replace(/```json|```/g,'').trim()
+    const m=text.match(/\{[\s\S]*\}/);if(m)text=m[0]
+    res.json(JSON.parse(text))
+  }catch(e){res.status(500).json({error:'Error generando: '+e.message})}
+})
+
+// Get trivia for user (unanswered, active questions for their avatar)
+app.get('/api/trivia/:avatarId', auth, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT tq.id,tq.question,tq.options,tq.difficulty,tq.points
+      FROM trivia_questions tq
+      WHERE tq.tournament_id=$1 AND tq.is_active=TRUE
+        AND tq.id NOT IN (SELECT trivia_id FROM trivia_answers WHERE avatar_id=$2)
+      ORDER BY tq.created_at DESC`,
+      [req.user.tournamentId,req.params.avatarId])
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Submit trivia answer (one shot only)
+app.post('/api/trivia/:triviaId/answer', auth, async(req,res)=>{
+  const {avatarId,answerIdx}=req.body
+  if(answerIdx==null||!avatarId) return res.status(400).json({error:'Datos incompletos'})
+  try{
+    const {rows:[av]}=await pool.query('SELECT id FROM avatars WHERE id=$1 AND user_id=$2',[avatarId,req.user.id])
+    if(!av) return res.status(403).json({error:'Avatar no encontrado'})
+    const {rows:[q]}=await pool.query('SELECT * FROM trivia_questions WHERE id=$1 AND tournament_id=$2',[req.params.triviaId,req.user.tournamentId])
+    if(!q) return res.status(404).json({error:'Pregunta no encontrada'})
+    const {rows:[existing]}=await pool.query('SELECT id FROM trivia_answers WHERE trivia_id=$1 AND avatar_id=$2',[req.params.triviaId,avatarId])
+    if(existing) return res.status(400).json({error:'Ya respondiste esta pregunta'})
+    const isCorrect=parseInt(answerIdx)===q.correct_answer
+    const pts=isCorrect?q.points:0
+    const id='ta-'+crypto.randomBytes(8).toString('hex')
+    await pool.query('INSERT INTO trivia_answers(id,trivia_id,avatar_id,answer_idx,is_correct,points_earned) VALUES($1,$2,$3,$4,$5,$6)',
+      [id,q.id,avatarId,answerIdx,isCorrect,pts])
+    res.json({isCorrect,points_earned:pts,correct_answer:q.correct_answer})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// Registration bonus info
+app.get('/api/bonus/:avatarId', auth, async(req,res)=>{
+  try{
+    const {rows:[b]}=await pool.query('SELECT * FROM registration_bonus WHERE avatar_id=$1',[req.params.avatarId])
+    res.json(b||null)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+
 // ─── SUPER ADMIN (dueño de la plataforma) ────────────────────────────────────
 function superAdmin(req,res,next){
   const key=req.headers['x-super-key']||req.query.key
@@ -1642,6 +1801,50 @@ app.delete('/superadmin/users/:uid', superAdmin, async(req,res)=>{
     res.json({success:true})
   }catch(e){res.status(500).json({error:e.message})}
 })
+
+// ─── SUPERADMIN: CREATE COURTESY TOURNAMENT ───────────────────────────────────
+app.post('/superadmin/courtesy', superAdmin, async(req,res)=>{
+  const {name,ownerName,ownerEmail,slug}=req.body
+  if(!name||!ownerName||!ownerEmail) return res.status(400).json({error:'Faltan datos'})
+  try{
+    // Generate slug if not provided
+    const finalSlug=slug||(name.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').slice(0,30)+'-'+crypto.randomBytes(3).toString('hex'))
+    const {rows:[existing]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[finalSlug])
+    if(existing) return res.status(400).json({error:'Slug ya existe: '+finalSlug})
+
+    const tid='t-'+crypto.randomBytes(8).toString('hex')
+    const hash=await bcrypt.hash(crypto.randomBytes(12).toString('hex'),10)
+    const uid='u-'+crypto.randomBytes(8).toString('hex')
+
+    await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,primary_color,inscription_fee,currency,is_active,is_courtesy)
+      VALUES($1,$2,$3,$4,$5,'#F6C90E',0,'USD',TRUE,TRUE)`,[tid,finalSlug,name,ownerName,ownerEmail])
+
+    const phases=['group','round32','round16','quarters','semis','third','final']
+    for(const ph of phases)
+      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tid,ph])
+
+    // Create admin user for the tournament
+    await pool.query('INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted) VALUES($1,$2,$3,$4,$5,TRUE,TRUE)',
+      [uid,tid,ownerName,ownerEmail.toLowerCase(),hash])
+
+    const link=`${process.env.APP_URL||'https://lapollaia.onrender.com'}/t/${finalSlug}`
+    res.json({success:true,tournamentId:tid,slug:finalSlug,link})
+  }catch(e){console.error('courtesy:',e);res.status(500).json({error:e.message})}
+})
+
+// SUPERADMIN: list courtesy tournaments
+app.get('/superadmin/courtesy', superAdmin, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT t.id,t.slug,t.name,t.owner_name,t.owner_email,t.created_at,
+        COUNT(DISTINCT u.id) FILTER(WHERE u.is_admin=FALSE) as user_count
+      FROM tournaments t LEFT JOIN users u ON u.tournament_id=t.id
+      WHERE t.is_courtesy=TRUE
+      GROUP BY t.id ORDER BY t.created_at DESC`)
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
 
 // Panel HTML del super admin
 app.get('/superadmin', superAdmin, async(req,res)=>{
@@ -1806,6 +2009,29 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
     <div class="stat"><div class="stat-n gold">$${revenue}</div><div class="stat-l">Ingresos USD</div></div>
   </div>
 
+  <!-- COURTESY SECTION -->
+  <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--gold-border);border-radius:var(--r-lg);padding:1.25rem 1.5rem">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+      <div style="font-size:1.3rem">🎁</div>
+      <div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:var(--ink)">POLLAS DE CORTESÍA</div>
+        <div style="font-size:11px;color:var(--ink3)">Crea pollas gratuitas (sin pago) y comparte el link directo.</div>
+      </div>
+    </div>
+    <div id="courtesy-list" style="margin-bottom:1rem"><div style="font-size:12px;color:var(--ink3)">Cargando...</div></div>
+    <div style="background:var(--cream2);border:1px solid var(--border);border-radius:var(--r);padding:1rem" id="courtesy-form">
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.75rem">Nueva polla de cortesía</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <input id="c-name" placeholder="Nombre de la polla (ej: Polla Familia García)" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit"/>
+        <input id="c-slug" placeholder="slug-personalizado (opcional)" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:monospace"/>
+        <input id="c-owner" placeholder="Nombre del admin" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit"/>
+        <input id="c-email" placeholder="Email del admin" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit"/>
+      </div>
+      <button onclick="createCourtesy()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">🎁 Crear polla gratis y generar link</button>
+      <div id="courtesy-result" style="margin-top:.75rem"></div>
+    </div>
+  </div>
+
   <div class="sec-label">Todas las pollas</div>
   <div class="t-table">
     <div class="t-head">
@@ -1921,6 +2147,61 @@ function backToList(){
   document.getElementById('list-view').classList.remove('hidden')
   document.getElementById('detail-view').classList.remove('on')
 }
+
+// ── Courtesy tournaments ──────────────────────────────────────────────────────
+async function loadCourtesy(){
+  try{
+    const r=await fetch('/superadmin/courtesy',{headers:{'x-super-key':KEY}})
+    const rows=await r.json()
+    const el=document.getElementById('courtesy-list')
+    if(!rows.length){el.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay pollas de cortesía aún.</div>';return}
+    el.innerHTML=rows.map(t=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:700;color:var(--ink)">\${t.name}</div>
+          <div style="font-family:monospace;font-size:10px;color:var(--gold)">lapollaia.com/t/\${t.slug}</div>
+        </div>
+        <div style="font-size:11px;color:var(--ink3);\${t.user_count>0?'color:var(--green);font-weight:700':''}">\${t.user_count} participantes</div>
+        <button onclick="copyLink('https://lapollaia.onrender.com/t/\${t.slug}')" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">📋 Copiar link</button>
+        <button onclick="delTournament('\${t.id}','\${t.name}')" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Eliminar</button>
+      </div>`).join('')
+  }catch(e){document.getElementById('courtesy-list').innerHTML='<div style="font-size:12px;color:red">Error: '+e.message+'</div>'}
+}
+
+async function createCourtesy(){
+  const name=document.getElementById('c-name').value.trim()
+  const slug=document.getElementById('c-slug').value.trim()
+  const ownerName=document.getElementById('c-owner').value.trim()
+  const ownerEmail=document.getElementById('c-email').value.trim()
+  const res_el=document.getElementById('courtesy-result')
+  if(!name||!ownerName||!ownerEmail){res_el.innerHTML='<div style="color:red;font-size:12px">Completa todos los campos requeridos</div>';return}
+  res_el.innerHTML='<div style="font-size:12px;color:var(--ink3)">Creando...</div>'
+  try{
+    const r=await fetch('/superadmin/courtesy',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},body:JSON.stringify({name,slug,ownerName,ownerEmail})})
+    const d=await r.json()
+    if(!r.ok){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+d.error+'</div>';return}
+    const link=d.link||('https://lapollaia.onrender.com/t/'+d.slug)
+    res_el.innerHTML=\`<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:.75rem 1rem">
+      <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">✅ Polla creada exitosamente</div>
+      <div style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:8px">\${link}</div>
+      <button onclick="copyLink('\${link}')" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📋 Copiar link</button>
+    </div>\`
+    // Reset form
+    ['c-name','c-slug','c-owner','c-email'].forEach(id=>document.getElementById(id).value='')
+    loadCourtesy()
+  }catch(e){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+e.message+'</div>'}
+}
+
+function copyLink(url){
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn=event.target
+    const orig=btn.textContent
+    btn.textContent='✅ Copiado'
+    setTimeout(()=>btn.textContent=orig,2000)
+  })
+}
+
+loadCourtesy()
 </script>
 </body>
 </html>`)

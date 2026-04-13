@@ -715,6 +715,111 @@ function SpecialPredictionsPage(){
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function TriviaSection(){
+  const {activeAvatar,user}=useApp()
+  const [questions,setQuestions]=React.useState([])
+  const [bonus,setBonus]=React.useState(null)
+  const [answers,setAnswers]=React.useState({}) // triviaId -> {isCorrect,points_earned,correct_answer,selected}
+  const [loading,setLoading]=React.useState(true)
+
+  const DIFF_LABELS={easy:'🟢 Fácil',medium:'🟡 Refácil',hard:'🔴 Muy fácil'}
+  const DIFF_COLORS={easy:'#16a34a',medium:'#d97706',hard:'#dc2626'}
+  const DIFF_PTS={easy:2,medium:3,hard:4}
+
+  React.useEffect(()=>{
+    if(!activeAvatar?.id) return
+    Promise.all([
+      api('/api/trivia/'+activeAvatar.id).catch(()=>[]),
+      api('/api/bonus/'+activeAvatar.id).catch(()=>null)
+    ]).then(([qs,b])=>{
+      setQuestions(Array.isArray(qs)?qs:[])
+      setBonus(b)
+      setLoading(false)
+    })
+  },[activeAvatar])
+
+  async function submitAnswer(triviaId,answerIdx){
+    try{
+      const d=await api('/api/trivia/'+triviaId+'/answer','POST',{avatarId:activeAvatar.id,answerIdx})
+      setAnswers(p=>({...p,[triviaId]:{...d,selected:answerIdx}}))
+    }catch(e){ alert(e.message) }
+  }
+
+  if(loading||(!bonus&&questions.length===0)) return null
+
+  return(
+    <div style={{marginTop:'1.25rem'}}>
+      {/* Registration bonus chip */}
+      {bonus&&(
+        <div style={{background:'linear-gradient(135deg,rgba(246,201,14,.12),rgba(246,201,14,.04))',
+          border:'1.5px solid rgba(246,201,14,.3)',borderRadius:'var(--r)',padding:'10px 14px',
+          display:'flex',alignItems:'center',gap:'10px',marginBottom:'0.75rem'}}>
+          <div style={{fontSize:'1.5rem'}}>🎁</div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:13,color:'var(--ink)'}}>¡Bienvenido! Bonus de registro</div>
+            <div style={{fontSize:11,color:'var(--ink3)',marginTop:2}}>Ya tienes <strong style={{color:'var(--gold)'}}>{bonus.points} puntos</strong> por unirte a la polla. ¡A ganar más!</div>
+          </div>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1.4rem',color:'var(--gold)'}}>+{bonus.points}</div>
+        </div>
+      )}
+
+      {/* Trivia questions */}
+      {questions.length>0&&(
+        <>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',letterSpacing:1,color:'var(--ink)',marginBottom:'0.5rem'}}>
+            🧠 EXTRA POINTS — {questions.length} pregunta{questions.length!==1?'s':''} disponible{questions.length!==1?'s':''}
+          </div>
+          {questions.map(q=>{
+            const ans=answers[q.id]
+            const opts=typeof q.options==='string'?JSON.parse(q.options):q.options
+            return(
+              <div key={q.id} className="card" style={{marginBottom:'0.75rem',border:'1.5px solid '+(ans?'rgba(255,255,255,.08)':'rgba(246,201,14,.25)'),transition:'all .3s'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:'0.6rem'}}>
+                  <span style={{fontSize:10,fontWeight:700,color:DIFF_COLORS[q.difficulty],background:DIFF_COLORS[q.difficulty]+'15',border:'1px solid '+DIFF_COLORS[q.difficulty]+'30',borderRadius:20,padding:'2px 8px'}}>
+                    {DIFF_LABELS[q.difficulty]} · +{q.points} pts
+                  </span>
+                  {ans&&(
+                    <span style={{fontSize:10,fontWeight:700,color:ans.isCorrect?'#16a34a':'#dc2626',background:ans.isCorrect?'rgba(22,163,74,.1)':'rgba(220,38,38,.1)',border:'1px solid '+(ans.isCorrect?'rgba(22,163,74,.3)':'rgba(220,38,38,.3)'),borderRadius:20,padding:'2px 8px'}}>
+                      {ans.isCorrect?'✅ +'+ans.points_earned+' pts':'❌ Respuesta incorrecta'}
+                    </span>
+                  )}
+                </div>
+                <div style={{fontWeight:700,fontSize:13,color:'var(--ink)',marginBottom:'0.75rem',lineHeight:1.5}}>{q.question}</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                  {opts.map((opt,i)=>{
+                    const isSelected=ans?.selected===i
+                    const isCorrect=ans&&i===ans.correct_answer
+                    const isWrong=ans&&isSelected&&!isCorrect
+                    let bg='var(--cream2)', border='var(--border)', color='var(--ink)', fw=400
+                    if(isCorrect&&ans){bg='rgba(22,163,74,.1)';border='rgba(22,163,74,.4)';color='#16a34a';fw=700}
+                    else if(isWrong){bg='rgba(220,38,38,.08)';border='rgba(220,38,38,.3)';color='#dc2626'}
+                    else if(!ans){bg='var(--cream2)';border='var(--border)'}
+                    return(
+                      <button key={i} onClick={()=>!ans&&submitAnswer(q.id,i)}
+                        disabled={!!ans}
+                        style={{background:bg,border:'1px solid '+border,borderRadius:8,padding:'8px 10px',
+                          textAlign:'left',cursor:ans?'default':'pointer',transition:'all .15s',
+                          fontSize:12,color,fontWeight:fw,lineHeight:1.4,fontFamily:'inherit',
+                          outline:'none'}}>
+                        <span style={{fontWeight:700,marginRight:4}}>{['A','B','C','D'][i]}.</span>{opt}
+                        {isCorrect&&ans?' ✅':''}{isWrong?' ❌':''}
+                      </button>
+                    )
+                  })}
+                </div>
+                {!ans&&(
+                  <div style={{fontSize:10,color:'var(--ink3)',marginTop:6,textAlign:'center'}}>Solo tienes una oportunidad de responder — ¡piensálo bien!</div>
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
+
 function DashboardPage(){
   const {user,setView,tournament}=useApp()
   const [stats,setStats]=React.useState(null)
@@ -792,7 +897,10 @@ function DashboardPage(){
 
         </div>
 
-        {/* Pelé IA free chat CTA */}
+        {/* Registration bonus + Trivia cards */}
+        <TriviaSection/>
+
+        {/* Pelé IA free chat CTA */}}
         <div style={{marginTop:'1.25rem',background:'linear-gradient(135deg,#1a1a2a,#0f1923)',
           border:'1.5px solid var(--gold)',borderRadius:'var(--r-lg)',padding:'1rem 1.25rem',
           display:'flex',alignItems:'center',gap:'1rem',cursor:'pointer'}}
@@ -2713,6 +2821,7 @@ function AdminPage(){
 
   const navItems=[
     {k:'users',icon:'👥',l:'Participantes'},
+    {k:'trivia',icon:'🧠',l:'Extra Points'},
     {k:'results',icon:'📊',l:'Resultados'},
     {k:'locks',icon:'🔒',l:'Fases'},
     {k:'teams',icon:'⚽',l:'Equipos'},
@@ -2759,9 +2868,198 @@ function AdminPage(){
           {tab==='locks'&&<AdminLocks/>}
           {tab==='teams'&&<AdminTeams/>}
           {tab==='results'&&<AdminResults/>}
+          {tab==='trivia'&&<AdminTrivia/>}
           {tab==='config'&&<AdminConfig/>}
         </div>
       </div>
+    </div>
+  )
+}
+
+function AdminTrivia(){
+  const {activeAvatar}=useApp()
+  const [questions,setQuestions]=React.useState([])
+  const [loading,setLoading]=React.useState(true)
+  const [generating,setGenerating]=React.useState(false)
+  const [saving,setSaving]=React.useState(false)
+  const [msg,setMsg]=React.useState(null)
+  const [showForm,setShowForm]=React.useState(false)
+  const [topic,setTopic]=React.useState('')
+  const [difficulty,setDifficulty]=React.useState('easy')
+  const [draft,setDraft]=React.useState(null) // AI-generated draft
+  const [editDraft,setEditDraft]=React.useState(null) // editable version
+
+  const DIFF_LABELS={easy:'🟢 Fácil (2 pts)',medium:'🟡 Refácil (3 pts)',hard:'🔴 Muy fácil (4 pts)'}
+  const DIFF_COLORS={easy:'#16a34a',medium:'#d97706',hard:'#dc2626'}
+
+  React.useEffect(()=>{ loadQuestions() },[])
+
+  async function loadQuestions(){
+    setLoading(true)
+    try{ const d=await api('/api/admin/trivia'); setQuestions(d||[]) }
+    catch(e){ setMsg({type:'error',text:e.message}) }
+    setLoading(false)
+  }
+
+  async function generateWithAI(){
+    if(!topic.trim()){ setMsg({type:'error',text:'Escribe un tema primero'}); return }
+    setGenerating(true); setMsg(null); setDraft(null)
+    try{
+      const d=await api('/api/admin/trivia/generate','POST',{topic,difficulty})
+      setDraft(d)
+      setEditDraft({...d, options:[...d.options]})
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+    setGenerating(false)
+  }
+
+  async function saveQuestion(){
+    if(!editDraft) return
+    setSaving(true); setMsg(null)
+    try{
+      const q=await api('/api/admin/trivia','POST',{
+        question:editDraft.question,
+        options:editDraft.options,
+        correct_answer:editDraft.correct_answer,
+        difficulty
+      })
+      setQuestions(p=>[q,...p])
+      setDraft(null); setEditDraft(null); setTopic(''); setShowForm(false)
+      setMsg({type:'success',text:'✅ Pregunta creada y publicada para todos los jugadores!'})
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+    setSaving(false)
+  }
+
+  async function toggleQuestion(id){
+    try{
+      const d=await api('/api/admin/trivia/'+id+'/toggle','PUT',{})
+      setQuestions(p=>p.map(q=>q.id===id?{...q,is_active:d.is_active}:q))
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+  }
+
+  async function deleteQuestion(id){
+    if(!window.confirm('¿Eliminar esta pregunta? Los jugadores que ya respondieron conservan sus puntos.')) return
+    try{
+      await api('/api/admin/trivia/'+id,'DELETE',null)
+      setQuestions(p=>p.filter(q=>q.id!==id))
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+  }
+
+  return(
+    <div>
+      {/* Header card */}
+      <div className="card" style={{marginBottom:'1rem',background:'linear-gradient(135deg,#0d1117,#111827)',border:'1.5px solid rgba(246,201,14,.3)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1rem'}}>
+          <div style={{width:44,height:44,borderRadius:'50%',overflow:'hidden',border:'2px solid var(--gold)',flexShrink:0}}>
+            <img src="/pele.jpg" style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}} alt="Pele"/>
+          </div>
+          <div>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',letterSpacing:1}}>EXTRA POINTS CON PELÉ IA</div>
+            <div style={{fontSize:'11px',color:'rgba(255,255,255,.5)',marginTop:2}}>Crea preguntas de trivia de fútbol. Los jugadores responden desde su tablero y suman puntos extra.</div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'1rem'}}>
+          <div style={{background:'rgba(22,163,74,.12)',border:'1px solid rgba(22,163,74,.3)',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#4ade80'}}>🟢 Fácil — 2 pts</div>
+          <div style={{background:'rgba(217,119,6,.12)',border:'1px solid rgba(217,119,6,.3)',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#fbbf24'}}>🟡 Refácil — 3 pts</div>
+          <div style={{background:'rgba(220,38,38,.12)',border:'1px solid rgba(220,38,38,.3)',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#f87171'}}>🔴 Muy fácil — 4 pts</div>
+        </div>
+        {!showForm?(
+          <button className="btn btn-gold btn-full" onClick={()=>setShowForm(true)}>🤖 Crear nueva pregunta con Pelé IA</button>
+        ):(
+          <div style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:10,padding:'1rem'}}>
+            <div style={{fontWeight:700,color:'#fff',marginBottom:'0.75rem',fontSize:13}}>🤖 Pelé IA genera la pregunta</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,marginBottom:8}}>
+              <input className="inp" placeholder="Tema: ej. Goleadores historicos del Mundial, Reglas del futbol..." value={topic} onChange={e=>setTopic(e.target.value)} onKeyDown={e=>e.key==='Enter'&&generateWithAI()}/>
+              <select className="inp" value={difficulty} onChange={e=>setDifficulty(e.target.value)} style={{width:130}}>
+                <option value="easy">Fácil (2 pts)</option>
+                <option value="medium">Refácil (3 pts)</option>
+                <option value="hard">Muy fácil (4 pts)</option>
+              </select>
+            </div>
+            <div style={{display:'flex',gap:8,marginBottom:draft?'1rem':0}}>
+              <button className="btn btn-gold" onClick={generateWithAI} disabled={generating} style={{flex:1}}>
+                {generating?'⏳ Generando...':(draft?'🔄 Regenerar':'✨ Generar con Pelé IA')}
+              </button>
+              <button className="btn btn-outline" onClick={()=>{setShowForm(false);setDraft(null);setEditDraft(null)}}>Cancelar</button>
+            </div>
+
+            {generating&&(
+              <div style={{textAlign:'center',padding:'1rem 0',color:'rgba(255,255,255,.5)',fontSize:12}}>
+                <div style={{fontSize:'1.5rem',marginBottom:6}}>🤔</div>
+                Pelé IA está pensando la pregunta perfecta...
+              </div>
+            )}
+
+            {editDraft&&(
+              <div style={{marginTop:'1rem'}}>
+                <div style={{height:1,background:'rgba(255,255,255,.08)',margin:'0 0 1rem'}}/>
+                <div style={{fontSize:11,fontWeight:700,color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Edita si quieres antes de guardar</div>
+                <textarea className="inp" rows={3} value={editDraft.question} onChange={e=>setEditDraft(p=>({...p,question:e.target.value}))} style={{marginBottom:8,resize:'vertical'}}/>
+                {editDraft.options.map((opt,i)=>(
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                    <button onClick={()=>setEditDraft(p=>({...p,correct_answer:i}))}
+                      style={{width:22,height:22,borderRadius:'50%',border:'none',cursor:'pointer',flexShrink:0,
+                        background:editDraft.correct_answer===i?'var(--gold)':'rgba(255,255,255,.15)',transition:'all .15s'}} title="Marcar como correcta"/>
+                    <input className="inp" value={opt} onChange={e=>{const o=[...editDraft.options];o[i]=e.target.value;setEditDraft(p=>({...p,options:o}))}}
+                      style={{flex:1,fontSize:12,borderColor:editDraft.correct_answer===i?'rgba(246,201,14,.5)':'rgba(255,255,255,.12)'}}/>
+                    <span style={{fontSize:10,color:'rgba(255,255,255,.3)',flexShrink:0}}>{editDraft.correct_answer===i?'✅ Correcta':''}</span>
+                  </div>
+                ))}
+                {editDraft.explanation&&(
+                  <div style={{background:'rgba(246,201,14,.06)',border:'1px solid rgba(246,201,14,.15)',borderRadius:8,padding:'8px 12px',fontSize:11,color:'rgba(255,255,255,.5)',marginBottom:12}}>
+                    💡 {editDraft.explanation}
+                  </div>
+                )}
+                <button className="btn btn-gold btn-full" onClick={saveQuestion} disabled={saving}>
+                  {saving?'Guardando...':'💾 Publicar pregunta — aparece en el tablero de todos'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {msg&&<Alert type={msg.type} style={{marginBottom:'1rem'}}>{msg.text}</Alert>}
+
+      {/* Questions list */}
+      <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',letterSpacing:1,color:'var(--ink)',marginBottom:'0.5rem'}}>{questions.length} PREGUNTA{questions.length!==1?'S':''} CREADA{questions.length!==1?'S':''}</div>
+      {loading?<Spinner/>:(
+        questions.length===0?(
+          <div className="card" style={{textAlign:'center',padding:'2rem',color:'var(--ink3)'}}>
+            <div style={{fontSize:'2rem',marginBottom:8}}>🧠</div>
+            <div style={{fontWeight:700,marginBottom:4}}>Aún no hay preguntas</div>
+            <div style={{fontSize:12}}>Crea la primera con Pelé IA y aparecerá en el tablero de tus jugadores automáticamente.</div>
+          </div>
+        ):(
+          questions.map(q=>(
+            <div key={q.id} className="card" style={{marginBottom:'0.75rem',borderLeft:`3px solid ${DIFF_COLORS[q.difficulty]||'var(--gold)'}`,opacity:q.is_active?1:0.5}}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:700,color:'var(--ink)',marginBottom:4}}>{q.question}</div>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    <span style={{fontSize:10,background:DIFF_COLORS[q.difficulty]+'20',color:DIFF_COLORS[q.difficulty],border:'1px solid '+DIFF_COLORS[q.difficulty]+'40',borderRadius:20,padding:'2px 8px',fontWeight:700}}>{DIFF_LABELS[q.difficulty]}</span>
+                    <span style={{fontSize:10,color:'var(--ink3)'}}>{ℹ️} {q.answer_count||0} resp · {q.correct_count||0} correctas</span>
+                    {!q.is_active&&<span style={{fontSize:10,color:'var(--ink3)',background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:20,padding:'2px 8px'}}>💤 Oculta</span>}
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:5,flexShrink:0}}>
+                  <button className="btn btn-outline btn-sm" onClick={()=>toggleQuestion(q.id)}>{q.is_active?'💤 Ocultar':'👁️ Mostrar'}</button>
+                  <button className="btn btn-sm" style={{background:'rgba(220,38,38,.1)',color:'#dc2626',border:'1px solid rgba(220,38,38,.2)'}} onClick={()=>deleteQuestion(q.id)}>🗑️</button>
+                </div>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+                {(q.options||[]).map((opt,i)=>(
+                  <div key={i} style={{fontSize:11,padding:'4px 8px',borderRadius:6,
+                    background:i===q.correct_answer?'rgba(22,163,74,.12)':'rgba(255,255,255,.02)',
+                    border:'1px solid '+(i===q.correct_answer?'rgba(22,163,74,.3)':'rgba(0,0,0,.05)'),
+                    color:i===q.correct_answer?'#16a34a':'var(--ink2)',fontWeight:i===q.correct_answer?700:400}}>
+                    {['A','B','C','D'][i]}. {opt} {i===q.correct_answer?'✅':''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )
+      )}
     </div>
   )
 }
