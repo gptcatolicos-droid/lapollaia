@@ -203,25 +203,30 @@ function Toggle({on,onChange}){
 // ─── NAV ──────────────────────────────────────────────────────────────────────
 function Nav(){
   const {user,activeAvatar,view,setView,logout,tournament}=useApp()
+  const tName=tournament?.name||'POLLA'
+  // Truncate tournament name on mobile-ish sizes
+  const shortName=tName.length>14?tName.substring(0,13)+'…':tName
   return(
     <nav className="nav">
-      <div style={{cursor:'pointer',display:'flex',alignItems:'center',gap:'8px'}} onClick={()=>setView(user?'dashboard':'landing')}>
-        <img src={tournament?.logo_url||"/logo.png"} alt={tournament?.name||"Polla IA"} style={{height:'42px',width:'42px',objectFit:'contain'}}/>
-        <div>
-          <div className="nav-logo" style={{lineHeight:1,fontSize:tournament?.name&&tournament.name.length>12?'1rem':'inherit'}}>{tournament?.name||'POLLA'} <span style={{color:'var(--gold)'}}>2026</span></div>
-          <div className="nav-sub">{tournament?.is_demo?'⚡ Demo gratuita':'Pronósticos · Torneo de Fútbol 2026'}</div>
+      <div style={{cursor:'pointer',display:'flex',alignItems:'center',gap:'7px',minWidth:0,flex:1,overflow:'hidden'}} onClick={()=>setView(user?'dashboard':'landing')}>
+        <img src={tournament?.logo_url||"/logo.png"} alt={tName} style={{height:'36px',width:'36px',objectFit:'contain',flexShrink:0}}/>
+        <div style={{minWidth:0,overflow:'hidden'}}>
+          <div className="nav-logo" style={{lineHeight:1,fontSize:tName.length>14?'.9rem':tName.length>10?'1rem':'inherit',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+            {shortName} <span style={{color:'var(--gold)'}}>2026</span>
+          </div>
+          <div className="nav-sub">{tournament?.is_demo?'⚡ Demo':'Pronósticos · Mundial 2026'}</div>
         </div>
       </div>
-      <div className="nav-actions">
+      <div className="nav-actions" style={{flexShrink:0,flexWrap:'nowrap'}}>
         {user&&view!=='dashboard'&&(
           <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>← Inicio</button>
         )}
         {user&&view==='dashboard'&&(
-          <button className="btn btn-outline btn-sm" onClick={()=>setView('ranking')}>🏅 Ranking</button>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('ranking')}>🏅</button>
         )}
         {user&&(
           <>
-            {user.isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>setView('admin')}>⚙️ Admin</button>}
+            {user.isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>setView('admin')}>⚙️</button>}
             <button className="btn btn-outline btn-sm" onClick={logout}>Salir</button>
           </>
         )}
@@ -305,10 +310,19 @@ function LandingPage(){
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
 function AuthPage(){
   const {setUser,setAvatars,setView,tournament}=useApp()
-  const [tab,setTab]=React.useState('login') // 'login' | 'register' | 'admin'
+  const [tab,setTab]=React.useState('login')
   const [form,setForm]=React.useState({name:'',email:'',password:''})
   const [loading,setLoading]=React.useState(false)
   const [err,setErr]=React.useState('')
+  const [captchaQ,setCaptchaQ]=React.useState(()=>{const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1;return{a,b,ans:a+b}})
+  const [captchaVal,setCaptchaVal]=React.useState('')
+
+  React.useEffect(()=>{
+    if(tab==='register'){
+      const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1
+      setCaptchaQ({a,b,ans:a+b}); setCaptchaVal('')
+    }
+  },[tab])
 
   const upd=k=>e=>setForm(p=>({...p,[k]:e.target.value}))
 
@@ -326,7 +340,14 @@ function AuthPage(){
   }
 
   async function handleRegister(e){
-    e.preventDefault(); setLoading(true); setErr('')
+    e.preventDefault(); setErr('')
+    if(parseInt(captchaVal)!==captchaQ.ans){
+      setErr(`La respuesta al captcha es incorrecta. ¿Cuánto es ${captchaQ.a} + ${captchaQ.b}?`)
+      const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1
+      setCaptchaQ({a,b,ans:a+b}); setCaptchaVal('')
+      return
+    }
+    setLoading(true)
     try{
       const data=await api('/api/auth/register','POST',{name:form.name,email:form.email,password:form.password,tournamentId:window.__TOURNAMENT_ID__||''})
       localStorage.setItem('polla_token',data.token)
@@ -388,6 +409,10 @@ function AuthPage(){
                   <div className="form-group">
                     <label>Contraseña <span className="text-muted text-xs">(mínimo 6 caracteres)</span></label>
                     <input className="inp" type="password" placeholder="••••••••" value={form.password} onChange={upd('password')} required minLength={6}/>
+                  </div>
+                  <div className="form-group">
+                    <label>Verificación — ¿Cuánto es {captchaQ.a} + {captchaQ.b}?</label>
+                    <input className="inp" type="number" placeholder="Respuesta" value={captchaVal} onChange={e=>setCaptchaVal(e.target.value)} required style={{maxWidth:120}}/>
                   </div>
                   <button className="btn btn-gold btn-full" disabled={loading}>{loading?'Creando cuenta...':'Crear cuenta →'}</button>
                 </form>
@@ -1584,7 +1609,7 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
                   border:'2px solid var(--gold)',borderRadius:'6px',background:'var(--cream)',color:'var(--ink)',padding:'4px'}}/>
               <span style={{fontSize:'12px',fontWeight:600}}>{f(t2)}</span>
             </div>
-            <div style={{display:'flex',gap:'6px'}}>
+            <div className="btn-row" style={{marginTop:'.5rem'}}>
               {onSuggest&&<button className="btn btn-outline btn-sm" style={{flex:1}} onClick={onSuggest}>💡 Sugiéreme</button>}
               <button className="btn btn-gold" style={{flex:2}} onClick={onSave} disabled={saving||scoreForm?.home===''||scoreForm?.away===''}>
                 {saving?'Guardando...':'💾 Guardar marcador'}
@@ -1864,41 +1889,41 @@ function BracketPage(){
       <Nav/>
       {/* Header bar */}
       <div style={{background:'rgba(13,17,23,.95)',borderBottom:'1px solid rgba(246,201,14,.15)',
-        padding:'.75rem 1.25rem',display:'flex',alignItems:'center',justifyContent:'space-between',
-        flexWrap:'wrap',gap:'8px',position:'sticky',top:0,zIndex:10,backdropFilter:'blur(12px)'}}>
-        <div>
-          <div style={{fontFamily:'Bebas Neue',fontSize:'1.3rem',color:'var(--gold)',letterSpacing:2,lineHeight:1}}>
-            🏆 MI PRONÓSTICO GENERAL 2026
+        padding:'.6rem .85rem',display:'flex',alignItems:'center',justifyContent:'space-between',
+        flexWrap:'wrap',gap:'6px',position:'sticky',top:0,zIndex:10,backdropFilter:'blur(12px)'}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'clamp(.95rem,4vw,1.3rem)',color:'var(--gold)',letterSpacing:2,lineHeight:1,whiteSpace:'nowrap'}}>
+            🏆 PRONÓSTICO GENERAL 2026
           </div>
-          <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)',marginTop:'2px'}}>
-            {locked?(hasBeenEdited?'✏️ Editado — si aciertas: +10 pts':'🔒 Confirmado — si aciertas: +100 pts'):'Confirma tu pronóstico para optar por 100 pts · Editable fase a fase'}
+          <div style={{fontSize:'9px',color:'rgba(255,255,255,.4)',marginTop:'2px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'200px'}}>
+            {locked?(hasBeenEdited?'✏️ Editado · +10 pts':'🔒 Confirmado · +100 pts'):'Confirma para optar por +100 pts'}
           </div>
         </div>
-        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center'}}>
+        <div style={{display:'flex',gap:'5px',flexWrap:'wrap',alignItems:'center',flexShrink:0}}>
           {/* Ver tab */}
           <button onClick={()=>setTab('view')}
-            style={{padding:'5px 12px',fontWeight:700,fontSize:'11px',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',borderRadius:'6px',transition:'all .2s',
+            style={{padding:'5px 10px',fontWeight:700,fontSize:'11px',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',borderRadius:'6px',transition:'all .2s',
               background:tab==='view'?'var(--gold)':'rgba(255,255,255,.06)',
               color:tab==='view'?'#0d1117':'rgba(255,255,255,.7)'}}>
             🏆 Ver
           </button>
           {/* Big green Pelé IA button */}
           <button onClick={()=>setTab('setup')}
-            style={{padding:'6px 14px',fontWeight:700,fontSize:'12px',border:'none',cursor:'pointer',
-              borderRadius:'8px',display:'flex',alignItems:'center',gap:'7px',transition:'all .2s',
+            style={{padding:'5px 10px',fontWeight:700,fontSize:'11px',border:'none',cursor:'pointer',
+              borderRadius:'8px',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',
               background:tab==='setup'?'#15803d':'#16a34a',
-              color:'#fff',boxShadow:'0 0 14px rgba(22,163,74,.4)'}}>
-            <img src='/pele.jpg' style={{width:'20px',height:'20px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1.5px solid rgba(255,255,255,.4)'}}/>
-            Generar con Pelé IA
+              color:'#fff',boxShadow:'0 0 12px rgba(22,163,74,.35)'}}>
+            <img src='/pele.jpg' style={{width:'18px',height:'18px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1.5px solid rgba(255,255,255,.4)'}}/>
+            <span style={{whiteSpace:'nowrap'}}>Pelé IA</span>
           </button>
-          <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 10px',fontSize:'11px',cursor:'pointer'}} onClick={exportPNG}>📸 PNG</button>
+          <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 8px',fontSize:'11px',cursor:'pointer'}} onClick={exportPNG}>📸</button>
           {!locked?(
             <>
-              <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 10px',fontSize:'11px',cursor:'pointer'}} onClick={()=>saveBracket(false)} disabled={saving}>💾 Guardar</button>
-              <button style={{background:'var(--gold)',color:'#0d1117',border:'none',borderRadius:'6px',padding:'5px 12px',fontSize:'11px',fontWeight:700,cursor:'pointer'}} onClick={()=>saveBracket(true)} disabled={saving}>🔒 Confirmar +100 pts</button>
+              <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 8px',fontSize:'11px',cursor:'pointer'}} onClick={()=>saveBracket(false)} disabled={saving}>💾</button>
+              <button style={{background:'var(--gold)',color:'#0d1117',border:'none',borderRadius:'6px',padding:'5px 10px',fontSize:'11px',fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}} onClick={()=>saveBracket(true)} disabled={saving}>🔒 +100 pts</button>
             </>
           ):(
-            <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 10px',fontSize:'11px',cursor:'pointer'}} onClick={()=>saveBracket(false)} disabled={saving}>✏️ Editar (+10 pts)</button>
+            <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 8px',fontSize:'11px',cursor:'pointer'}} onClick={()=>saveBracket(false)} disabled={saving}>✏️ Editar</button>
           )}
         </div>
       </div>
@@ -2401,33 +2426,60 @@ function ResultsPage(){
 
 // ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
 function AdminPage(){
-  const {user,setView}=useApp()
+  const {user,tournament,setView}=useApp()
   const [tab,setTab]=React.useState('users')
   if(!user?.isAdmin) return null
-  const tabs=[
-    {k:'users',l:'👥 Participantes'},
-    {k:'locks',l:'🔒 Fases'},
-    {k:'teams',l:'⚽ Equipos'},
-    {k:'results',l:'📊 Resultados'},
-    {k:'sync',l:'🔄 Sync'},
-    {k:'whatsapp',l:'💬 WhatsApp'},
-    {k:'config',l:'⚙️ Config'},
+
+  const navItems=[
+    {k:'users',icon:'👥',l:'Participantes'},
+    {k:'results',icon:'📊',l:'Resultados'},
+    {k:'locks',icon:'🔒',l:'Fases'},
+    {k:'teams',icon:'⚽',l:'Equipos'},
+    {k:'config',icon:'⚙️',l:'Configuración'},
   ]
+
   return(
-    <div className="page">
-      <Nav/>
-      <div className="container pad">
-        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.5rem'}}>⚙️ ADMIN · POLLA 2026</h2>
-        <div className="admin-tabs">
-          {tabs.map(({k,l})=><button key={k} className={`at ${tab===k?'at-on':''}`} onClick={()=>setTab(k)}>{l}</button>)}
+    <div className="page" style={{flexDirection:'row',minHeight:'100vh'}}>
+      {/* Sidebar */}
+      <div className="adm-sidebar">
+        <div className="adm-sidebar-header">
+          <img src={tournament?.logo_url||"/logo.png"} style={{width:28,height:28,objectFit:'contain',borderRadius:6,border:'1px solid var(--border)',flexShrink:0}} alt=""/>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:'12px',fontWeight:700,color:'var(--ink)',lineHeight:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tournament?.name||'Mi Polla'}</div>
+            <div style={{fontSize:'9px',color:'var(--ink3)',marginTop:1}}>Admin · Panel</div>
+          </div>
         </div>
-        {tab==='users'&&<AdminUsers/>}
-        {tab==='locks'&&<AdminLocks/>}
-        {tab==='teams'&&<AdminTeams/>}
-        {tab==='results'&&<AdminResults/>}
-        {tab==='sync'&&<AdminSync/>}
-        {tab==='whatsapp'&&<AdminWhatsApp/>}
-        {tab==='config'&&<AdminConfig/>}
+        {navItems.map(({k,icon,l})=>(
+          <button key={k} className={`adm-nav-btn ${tab===k?'adm-nav-on':''}`} onClick={()=>setTab(k)}>
+            <span style={{fontSize:'14px',flexShrink:0}}>{icon}</span>
+            <span className="adm-nav-label">{l}</span>
+          </button>
+        ))}
+        <div style={{marginTop:'auto',padding:'10px 12px',borderTop:'1px solid var(--border)'}}>
+          <button className="btn btn-outline btn-sm btn-full" onClick={()=>setView('dashboard')}>← App</button>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,background:'var(--cream2)'}}>
+        <div style={{background:'var(--white)',borderBottom:'1px solid var(--border)',padding:'12px 18px',
+          display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1.15rem',letterSpacing:1,color:'var(--ink)'}}>
+            {navItems.find(n=>n.k===tab)?.icon} {navItems.find(n=>n.k===tab)?.l||'Admin'}
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <span style={{fontSize:'10px',color:'var(--ink3)',background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 8px'}}>
+              {tournament?.slug?`lapollaia.com/t/${tournament.slug}`:''}
+            </span>
+          </div>
+        </div>
+        <div style={{flex:1,padding:'1.1rem',overflow:'auto'}}>
+          {tab==='users'&&<AdminUsers/>}
+          {tab==='locks'&&<AdminLocks/>}
+          {tab==='teams'&&<AdminTeams/>}
+          {tab==='results'&&<AdminResults/>}
+          {tab==='config'&&<AdminConfig/>}
+        </div>
       </div>
     </div>
   )
@@ -2437,6 +2489,10 @@ function AdminUsers(){
   const [users,setUsers]=React.useState([])
   const [loading,setLoading]=React.useState(true)
   const [search,setSearch]=React.useState('')
+  const [detail,setDetail]=React.useState(null) // {userId, name, bg}
+  const [detailData,setDetailData]=React.useState(null)
+  const [detailTab,setDetailTab]=React.useState('predictions')
+  const [loadingDetail,setLoadingDetail]=React.useState(false)
 
   React.useEffect(()=>{
     api('/api/admin/users').then(d=>{setUsers(d);setLoading(false)}).catch(()=>setLoading(false))
@@ -2445,54 +2501,237 @@ function AdminUsers(){
   async function toggleAvatar(avId,field,val){
     try{
       await api(`/api/admin/avatars/${avId}`,'PUT',{[field]:val})
-      setUsers(us=>us.map(u=>({...u,avatars:(u.avatars||[]).map(a=>a.id===avId?{...a,['is_active']:val}:a)})))
+      setUsers(us=>us.map(u=>({...u,avatars:(u.avatars||[]).map(a=>a.id===avId?{...a,is_active:val}:a)})))
     }catch(e){alert(e.message)}
   }
 
-  async function deleteUser(uid,name){
-    if(!confirm(`¿Eliminar a "${name}" y todos sus datos? Esta acción no se puede deshacer.`)) return
+  async function deleteUser(uid,name,e){
+    e&&e.stopPropagation()
+    if(!confirm(`¿Eliminar a "${name}" y todos sus datos?`)) return
     try{
       await api(`/api/admin/users/${uid}`,'DELETE')
       setUsers(us=>us.filter(u=>u.id!==uid))
-    }catch(e){alert('Error al eliminar: '+e.message)}
+    }catch(e){alert('Error: '+e.message)}
+  }
+
+  async function openDetail(u,e){
+    e&&e.stopPropagation()
+    const bg=generateAvatarColor(u.name||'x')
+    setDetail({userId:u.id,name:u.name,email:u.email,bg,created_at:u.created_at})
+    setDetailTab('predictions')
+    setLoadingDetail(true)
+    try{
+      const d=await api(`/api/admin/users/${u.id}/details`)
+      setDetailData(d)
+    }catch(err){ setDetailData(null) }
+    setLoadingDetail(false)
   }
 
   if(loading) return <Spinner/>
+
+  // ── DETAIL VIEW ──
+  if(detail){
+    const initials=(detail.name||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase()
+    const d=detailData
+    const approved=d?.avatars?.[0]?.is_active
+    return(
+      <div>
+        <button className="btn btn-outline btn-sm" style={{marginBottom:'1rem'}} onClick={()=>{setDetail(null);setDetailData(null)}}>← Volver a participantes</button>
+        {/* User header */}
+        <div className="card" style={{display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1rem',flexWrap:'wrap'}}>
+          <AvatarCircle nickname={detail.name||'?'} size={52}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:'15px',fontWeight:700,color:'var(--ink)'}}>{detail.name}</div>
+            <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:'2px'}}>{detail.email} · Se unió {detail.created_at?new Date(detail.created_at).toLocaleDateString('es-CO'):''}</div>
+            <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap',alignItems:'center'}}>
+              {approved
+                ?<span className="chip chip-g">✅ Aprobado</span>
+                :<span className="chip chip-gold">⏳ Pendiente aprobación</span>}
+              <span style={{fontSize:'11px',color:'var(--ink3)'}}>
+                {d?.stats?.played||0} pronósticos jugados ·
+                <strong style={{color:'var(--gold)',marginLeft:4}}>{d?.stats?.total||0} pts</strong>
+              </span>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:6,flexShrink:0}}>
+            {d?.avatars?.[0]&&(
+              <button className={`btn btn-sm ${d.avatars[0].is_active?'btn-red':'btn-green'}`}
+                onClick={()=>{
+                  const av=d.avatars[0]; const newVal=!av.is_active
+                  toggleAvatar(av.id,'isActive',newVal)
+                  setDetailData(dd=>({...dd,avatars:dd.avatars.map(a=>a.id===av.id?{...a,is_active:newVal}:a)}))
+                }}>
+                {d.avatars[0].is_active?'🚫 Suspender':'✅ Aprobar'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:'flex',gap:4,marginBottom:'1rem',background:'var(--cream2)',borderRadius:'50px',padding:3,width:'fit-content'}}>
+          {[['predictions','Pronósticos'],['special','Predicciones especiales'],['bracket','Bracket']].map(([k,l])=>(
+            <button key={k} onClick={()=>setDetailTab(k)}
+              style={{padding:'6px 14px',borderRadius:'50px',fontSize:'11px',fontWeight:600,border:'none',cursor:'pointer',transition:'all .15s',
+                background:detailTab===k?'var(--white)':'transparent',
+                color:detailTab===k?'var(--ink)':'var(--ink3)',
+                boxShadow:detailTab===k?'0 1px 3px rgba(26,24,20,.1)':'none'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {loadingDetail&&<Spinner/>}
+
+        {!loadingDetail&&detailTab==='predictions'&&(
+          <div className="card" style={{padding:0,overflow:'hidden'}}>
+            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.3fr',background:'var(--cream2)',borderBottom:'1px solid var(--border)'}}>
+              {['Partido','Pronóstico','Pts','Ingresado'].map(h=>(
+                <div key={h} style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',padding:'9px 12px'}}>{h}</div>
+              ))}
+            </div>
+            {(d?.predictions||[]).slice(0,50).map((p,i)=>(
+              <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.3fr',borderBottom:'1px solid var(--border)',alignItems:'center'}}>
+                <div style={{padding:'9px 12px'}}>
+                  <div style={{fontSize:'12px',fontWeight:700,color:'var(--ink)'}}>{es(p.team1)} vs {es(p.team2)}</div>
+                  <div style={{fontSize:'10px',color:'var(--ink3)'}}>{PHASE_LABELS[p.phase]||p.phase}{p.group_name?` · Grupo ${p.group_name}`:''}</div>
+                </div>
+                <div style={{padding:'9px 12px',fontWeight:700,color:'var(--gold)',fontSize:'13px'}}>{p.score_home} – {p.score_away}</div>
+                <div style={{padding:'9px 12px'}}>
+                  {p.points_earned>0
+                    ?<span className="chip chip-g">+{p.points_earned}</span>
+                    :p.real_home!=null
+                      ?<span className="chip chip-ink">+0</span>
+                      :<span style={{fontSize:'11px',color:'var(--ink3)'}}>Pendiente</span>}
+                </div>
+                <div style={{padding:'9px 12px',fontSize:'10px',color:'var(--ink3)'}}>
+                  {p.predicted_at?new Date(p.predicted_at).toLocaleString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—'}
+                </div>
+              </div>
+            ))}
+            {(!d?.predictions||d.predictions.length===0)&&(
+              <div style={{padding:'2rem',textAlign:'center',color:'var(--ink3)',fontSize:'13px'}}>Sin pronósticos aún</div>
+            )}
+          </div>
+        )}
+
+        {!loadingDetail&&detailTab==='special'&&(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
+            {[
+              ['Campeón del torneo',d?.special?.champion_team,'+10 pts'],
+              ['Equipo sorpresa',d?.special?.surprise_team,'+3 pts'],
+              ['Balón de Oro',d?.special?.balon_de_oro,'+5 pts'],
+              ['Guante de Oro',d?.special?.guante_de_oro,'+5 pts'],
+              ['Bota de Oro',d?.special?.bota_de_oro,'+5 pts'],
+            ].map(([label,val,pts])=>(
+              <div key={label} className="card-sm" style={label==='Campeón del torneo'?{gridColumn:'span 2'}:{}}>
+                <div style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>{label}</div>
+                <div style={{fontSize:'14px',fontWeight:700,color:'var(--ink)'}}>{val?`${f(val)?.[0]!=='❓'?f(val):''} ${es(val)||val}`:'—'}</div>
+                <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:2}}>{pts} si acierta</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loadingDetail&&detailTab==='bracket'&&(
+          <div className="card">
+            {d?.bracket?.bracket?(
+              <>
+                <div style={{fontWeight:700,fontSize:'13px',marginBottom:'8px'}}>
+                  Campeón pronosticado: {d.bracket.bracket.champion?`${f(d.bracket.bracket.champion)} ${es(d.bracket.bracket.champion)}`:'No definido'}
+                </div>
+                <div style={{fontSize:'11px',color:'var(--ink3)',marginBottom:'12px'}}>
+                  {d.bracket.locked_at?`Confirmado ${new Date(d.bracket.locked_at).toLocaleDateString('es-CO')}`:'No confirmado'}
+                  {' · '}{d.bracket.has_been_edited?'Editado después de generarse':'Sin editar'}
+                  {' · '}{d.bracket.is_ai_generated?'Generado con Pelé IA':'Manual'}
+                </div>
+                <div style={{overflowX:'auto'}}>
+                  {[['round32','R32'],['round16','R16'],['quarters','QF'],['semis','SF']].map(([phase,label])=>(
+                    <div key={phase} style={{marginBottom:'8px'}}>
+                      <div style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>{label}</div>
+                      <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                        {(d.bracket.bracket[phase]||[]).map((m,i)=>(
+                          <div key={i} style={{background:'var(--cream2)',border:`1px solid ${m.winner?'var(--gold-border)':'var(--border)'}`,borderRadius:6,padding:'3px 8px',fontSize:'10px',
+                            color:m.winner?'var(--gold)':'var(--ink2)',fontWeight:m.winner?700:400}}>
+                            {m.winner?`✓ ${es(m.winner)} ${m.home_score}–${m.away_score}`:`${es(m.home)||'?'} vs ${es(m.away)||'?'}`}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{marginTop:'8px',padding:'10px',background:'var(--gold-bg)',border:'1px solid var(--gold-border)',borderRadius:8}}>
+                    <div style={{fontSize:'11px',fontWeight:700,color:'var(--gold)'}}>
+                      🏆 Final: {d.bracket.bracket.final?.home?`${es(d.bracket.bracket.final.home)} ${d.bracket.bracket.final.home_score}–${d.bracket.bracket.final.away_score} ${es(d.bracket.bracket.final.away)}`:'Por definir'}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ):(
+              <div style={{textAlign:'center',color:'var(--ink3)',fontSize:'13px',padding:'1rem'}}>No ha generado bracket todavía</div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── LIST VIEW ──
   const filtered=users.filter(u=>!search||u.name?.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase()))
+  const approved=filtered.filter(u=>(u.avatars||[]).some(a=>a.is_active)).length
+  const pending=filtered.length-approved
 
   return(
     <div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
-        <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',color:'var(--ink3)'}}>{users.length} PARTICIPANTES</div>
-        <input className="inp" style={{maxWidth:200}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..."/>
+      {/* Approval info banner */}
+      <div className="card" style={{background:'rgba(200,168,75,.06)',border:'1px solid var(--gold-border)',borderRadius:'var(--r)',padding:'10px 14px',marginBottom:'1rem',display:'flex',gap:10,alignItems:'flex-start'}}>
+        <span style={{fontSize:'14px',flexShrink:0}}>ℹ️</span>
+        <div style={{fontSize:'11px',color:'var(--ink2)',lineHeight:1.6}}>
+          <strong>Sistema de aprobación:</strong> Los participantes pueden registrarse y cargar pronósticos libremente.
+          Sus resultados quedan guardados pero <strong>no suman puntos al ranking hasta que los apruebes.</strong>
+          Si apruebas después de que empezó el torneo, los puntos se calculan retroactivamente.
+        </div>
       </div>
-      {filtered.map(u=>(
-        <div key={u.id} className="user-row">
-          <div className="ua-av" style={{background:generateAvatarColor(u.name||'x')}}>
-            {u.picture?<img src={u.picture} style={{width:38,height:38,borderRadius:'50%',objectFit:'cover'}} alt=""/>
-              :(u.name||'?').substring(0,2).toUpperCase()}
-          </div>
-          <div className="ua-info">
-            <div className="ua-name">{u.name}</div>
-            <div className="ua-email">{u.email}{u.phone&&<>{' · '}<a href={`https://wa.me/${u.phone.replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer" style={{color:'#25D366',fontWeight:600,textDecoration:'none'}} title="Abrir WhatsApp">📱 {u.phone}</a></>}</div>
-            <div className="ua-avatars">
-              {(u.avatars||[]).map(av=>(
-                <div key={av.id} style={{background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 8px',fontSize:10}}>
-                  <span className="font-bold">{av.nickname}</span>{' '}
-                  <span className={`chip ${av.is_active?'chip-g':'chip-o'}`}>{av.is_active?'✅ Activo':'⏳ Pendiente aprobación'}</span>{' '}
-                  <button className={`btn btn-sm ${av.is_active?'btn-red':'btn-green'}`} style={{padding:'1px 6px',fontSize:9}} onClick={()=>toggleAvatar(av.id,'isActive',!av.is_active)}>
-                    {av.is_active?'🚫 Suspender':'✓ Aprobar'}
-                  </button>
-                </div>
-              ))}
+
+      {/* Stats row */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'1rem'}}>
+        <div className="stat-card"><div className="stat-n">{filtered.length}</div><div className="stat-l">Total</div></div>
+        <div className="stat-card"><div className="stat-n" style={{color:'var(--green)'}}>{approved}</div><div className="stat-l">Aprobados</div></div>
+        <div className="stat-card"><div className="stat-n" style={{color:'var(--gold)'}}>{pending}</div><div className="stat-l">Pendientes</div></div>
+      </div>
+
+      {/* Search */}
+      <input className="inp" style={{marginBottom:'1rem'}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar participante..."/>
+
+      {filtered.map(u=>{
+        const mainAv=(u.avatars||[])[0]
+        const isApproved=mainAv?.is_active
+        return(
+          <div key={u.id} className="card-sm" style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'8px',cursor:'pointer',transition:'all .12s'}}
+            onClick={()=>openDetail(u)}>
+            <AvatarCircle nickname={u.name||'?'} size={40}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:'13px',fontWeight:700,color:'var(--ink)'}}>{u.name}</div>
+              <div style={{fontSize:'10px',color:'var(--ink3)',marginTop:'1px'}}>{u.email}</div>
+              <div style={{display:'flex',gap:5,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
+                {isApproved
+                  ?<span className="chip chip-g" style={{fontSize:'9px'}}>✅ Aprobado</span>
+                  :<span className="chip chip-gold" style={{fontSize:'9px'}}>⏳ Pendiente</span>}
+                <span style={{fontSize:'10px',color:'var(--ink3)'}}>{new Date(u.created_at).toLocaleDateString('es-CO')}</span>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:'flex',alignItems:'center',gap:4}}>
+                <Toggle on={!!isApproved} onChange={v=>mainAv&&toggleAvatar(mainAv.id,'isActive',v)}/>
+                <span style={{fontSize:'10px',color:'var(--ink3)',minWidth:50}}>{isApproved?'Activo':'Aprobar'}</span>
+              </div>
+              <button className="btn btn-sm" style={{padding:'4px 10px',fontSize:'11px',background:'var(--gold-bg)',color:'var(--gold)',border:'1px solid var(--gold-border)'}}
+                onClick={(e)=>{e.stopPropagation();openDetail(u,e)}}>Ver →</button>
+              <button className="btn btn-sm" style={{padding:'4px 8px',fontSize:'10px',background:'var(--red-bg)',color:'var(--red)',border:'1px solid rgba(192,57,43,.18)'}}
+                onClick={(e)=>deleteUser(u.id,u.name,e)}>🗑</button>
             </div>
           </div>
-          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'4px'}}>
-            <div style={{fontSize:10,color:'var(--ink3)'}}>{new Date(u.created_at).toLocaleDateString('es-CO')}</div>
-            <button className="btn btn-sm" style={{background:'#fee2e2',color:'#dc2626',border:'1px solid #fca5a5',padding:'2px 8px',fontSize:9,fontWeight:700}} onClick={()=>deleteUser(u.id,u.name)}>🗑 Eliminar</button>
-          </div>
-        </div>
-      ))}
+        )
+      })}
+      {filtered.length===0&&<div style={{textAlign:'center',padding:'2rem',color:'var(--ink3)',fontSize:'13px'}}>No hay participantes aún. Comparte el link de tu polla.</div>}
     </div>
   )
 }

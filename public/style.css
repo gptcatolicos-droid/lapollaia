@@ -411,10 +411,63 @@ a{color:var(--gold);text-decoration:none;}
 .g-dot{width:16px;height:16px;border-radius:50%;
   background:conic-gradient(#4285F4 90deg,#EA4335 90deg 180deg,#FBBC05 180deg 270deg,#34A853 270deg);flex-shrink:0;}
 
+/* ── MOBILE ─────────────────────── */
+.btn-row{display:flex;gap:6px;}
+
+@media(max-width:600px){
+  /* Nav */
+  .nav{padding:.6rem .85rem;}
+  .nav-logo{font-size:1rem;letter-spacing:1px;}
+  .nav-sub{display:none;}
+  .nav-actions{gap:4px;}
+  .nav-actions .btn{padding:.32rem .6rem;font-size:.72rem;}
+  /* Hide text labels on very small nav buttons — keep icons */
+  .nav-actions .btn-outline{padding:.32rem .55rem;}
+
+  /* Dashboard */
+  .dash-stats{grid-template-columns:repeat(3,1fr);gap:.4rem;}
+  .stat-card{padding:.6rem .4rem;}
+  .stat-n{font-size:1.5rem;}
+  .action-card{padding:.75rem .6rem;}
+  .ac-icon{font-size:1.2rem;margin-bottom:.2rem;}
+  .ac-label{font-size:11px;}
+  .ac-desc{font-size:9px;}
+
+  /* Score inputs */
+  .inp-score{width:44px;height:44px;font-size:1.25rem;}
+
+  /* Match card buttons — stack vertically */
+  .btn-row{flex-direction:column;}
+
+  /* Chat */
+  .chat-topbar{padding:.6rem .85rem;}
+  .pele-av{width:36px;height:36px;}
+
+  /* Modal */
+  .modal-box{max-height:95vh;}
+  .modal-body{padding:1rem;}
+
+  /* Cards */
+  .card{padding:.85rem;}
+}
+
 @media(max-width:480px){
   .av-grid{grid-template-columns:repeat(2,1fr);}
   .extra-grid{grid-template-columns:1fr 1fr;}
   .ef-full{grid-column:span 2;}
   .group-grid{grid-template-columns:repeat(3,1fr);}
-  .dash-stats{grid-template-columns:repeat(2,1fr);}
+  .dash-stats{grid-template-columns:repeat(3,1fr);}
+}
+
+/* ── ADMIN SIDEBAR ───────────────────────────────────────── */
+.adm-sidebar{width:180px;background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:10px 8px;gap:2px;flex-shrink:0;}
+.adm-sidebar-header{display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:12px;}
+.adm-nav-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:500;color:var(--ink2);border:none;background:transparent;width:100%;text-align:left;transition:all .12s;}
+.adm-nav-btn:hover:not(.adm-nav-on){background:var(--cream2);}
+.adm-nav-on{background:var(--gold-bg)!important;color:var(--gold)!important;font-weight:700!important;}
+@media(max-width:600px){
+  .adm-sidebar{width:100%;flex-direction:row;border-right:none;border-bottom:1px solid var(--border);overflow-x:auto;padding:6px;gap:4px;}
+  .adm-sidebar-header{display:none;}
+  .adm-nav-label{display:none;}
+  .adm-nav-btn{padding:8px;min-width:36px;justify-content:center;}
 }

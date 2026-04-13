@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const path = require('path')
 const crypto = require('crypto')
+const https = require('https')
 const Anthropic = require('@anthropic-ai/sdk')
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago')
 const nodemailer = require('nodemailer')
@@ -68,6 +69,40 @@ async function sendMail(to, subject, html){
 
 
 app.use(express.json({ limit: '10mb' }))
+
+// ─── SECURITY HEADERS ─────────────────────────────────────────────────────────
+app.use((req,res,next)=>{
+  res.setHeader('X-Content-Type-Options','nosniff')
+  res.setHeader('X-Frame-Options','SAMEORIGIN')
+  res.setHeader('X-XSS-Protection','1; mode=block')
+  res.setHeader('Referrer-Policy','strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy','camera=(),microphone=(),geolocation=()')
+  next()
+})
+
+// ─── PAYPAL HELPERS ───────────────────────────────────────────────────────────
+async function paypalToken(){
+  const cid=process.env.PAYPAL_CLIENT_ID||''
+  const sec=process.env.PAYPAL_CLIENT_SECRET||''
+  if(!cid||!sec) throw new Error('PayPal no configurado')
+  const auth=Buffer.from(`${cid}:${sec}`).toString('base64')
+  const body='grant_type=client_credentials'
+  return new Promise((resolve,reject)=>{
+    const req=https.request({hostname:'api-m.paypal.com',path:'/v1/oauth2/token',method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded','Authorization':`Basic ${auth}`,'Content-Length':Buffer.byteLength(body)}
+    },res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{resolve(JSON.parse(d).access_token)}catch(e){reject(e)}})})
+    req.on('error',reject);req.write(body);req.end()
+  })
+}
+async function paypalAPI(method,path,body,token){
+  const data=body?JSON.stringify(body):undefined
+  return new Promise((resolve,reject)=>{
+    const req=https.request({hostname:'api-m.paypal.com',path,method,
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`,...(data?{'Content-Length':Buffer.byteLength(data)}:{})}
+    },res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>{try{resolve({status:res.statusCode,data:JSON.parse(d)})}catch(e){resolve({status:res.statusCode,data:d})}})})
+    req.on('error',reject);if(data)req.write(data);req.end()
+  })
+}
 
 // ─── STATIC ───────────────────────────────────────────────────────────────────
 // Serve marketing home at /
@@ -453,6 +488,103 @@ app.get('/payment/failure', (req,res)=>{
 
 app.get('/payment/pending', (req,res)=>{
   res.redirect('/')
+})
+
+// ─── PAYPAL CHECKOUT ──────────────────────────────────────────────────────────
+// Create tournament without MP (PayPal path)
+app.post('/api/tournaments/create-paypal', async(req,res)=>{
+  const {name,slug,adminName,email,password}=req.body
+  if(!name||!slug||!adminName||!email||!password) return res.status(400).json({error:'Datos incompletos'})
+  const cleanSlug=slug.toLowerCase().replace(/[^a-z0-9-]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')
+  if(cleanSlug.length<3) return res.status(400).json({error:'El slug es muy corto'})
+  try{
+    const {rows:[ex]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[cleanSlug])
+    if(ex) return res.status(400).json({error:'Ese nombre de polla ya está tomado. Elige otro.'})
+    const tid='t-'+crypto.randomBytes(12).toString('hex')
+    const hash=await bcrypt.hash(password,10)
+    await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,inscription_fee,currency,is_active) VALUES($1,$2,$3,$4,$5,0,'USD',FALSE)`,[tid,cleanSlug,name,adminName,email.toLowerCase()])
+    const uid='u-'+crypto.randomBytes(12).toString('hex')
+    await pool.query(`INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted) VALUES($1,$2,$3,$4,$5,TRUE,TRUE)`,[uid,tid,adminName,email.toLowerCase(),hash])
+    res.json({tournamentId:tid,slug:cleanSlug})
+  }catch(e){ res.status(500).json({error:e.message}) }
+})
+
+app.post('/api/paypal/create-order', async(req,res)=>{
+  const {tournamentId,tournamentName}=req.body
+  if(!tournamentId) return res.status(400).json({error:'tournamentId requerido'})
+  try{
+    const token=await paypalToken()
+    const {status,data}=await paypalAPI('POST','/v2/checkout/orders',{
+      intent:'CAPTURE',
+      purchase_units:[{
+        reference_id:tournamentId,
+        custom_id:tournamentId,
+        description:`La Polla IA — ${tournamentName||'Torneo 2026'}`,
+        amount:{currency_code:'USD',value:'3.99'}
+      }],
+      application_context:{
+        brand_name:'La Polla IA',
+        landing_page:'NO_PREFERENCE',
+        user_action:'PAY_NOW',
+        return_url:`${APP_URL}/confirmacionpagopaypal`,
+        cancel_url:`${APP_URL}/payment/failure`
+      }
+    },token)
+    if(status>=400) return res.status(500).json({error:'Error creando orden PayPal: '+JSON.stringify(data)})
+    res.json({orderId:data.id})
+  }catch(e){ res.status(500).json({error:e.message}) }
+})
+
+app.post('/api/paypal/capture-order', async(req,res)=>{
+  const {orderId,tournamentId}=req.body
+  if(!orderId||!tournamentId) return res.status(400).json({error:'Datos incompletos'})
+  try{
+    const token=await paypalToken()
+    const {status,data}=await paypalAPI('POST',`/v2/checkout/orders/${orderId}/capture`,{},token)
+    if(status>=400||data.status!=='COMPLETED') return res.status(400).json({error:'Pago no completado'})
+    // Activate tournament
+    await pool.query('UPDATE tournaments SET is_active=TRUE,mp_payment_id=$1 WHERE id=$2',[orderId,tournamentId])
+    const phases=['group','round32','round16','quarters','semis','third','final']
+    for(const ph of phases)
+      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tournamentId,ph])
+    const {rows:[t]}=await pool.query('SELECT slug,name,owner_email,owner_name FROM tournaments WHERE id=$1',[tournamentId])
+    if(t) await sendActivationEmail(t)
+    res.json({success:true,slug:t?.slug||''})
+  }catch(e){ res.status(500).json({error:e.message}) }
+})
+
+// PayPal confirmation page
+app.get('/confirmacionpagopaypal', async(req,res)=>{
+  const {token,PayerID}=req.query
+  // token is the PayPal order ID when redirected from PayPal
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pago Recibido — La Polla IA</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:#0d1117;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
+.card{background:#1a1f2e;border:1px solid rgba(246,201,14,.25);border-radius:20px;padding:2.5rem;max-width:500px;width:100%;text-align:center}
+.check{width:72px;height:72px;background:rgba(22,163,74,.15);border:2px solid #16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1.5rem}
+h1{font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#F6C90E;letter-spacing:2px;margin-bottom:.5rem}
+p{color:rgba(255,255,255,.55);font-size:14px;line-height:1.7;margin-bottom:1rem}
+.note{background:rgba(246,201,14,.08);border:1px solid rgba(246,201,14,.2);border-radius:10px;padding:1rem;margin-bottom:1.5rem}
+.note strong{color:#F6C90E}
+.btn{display:inline-block;background:#F6C90E;color:#0d1117;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;text-decoration:none;transition:all .2s}
+.btn:hover{background:#d4aa00;transform:translateY(-2px)}
+.small{font-size:12px;color:rgba(255,255,255,.2);margin-top:1.25rem}
+</style></head><body>
+<div class="card">
+  <div class="check">✅</div>
+  <h1>Pago Recibido</h1>
+  <p>Tu pago de <strong style="color:#F6C90E">$3.99 USD</strong> via PayPal fue procesado exitosamente.</p>
+  <div class="note">
+    <p style="margin:0"><strong>Tu polla está siendo activada.</strong> En unos segundos podrás acceder con el usuario y contraseña que registraste.</p>
+  </div>
+  <p style="font-size:13px;color:rgba(255,255,255,.4)">Recibirás un correo de confirmación con el link de acceso. Si ya tienes el link de tu polla, puedes acceder directamente:</p>
+  <a href="/" class="btn">🏆 Ir a lapollaia.com</a>
+  <p class="small">ID de orden PayPal: ${token||'—'} · Guarda este número como comprobante.</p>
+</div>
+</body></html>`)
 })
 
 // ─── TOURNAMENT PUBLIC INFO ───────────────────────────────────────────────────
@@ -1185,6 +1317,38 @@ app.get('/api/admin/users', auth, tournamentAdmin, async(req,res)=>{
       WHERE u.tournament_id=$1 AND u.is_admin=FALSE GROUP BY u.id ORDER BY u.created_at DESC`,[req.user.tournamentId])
     res.json(rows)
   }catch(e){ res.status(500).json({error:'Error'}) }
+})
+
+// Admin: view full details of one user (predictions + bracket + special) — READ ONLY
+app.get('/api/admin/users/:userId/details', auth, tournamentAdmin, async(req,res)=>{
+  const {userId}=req.params
+  try{
+    // Verify user belongs to this tournament
+    const {rows:[u]}=await pool.query('SELECT id,name,email,created_at FROM users WHERE id=$1 AND tournament_id=$2',[userId,req.user.tournamentId])
+    if(!u) return res.status(404).json({error:'Usuario no encontrado'})
+    // Get avatars
+    const {rows:avatars}=await pool.query('SELECT id,nickname,is_active FROM avatars WHERE user_id=$1',[userId])
+    const avIds=avatars.map(a=>a.id)
+    if(!avIds.length) return res.json({user:u,avatars:[],predictions:[],bracket:null,special:null,stats:{total:0,played:0}})
+    // Predictions with match info + results
+    const {rows:predictions}=await pool.query(`
+      SELECT p.id,p.match_id,p.score_home,p.score_away,p.points_earned,p.created_at as predicted_at,
+        m.phase,m.group_name,m.team1,m.team2,m.match_date,m.match_num,
+        r.score_home as real_home,r.score_away as real_away
+      FROM predictions p
+      JOIN matches m ON m.id=p.match_id
+      LEFT JOIN match_results r ON r.match_id=p.match_id
+      WHERE p.avatar_id=ANY($1)
+      ORDER BY m.match_date ASC`,[[avIds[0]]])
+    // Bracket
+    const {rows:[bk]}=await pool.query('SELECT bracket,is_ai_generated,has_been_edited,locked_at,updated_at FROM bracket_predictions WHERE avatar_id=ANY($1)',[avIds])
+    // Special predictions
+    const {rows:[sp]}=await pool.query('SELECT * FROM special_predictions WHERE avatar_id=ANY($1)',[avIds])
+    // Stats
+    const total=predictions.reduce((s,p)=>s+(p.points_earned||0),0)
+    const played=predictions.filter(p=>p.real_home!=null).length
+    res.json({user:u,avatars,predictions,bracket:bk||null,special:sp||null,stats:{total,played}})
+  }catch(e){ console.error(e); res.status(500).json({error:e.message}) }
 })
 
 app.put('/api/admin/avatars/:id', auth, tournamentAdmin, async(req,res)=>{

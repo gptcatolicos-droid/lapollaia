@@ -171,52 +171,53 @@ body{font-family:'DM Sans',sans-serif;background:var(--ink);color:var(--white);o
 .carousel-header{text-align:center;padding:0 1.5rem;margin-bottom:2.5rem}
 .carousel-track-wrap{overflow:hidden;padding:1rem 0 1.5rem;position:relative}
 .carousel-track{display:flex;gap:24px;transition:transform .5s cubic-bezier(.4,0,.2,1);will-change:transform}
-.carousel-slide{flex:0 0 360px;border-radius:var(--r-lg);overflow:hidden;border:1px solid rgba(255,255,255,.08);background:#111827;box-shadow:0 24px 60px rgba(0,0,0,.6);transition:all .4s;cursor:pointer;position:relative}
-.carousel-slide.active{border-color:rgba(246,201,14,.4);box-shadow:0 32px 80px rgba(246,201,14,.15);transform:scale(1.03)}
-.carousel-slide:not(.active){opacity:.52;transform:scale(.95)}
-.slide-bar{height:26px;background:rgba(255,255,255,.04);display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid rgba(255,255,255,.06)}
+.carousel-slide{flex:0 0 360px;border-radius:var(--r-lg);overflow:hidden;border:1px solid rgba(26,24,20,.1);background:#F7F4EE;box-shadow:0 24px 60px rgba(0,0,0,.25);transition:all .4s;cursor:pointer;position:relative}
+.carousel-slide.active{border-color:rgba(200,168,75,.5);box-shadow:0 32px 80px rgba(200,168,75,.15);transform:scale(1.03)}
+.carousel-slide:not(.active){opacity:.55;transform:scale(.95)}
+.slide-bar{height:26px;background:#EFEBE3;display:flex;align-items:center;gap:6px;padding:0 12px;border-bottom:1px solid rgba(26,24,20,.07)}
 .slide-dot{width:7px;height:7px;border-radius:50%}
-.slide-label{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.28);margin-left:4px}
-.slide-body{padding:14px;min-height:255px}
+.slide-label{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(26,24,20,.35);margin-left:4px}
+.slide-body{padding:14px;min-height:255px;background:#F7F4EE}
 .carousel-dots{display:flex;justify-content:center;gap:8px;margin-top:1.5rem}
 .c-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.15);cursor:pointer;transition:all .2s}
 .c-dot.on{background:var(--gold);width:24px;border-radius:4px}
 .carousel-nav{display:flex;justify-content:center;gap:10px;margin-top:1rem}
 .c-btn{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;font-size:1rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center}
 .c-btn:hover{background:rgba(246,201,14,.15);border-color:rgba(246,201,14,.4)}
+/* Carousel mockup elements — light/cream theme */
 .mk-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.mk-logo{font-family:'Bebas Neue',sans-serif;font-size:.8rem;color:var(--gold);letter-spacing:1px}
-.mk-btn{background:var(--gold);color:#0d1117;border:none;border-radius:5px;padding:3px 8px;font-size:7px;font-weight:700;cursor:default}
-.mk-match{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;margin-bottom:6px}
+.mk-logo{font-family:'Bebas Neue',sans-serif;font-size:.8rem;color:#C8A84B;letter-spacing:1px}
+.mk-btn{background:#C8A84B;color:#fff;border:none;border-radius:5px;padding:3px 8px;font-size:7px;font-weight:700;cursor:default}
+.mk-match{background:#fff;border:1px solid rgba(26,24,20,.09);border-radius:8px;padding:8px 10px;margin-bottom:6px;box-shadow:0 1px 4px rgba(26,24,20,.06)}
 .mk-teams{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-.mk-team{display:flex;align-items:center;gap:4px;font-size:9px;font-weight:600}
+.mk-team{display:flex;align-items:center;gap:4px;font-size:9px;font-weight:600;color:#1A1814}
 .mk-score-box{display:flex;align-items:center;gap:5px}
-.mk-score{width:24px;height:24px;border-radius:4px;border:1.5px solid var(--gold);background:rgba(246,201,14,.08);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:.95rem;color:var(--gold)}
-.mk-dash{color:rgba(255,255,255,.3);font-size:.75rem}
-.mk-save{background:var(--gold);color:#0d1117;border:none;border-radius:5px;padding:4px 10px;font-size:8px;font-weight:700;width:100%;cursor:default;margin-top:5px;text-align:center}
+.mk-score{width:24px;height:24px;border-radius:4px;border:1.5px solid #C8A84B;background:rgba(200,168,75,.08);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:.95rem;color:#C8A84B}
+.mk-dash{color:rgba(26,24,20,.3);font-size:.75rem}
+.mk-save{background:#C8A84B;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:8px;font-weight:700;width:100%;cursor:default;margin-top:5px;text-align:center}
 .mk-chat-bubble{border-radius:10px;padding:6px 9px;font-size:9px;line-height:1.5;margin-bottom:5px;max-width:85%}
-.mk-chat-pele{background:#1e293b;border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.8)}
-.mk-chat-user{background:var(--gold);color:#0d1117;font-weight:600;margin-left:auto}
-.mk-pele-av{width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1px solid var(--gold)}
+.mk-chat-pele{background:#fff;border:1px solid rgba(26,24,20,.1);color:#3D3A35;box-shadow:0 1px 3px rgba(26,24,20,.06)}
+.mk-chat-user{background:#C8A84B;color:#fff;font-weight:600;margin-left:auto}
+.mk-pele-av{width:20px;height:20px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1px solid #C8A84B}
 .mk-pele-av img{width:100%;height:100%;object-fit:cover;object-position:top}
 .mk-chat-row{display:flex;gap:6px;align-items:flex-start}
-.mk-option-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:5px 9px;font-size:8px;color:rgba(255,255,255,.7);cursor:default;display:flex;align-items:center;gap:5px;margin-bottom:4px}
-.mk-option-btn.gold-border{border-color:rgba(246,201,14,.4);background:rgba(246,201,14,.05)}
-.mk-rank-row{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;margin-bottom:3px;background:rgba(255,255,255,.03)}
-.mk-rank-av{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#0d1117}
-.mk-rank-name{flex:1;font-size:9px;font-weight:600}
-.mk-rank-pts{font-family:'Bebas Neue',sans-serif;font-size:.9rem;color:var(--gold)}
+.mk-option-btn{background:#fff;border:1px solid rgba(26,24,20,.1);border-radius:7px;padding:5px 9px;font-size:8px;color:#3D3A35;cursor:default;display:flex;align-items:center;gap:5px;margin-bottom:4px;box-shadow:0 1px 2px rgba(26,24,20,.05)}
+.mk-option-btn.gold-border{border-color:rgba(200,168,75,.5);background:rgba(200,168,75,.06)}
+.mk-rank-row{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;margin-bottom:3px;background:#fff;border:1px solid rgba(26,24,20,.06)}
+.mk-rank-av{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff}
+.mk-rank-name{flex:1;font-size:9px;font-weight:600;color:#1A1814}
+.mk-rank-pts{font-family:'Bebas Neue',sans-serif;font-size:.9rem;color:#C8A84B}
 .mk-tab{display:inline-block;font-size:8px;font-weight:700;padding:3px 7px;border-radius:5px;cursor:default;margin-right:3px}
-.mk-tab.on{background:var(--ink);color:#fff}
-.mk-tab.off{color:rgba(255,255,255,.35)}
-.mk-user-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
-.mk-approve-btn{background:var(--green);color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:7px;font-weight:700;cursor:default;margin-left:auto}
-.mk-toggle{width:22px;height:11px;border-radius:6px;background:var(--gold);position:relative;cursor:default;flex-shrink:0}
+.mk-tab.on{background:#1A1814;color:#F7F4EE}
+.mk-tab.off{color:rgba(26,24,20,.35)}
+.mk-user-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(26,24,20,.06)}
+.mk-approve-btn{background:#2D7D4A;color:#fff;border:none;border-radius:4px;padding:2px 7px;font-size:7px;font-weight:700;cursor:default;margin-left:auto}
+.mk-toggle{width:22px;height:11px;border-radius:6px;background:#C8A84B;position:relative;cursor:default;flex-shrink:0}
 .mk-toggle::after{content:'';position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;top:1px;right:1px}
 .mk-br-phase{display:flex;flex-direction:column;gap:3px;flex:1}
-.mk-br-ph-label{font-size:7px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;text-align:center}
-.mk-br-slot{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:4px;padding:2px 5px;font-size:7px;display:flex;align-items:center;gap:3px;margin-bottom:2px}
-.mk-br-slot.win{border-color:rgba(246,201,14,.3);background:rgba(246,201,14,.06);color:var(--gold);font-weight:700}
+.mk-br-ph-label{font-size:7px;color:#C8A84B;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;text-align:center}
+.mk-br-slot{background:#fff;border:1px solid rgba(26,24,20,.09);border-radius:4px;padding:2px 5px;font-size:7px;display:flex;align-items:center;gap:3px;margin-bottom:2px;color:#3D3A35}
+.mk-br-slot.win{border-color:rgba(200,168,75,.4);background:rgba(200,168,75,.08);color:#C8A84B;font-weight:700}
 .how-section{padding:5rem 1.5rem;background:linear-gradient(180deg,transparent,rgba(246,201,14,.025),transparent)}
 .how-grid{max-width:980px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:1.5rem}
 .how-card{position:relative;border-radius:var(--r-lg);padding:2rem 1.75rem;overflow:hidden;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);transition:all .25s}
@@ -287,7 +288,20 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
 .spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(0,0,0,.3);border-top-color:var(--ink);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:5px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:700px){.pele-cta-grid{grid-template-columns:1fr!important}.pele-mockup{display:none!important}}
-@media(max-width:600px){.nav-enter{display:none}.carousel-slide{flex:0 0 300px}.carousel-track{padding:0 calc(50% - 150px)}.hcd{padding:.55rem .7rem;min-width:48px}.hcd-n{font-size:1.6rem}.hero-proof{gap:.75rem}}
+@media(max-width:600px){
+  .nav-enter{display:none}
+  .carousel-slide{flex:0 0 300px}
+  .carousel-track{padding:0 calc(50% - 150px)}
+  .hcd{padding:.55rem .7rem;min-width:48px}
+  .hcd-n{font-size:1.6rem}
+  .hero-proof{gap:.75rem}
+  /* Nav mobile: hide Pelé IA link and lang button, compact CTA */
+  .nav-pele-link{display:none!important}
+  .lang-btn{display:none!important}
+  .nav-name{font-size:.95rem;letter-spacing:1px}
+  .nav-sub{font-size:8px}
+  .nav-cta{padding:6px 11px;font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -302,7 +316,7 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
       <input type="text" id="navSlug" placeholder="nombre de tu polla..." onkeypress="if(event.key==='Enter')go('navSlug')"/>
       <button onclick="go('navSlug')">Entrar</button>
     </div>
-    <a href="/pele" target="_blank" style="font-size:11px;color:rgba(255,255,255,.5);text-decoration:none;white-space:nowrap;display:flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid rgba(255,255,255,.1);border-radius:7px;transition:all .15s" onmouseover="this.style.borderColor='rgba(246,201,14,.35)';this.style.color='#F6C90E'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)';this.style.color='rgba(255,255,255,.5)'">&#129302; Pelé IA</a><button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
+    <a href="/pele" target="_blank" class="nav-pele-link" style="font-size:11px;color:rgba(255,255,255,.5);text-decoration:none;white-space:nowrap;display:flex;align-items:center;gap:4px;padding:5px 8px;border:1px solid rgba(255,255,255,.1);border-radius:7px;transition:all .15s" onmouseover="this.style.borderColor='rgba(246,201,14,.35)';this.style.color='#F6C90E'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)';this.style.color='rgba(255,255,255,.5)'">&#129302; Pelé IA</a><button class="lang-btn" id="langBtn" onclick="toggleLang()">EN</button>
     <button class="nav-cta" onclick="showCreate();document.getElementById('crear').scrollIntoView({behavior:'smooth'})">Crear mi Polla</button>
   </div>
 </nav>
@@ -452,14 +466,18 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
       <div class="carousel-slide" data-idx="4" onclick="goSlide(4)">
         <div class="slide-bar"><div class="slide-dot" style="background:#ff5f57"></div><div class="slide-dot" style="background:#ffbd2e"></div><div class="slide-dot" style="background:#28c840"></div><div class="slide-label">Panel de Administrador</div></div>
         <div class="slide-body">
-          <div class="mk-nav"><div class="mk-logo">&#9881;&#65039; ADMIN</div><div style="font-size:7px;background:rgba(229,62,62,.15);color:#fc8181;padding:2px 7px;border-radius:4px;font-weight:700">Admin</div></div>
-          <div style="margin-bottom:8px"><span class="mk-tab on">&#128101; Participantes</span><span class="mk-tab off">&#128202; Resultados</span><span class="mk-tab off">&#9881; Config</span></div>
-          <div class="mk-user-row"><div class="mk-rank-av" style="background:linear-gradient(135deg,#F6C90E,#d4aa00)">DA</div><div style="flex:1"><div style="font-size:9px;font-weight:700">Daniela Torres</div><div style="font-size:7px;color:rgba(255,255,255,.35)">daniela@email.com</div></div><span style="background:rgba(22,163,74,.15);color:#4ade80;border-radius:4px;padding:1px 6px;font-size:7px;font-weight:700">&#9989; Activo</span></div>
-          <div class="mk-user-row"><div class="mk-rank-av" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">CA</div><div style="flex:1"><div style="font-size:9px;font-weight:700">Carlos Perez</div><div style="font-size:7px;color:rgba(255,255,255,.35)">carlos@email.com</div></div><button class="mk-approve-btn">&#10003; Aprobar</button></div>
-          <div class="mk-user-row"><div class="mk-rank-av" style="background:linear-gradient(135deg,#a18cd1,#fbc2eb)">MA</div><div style="flex:1"><div style="font-size:9px;font-weight:700">Maria Garcia</div><div style="font-size:7px;color:rgba(255,255,255,.35)">maria@email.com</div></div><button class="mk-approve-btn">&#10003; Aprobar</button></div>
-          <div style="margin-top:8px;background:rgba(255,255,255,.03);border-radius:6px;padding:7px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:8px;color:rgba(255,255,255,.5)">&#128274; Pronosticos abiertos</span><div class="mk-toggle"></div></div>
-            <div style="font-size:7px;color:rgba(255,255,255,.3)">Se bloquean auto 2h antes de cada partido</div>
+          <div class="mk-nav"><div class="mk-logo">&#9881; ADMIN PANEL</div><div style="font-size:7px;background:rgba(192,57,43,.1);color:#C0392B;padding:2px 7px;border-radius:4px;font-weight:700">Admin</div></div>
+          <div style="margin-bottom:7px"><span class="mk-tab on">&#128101; Participantes</span><span class="mk-tab off">&#128202; Resultados</span><span class="mk-tab off">&#9881; Config</span></div>
+          <!-- Approval info callout -->
+          <div style="background:rgba(200,168,75,.08);border:1px solid rgba(200,168,75,.25);border-radius:6px;padding:5px 8px;font-size:7px;color:#7A7570;line-height:1.5;margin-bottom:7px">
+            <strong style="color:#C8A84B">Sistema de aprobaci&#243;n:</strong> Los usuarios quedan en espera hasta que el admin los apruebe. Los puntos se calculan retroactivamente.
+          </div>
+          <div class="mk-user-row"><div class="mk-rank-av" style="background:linear-gradient(135deg,#C8A84B,#F0C060)">DA</div><div style="flex:1"><div style="font-size:9px;font-weight:700;color:#1A1814">Daniela Torres</div><div style="font-size:7px;color:#7A7570">&#9989; Aprobada &middot; 247 pts</div></div><div style="font-size:7px;background:rgba(45,125,74,.1);color:#2D7D4A;padding:2px 6px;border-radius:4px;border:1px solid rgba(45,125,74,.2)">Activa</div></div>
+          <div class="mk-user-row"><div class="mk-rank-av" style="background:linear-gradient(135deg,#4facfe,#00f2fe)">CA</div><div style="flex:1"><div style="font-size:9px;font-weight:700;color:#1A1814">Carlos Perez</div><div style="font-size:7px;color:#C8A84B">&#9203; Pendiente aprobaci&#243;n</div></div><button class="mk-approve-btn">&#10003; Aprobar</button></div>
+          <div class="mk-user-row"><div class="mk-rank-av" style="background:linear-gradient(135deg,#a18cd1,#fbc2eb)">MA</div><div style="flex:1"><div style="font-size:9px;font-weight:700;color:#1A1814">Maria Garcia</div><div style="font-size:7px;color:#7A7570">&#9989; Aprobada &middot; 189 pts</div></div><div class="mk-toggle"></div></div>
+          <div style="margin-top:8px;background:#fff;border-radius:6px;padding:6px 8px;border:1px solid rgba(26,24,20,.07)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:8px;color:#7A7570">&#128274; Pron&#243;sticos abiertos</span><div class="mk-toggle"></div></div>
+            <div style="font-size:7px;color:#7A7570">Se bloquean auto 2h antes de cada partido</div>
           </div>
         </div>
       </div>
@@ -600,7 +618,7 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
   </div>
   <div class="how-grid">
     <div class="how-card" data-n="1"><div class="how-num">1</div><h3>Crea tu Polla</h3><p>Pagas una sola vez ($3.99), le pones el nombre de tu familia o grupo y te queda un link unico. En menos de 2 minutos esta lista.</p><div class="how-badge">&#9889; 2 minutos &middot; 1 clic</div></div>
-    <div class="how-card" data-n="2"><div class="how-num">2</div><h3>Invita a todos</h3><p>Mandas el link por WhatsApp. Cada participante se registra solo con su correo. Tu apruebas quien entra. Sin instalaciones, sin explicaciones.</p><div class="how-badge">&#128242; Un link &middot; Jugadores ilimitados</div></div>
+    <div class="how-card" data-n="2"><div class="how-num">2</div><h3>Invita y aprueba participantes</h3><p>Mandas el link por WhatsApp. Cada participante se registra solo. <strong style="color:rgba(255,255,255,.75)">Tu como admin apruebas quien entra</strong> — los puntos solo se cuentan en el ranking cuando apruebes a cada participante. Retroactivo si apruebas despues.</p><div class="how-badge">&#128101; Aprobacion con un toque &middot; Privada</div></div>
     <div class="how-card" data-n="3"><div class="how-num">3</div><h3>A jugar!</h3><p>Cada jugador ingresa sus pronosticos con Pele IA. Define tu bracket del campeon. El ranking se actualiza solo despues de cada partido.</p><div class="how-badge">&#129302; IA incluida &middot; Automatico</div></div>
   </div>
   <div style="max-width:1000px;margin:3rem auto 0;padding:0 1rem">
@@ -699,7 +717,19 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
       <div class="fg"><label>Tu nombre completo</label><input type="text" id="cf-aname" placeholder="Tu nombre"/></div>
       <div class="fg"><label>Tu correo (seras el administrador)</label><input type="email" id="cf-email" placeholder="tu@correo.com"/></div>
       <div class="fg"><label>Contrasena</label><input type="password" id="cf-pass" placeholder="Minimo 6 caracteres"/></div>
-      <button class="btn-main btn-full" style="margin-top:1rem" id="createBtn" onclick="doCreate()">&#128179; Pagar $3.99 y crear mi Polla</button>
+      <!-- Math captcha -->
+      <div class="fg">
+        <label id="captcha-label">Verificacion: ¿Cuanto es <span id="cq">...</span>?</label>
+        <input type="number" id="cf-captcha" placeholder="Respuesta" style="max-width:120px"/>
+      </div>
+      <!-- Payment buttons -->
+      <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
+        <button class="btn-main btn-full" id="createBtn" onclick="doCreate('mp')">&#128179; Pagar $3.99 con MercadoPago</button>
+        <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.25);margin:2px 0">— o —</div>
+        <div id="paypal-btn-container" style="display:none;"></div>
+        <button class="btn-sec btn-full" id="ppShowBtn" onclick="showPayPalBtn()">&#128178; Pagar $3.99 con PayPal</button>
+      </div>
+      <p class="price-note" style="margin-top:.75rem">Pago seguro &middot; MercadoPago o PayPal &middot; Tu polla queda activa en minutos</p>
     </div>
   </div>
 </div></div>
@@ -730,6 +760,7 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
   <p>&copy; 2026 La Polla IA &middot; <a href="/terminos.html" style="color:rgba(246,201,14,.4);text-decoration:none">Terminos</a> &middot; <a href="/privacidad.html" style="color:rgba(246,201,14,.4);text-decoration:none">Privacidad</a></p>
 </footer>
 
+<script src="https://www.paypal.com/sdk/js?client-id=BAA2SPZO21xJDONctODZwR8t_iI70Upycs0uuhcbRe8YBNKyDjioG9s1xHKfKyIIVG287EUlrp-7u5M8ZU&currency=USD&disable-funding=venmo" async></script>
 <script>
 const SLIDE_LABELS=['Chat con Pele IA - Elige como jugar','Ingreso de Marcadores - Partido a partido','Pronostico General - Bracket completo con IA','Ranking en Tiempo Real - Se actualiza solo','Panel de Administrador - Tu tienes el control','Predicciones Especiales - Mas formas de ganar']
 let curSlide=0;const nSlides=6
@@ -775,31 +806,102 @@ function renderFaq(items){document.getElementById('faq-list').innerHTML=items.ma
 function toggleFaq(i){const a=document.getElementById('fa'+i),ic=document.getElementById('fi'+i);const open=a.classList.toggle('open');ic.textContent=open?'-':'+'}
 renderFaq(FAQS)
 
-function showCreate(){const f=document.getElementById('createForm');f.style.display='block';setTimeout(()=>f.scrollIntoView({behavior:'smooth',block:'start'}),100)}
+// ─── CAPTCHA ──────────────────────────────────────────────────────────────────
+let _captchaAns=0
+function genCaptcha(){
+  const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1
+  _captchaAns=a+b
+  const el=document.getElementById('cq')
+  if(el) el.textContent=`${a} + ${b}`
+}
+genCaptcha()
+
+function showCreate(){
+  const f=document.getElementById('createForm');f.style.display='block'
+  setTimeout(()=>f.scrollIntoView({behavior:'smooth',block:'start'}),100)
+}
 function go(id){const s=(document.getElementById(id).value||'').trim().toLowerCase();if(s)window.location.href='/t/'+s}
 function autoSlug(v){const s=v.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');const el=document.getElementById('slugPrev');if(el)el.textContent='lapollaia.com/t/'+(s||'...');window._autoSlug=s}
-async function doCreate(){
+
+function validateForm(){
   const name=document.getElementById('cf-name').value.trim()
   const slug=(window._autoSlug||name.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')).substring(0,40)
   const adminName=document.getElementById('cf-aname').value.trim()
   const email=document.getElementById('cf-email').value.trim()
   const pass=document.getElementById('cf-pass').value
-  const errEl=document.getElementById('fErr'),btn=document.getElementById('createBtn')
+  const captchaVal=parseInt(document.getElementById('cf-captcha').value)
+  const errEl=document.getElementById('fErr')
   errEl.style.display='none'
-  if(!name||!adminName||!email||!pass){errEl.textContent='Complete todos los campos.';errEl.style.display='block';return}
-  if(pass.length<6){errEl.textContent='La contrasena debe tener al menos 6 caracteres.';errEl.style.display='block';return}
-  if(slug.length<3){errEl.textContent='El nombre debe tener al menos 3 caracteres.';errEl.style.display='block';return}
+  if(!name||!adminName||!email||!pass){errEl.textContent='Complete todos los campos.';errEl.style.display='block';return null}
+  if(pass.length<6){errEl.textContent='La contrasena debe tener al menos 6 caracteres.';errEl.style.display='block';return null}
+  if(slug.length<3){errEl.textContent='El nombre debe tener al menos 3 caracteres.';errEl.style.display='block';return null}
+  if(isNaN(captchaVal)||captchaVal!==_captchaAns){errEl.textContent='La respuesta de verificacion es incorrecta.';errEl.style.display='block';genCaptcha();document.getElementById('cf-captcha').value='';return null}
+  return {name,slug,adminName,email,password:pass}
+}
+
+async function doCreate(provider){
+  const data=validateForm(); if(!data) return
+  const btn=document.getElementById('createBtn'),errEl=document.getElementById('fErr')
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Creando tu Polla...'
   try{
-    const r=await fetch('/api/tournaments/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,slug,adminName,email,password:pass,inscriptionFee:0,currency:'USD'})})
+    const r=await fetch('/api/tournaments/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data,inscriptionFee:0,currency:'USD'})})
     const d=await r.json()
     if(!r.ok)throw new Error(d.error||'Error')
     window.location.href=d.initPoint
   }catch(e){
     errEl.textContent=e.message;errEl.style.display='block'
-    btn.disabled=false;btn.innerHTML='Pagar $3.99 y crear mi Polla'
+    btn.disabled=false;btn.innerHTML='&#128179; Pagar $3.99 con MercadoPago'
   }
 }
+
+// ─── PAYPAL FLOW ──────────────────────────────────────────────────────────────
+let _ppTournamentId='',_ppSlug=''
+
+async function showPayPalBtn(){
+  const data=validateForm(); if(!data) return
+  const errEl=document.getElementById('fErr')
+  const ppBtn=document.getElementById('ppShowBtn')
+  ppBtn.disabled=true;ppBtn.innerHTML='<span class="spinner"></span>Preparando PayPal...'
+
+  // Step 1: create tournament (pending)
+  try{
+    const r=await fetch('/api/tournaments/create-paypal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+    const d=await r.json()
+    if(!r.ok) throw new Error(d.error||'Error creando torneo')
+    _ppTournamentId=d.tournamentId; _ppSlug=d.slug
+  }catch(e){
+    errEl.textContent=e.message;errEl.style.display='block'
+    ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
+    return
+  }
+
+  ppBtn.style.display='none'
+  const container=document.getElementById('paypal-btn-container')
+  container.style.display='block'; container.innerHTML=''
+
+  // Step 2: render PayPal button
+  if(typeof paypal==='undefined'){errEl.textContent='PayPal no disponible. Usa MercadoPago.';errEl.style.display='block';return}
+  paypal.Buttons({
+    style:{color:'blue',shape:'rect',label:'pay',height:44},
+    createOrder:async()=>{
+      const r=await fetch('/api/paypal/create-order',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({tournamentId:_ppTournamentId,tournamentName:document.getElementById('cf-name').value.trim()})})
+      const d=await r.json()
+      if(!d.orderId) throw new Error(d.error||'Error PayPal')
+      return d.orderId
+    },
+    onApprove:async(data)=>{
+      container.innerHTML='<div style="text-align:center;padding:12px;font-size:13px;color:#4ade80">Procesando pago...</div>'
+      const r=await fetch('/api/paypal/capture-order',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({orderId:data.orderID,tournamentId:_ppTournamentId})})
+      const d=await r.json()
+      if(d.success) window.location.href=`/confirmacionpagopaypal?slug=${_ppSlug}`
+      else {errEl.textContent='Error al capturar pago: '+(d.error||'');errEl.style.display='block'}
+    },
+    onError:(err)=>{errEl.textContent='Error PayPal: '+err;errEl.style.display='block'}
+  }).render('#paypal-btn-container')
+}
+
 function toggleLang(){const btn=document.getElementById('langBtn');btn.textContent=btn.textContent==='EN'?'ES':'EN'}
 </script>
 </body>
