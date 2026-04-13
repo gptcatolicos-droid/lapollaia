@@ -1267,8 +1267,21 @@ function ChatPage(){
   function showMatchStats(match, forceIdx){
     if(!match) return
     if(forceIdx!==undefined) setCurrentMatchIdx(forceIdx)
+    // Pre-fill scoreForm if prediction already exists
+    const existingPred = predictions[match.id]
+    if(existingPred){
+      setScoreForm({
+        home: String(existingPred.score_home ?? ''),
+        away: String(existingPred.score_away ?? ''),
+        pen: existingPred.penalty_winner || ''
+      })
+    } else {
+      setScoreForm({home:'',away:'',pen:''})
+    }
     addMsg('pele','__STATS__','stats')
-    addMsg('pele',`¿Cuánto crees que queda este partido? 🤔\n(Dime el marcador o escribe "no sé" para que yo te sugiera)`)
+    addMsg('pele',existingPred
+      ? `✏️ Ya tienes pronóstico guardado: **${es(match.team1)} ${existingPred.score_home} – ${existingPred.score_away} ${es(match.team2)}**\n¿Quieres editarlo?`
+      : `¿Cuánto crees que queda este partido? 🤔\n(Dime el marcador o escribe "no sé" para que yo te sugiera)`)
     setChatPhase('score_input')
   }
 
@@ -1713,6 +1726,54 @@ function ChatPage(){
             </div>
           )
         })}
+        {autofilling&&(
+          <div style={{width:'100%',padding:'0 .5rem .5rem'}}>
+            <div style={{padding:'1.1rem .9rem',background:'linear-gradient(135deg,#0d1117,#111827)',border:'1px solid rgba(246,201,14,.25)',borderRadius:'var(--r)',overflow:'hidden',position:'relative'}}>
+              <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,#F6C90E,transparent)',animation:'pele-scan 1.8s ease-in-out infinite'}}/>
+              <div style={{display:'flex',alignItems:'center',gap:'9px',marginBottom:'.8rem'}}>
+                <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'rgba(246,201,14,.1)',border:'1.5px solid rgba(246,201,14,.4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1rem',animation:'pele-pulse 1.5s ease-in-out infinite'}}>🤖</div>
+                <div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'.9rem',letterSpacing:'2px',color:'#F6C90E',lineHeight:1}}>PELÉ IA CALCULANDO</div>
+                  <div style={{fontSize:'9px',color:'rgba(255,255,255,.35)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>Sistema de predicción activo</div>
+                </div>
+                <div style={{marginLeft:'auto',display:'flex',gap:'3px'}}>
+                  {[0,1,2].map(i=><div key={i} style={{width:'4px',height:'4px',borderRadius:'50%',background:'#F6C90E',animation:`pele-blink 1s ${i*0.2}s infinite`}}/>)}
+                </div>
+              </div>
+              {[
+                {icon:'📡',label:'Escaneando partidos del torneo 2026',sub:'Cargando fixture completo USA · Canadá · México'},
+                {icon:'🧬',label:'Procesando ADN futbolístico de 48 selecciones',sub:'Rankings FIFA · historial reciente · forma actual'},
+                {icon:'⚡',label:'Calculando probabilidades de victoria',sub:'Modelo Elo + regresión logística · 2.4M iteraciones'},
+                {icon:'🌍',label:'Cruzando factores de sede y clima',sub:'Altitud · temperatura · ventaja local · viajes'},
+                {icon:'🏆',label:'Identificando patrones históricos',sub:'Copa del Mundo 1930-2022 · 22 torneos analizados'},
+                {icon:'🎯',label:'Generando marcadores más probables',sub:'Ponderando goles esperados xG · forma actual'},
+                {icon:'🔮',label:'Optimizando estrategia para tus puntos',sub:'Calibrando sorpresas · favoritos · grupos de la muerte'},
+                {icon:'✅',label:'¡Predicciones completadas!',sub:'Tu polla está lista · Puedes editar cualquier resultado'},
+              ].map((step,i)=>{
+                const done=autofillStep>i,active=autofillStep===i,pend=autofillStep<i
+                return(
+                  <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'4px 0',opacity:pend?0.25:1,transition:'opacity 0.5s,transform 0.4s',transform:active?'translateX(3px)':'translateX(0)'}}>
+                    <div style={{width:'24px',height:'24px',borderRadius:'5px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem',
+                      background:done?'rgba(22,163,74,.15)':active?'rgba(246,201,14,.12)':'rgba(255,255,255,.04)',
+                      border:`1px solid ${done?'rgba(22,163,74,.4)':active?'rgba(246,201,14,.5)':'rgba(255,255,255,.06)'}`,
+                      transition:'all 0.4s',boxShadow:active?'0 0 8px rgba(246,201,14,.25)':'none'
+                    }}>{done?'✓':step.icon}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:'11px',fontWeight:600,color:done?'rgba(74,222,128,.9)':active?'#F6C90E':'rgba(255,255,255,.5)',transition:'color 0.4s',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{step.label}</div>
+                      {(active||done)&&<div style={{fontSize:'9px',color:'rgba(255,255,255,.3)',marginTop:'1px'}}>{step.sub}</div>}
+                    </div>
+                    {active&&<div style={{flexShrink:0,display:'flex',gap:'2px',alignItems:'center',paddingTop:'2px'}}>
+                      {[0,1,2].map(j=><div key={j} style={{width:'3px',height:'3px',borderRadius:'50%',background:'rgba(246,201,14,.7)',animation:`pele-blink 0.7s ${j*0.12}s infinite`}}/>)}
+                    </div>}
+                  </div>
+                )
+              })}
+              <div style={{marginTop:'8px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
+                <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,autofillStep*(100/7))}%`,transition:'width 1.2s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
+              </div>
+            </div>
+          </div>
+        )}
         {loadingMsg&&(
           <div className="row-ai">
             <div className="pm">🏆</div>

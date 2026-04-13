@@ -64,8 +64,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
 .prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),#ffdd55);border-radius:2px;transition:width 1.6s cubic-bezier(.4,0,.2,1);box-shadow:0 0 8px rgba(246,201,14,.5)}
 
 /* BRACKET — identical to internal */
-.bk-wrap{padding:1rem;overflow-x:auto}
-.bk-outer{display:flex;gap:18px;align-items:stretch;padding:4px 8px;min-width:1100px}
+.bk-wrap{padding:1rem;overflow:hidden}
+.bk-outer{display:flex;gap:18px;align-items:stretch;padding:4px 8px;width:100%;transform-origin:top left}
 .ph-col{display:flex;flex-direction:column;flex:1;min-width:140px;position:relative}
 .ph-lbl{font-family:'Bebas Neue',sans-serif;font-size:10px;color:var(--gold);letter-spacing:1px;text-align:center;margin-bottom:8px;text-transform:uppercase;padding:3px 0;background:rgba(246,201,14,.08);border-radius:4px;border:1px solid rgba(246,201,14,.18)}
 .ph-matches{display:flex;flex-direction:column;justify-content:space-around;gap:8px;flex:1;position:relative}
@@ -111,6 +111,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
 .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);background:#16a34a;color:#fff;padding:.65rem 1.5rem;border-radius:100px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:999;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -170,7 +171,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
   <div id="resultArea" style="display:none">
     <div class="result-wrap">
       <!-- bracket card -->
-      <div style="background:#111827;border:1px solid rgba(246,201,14,.2);border-radius:20px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6);margin-bottom:1rem">
+      <div id="bracketCard" style="background:#111827;border:1px solid rgba(246,201,14,.2);border-radius:20px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6);margin-bottom:1rem">
         <div style="background:rgba(13,17,23,.95);padding:.65rem 1rem;display:flex;align-items:center;gap:6px;border-bottom:1px solid rgba(255,255,255,.07)">
           <div style="width:8px;height:8px;border-radius:50%;background:#ff5f57"></div>
           <div style="width:8px;height:8px;border-radius:50%;background:#ffbd2e"></div>
@@ -185,10 +186,11 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
       <div class="share-box">
         <div class="share-title">📤 Comparte tu bracket</div>
         <div class="share-row">
-          <button class="sbtn sb-fb" onclick="shareFB()"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>Facebook</button>
-          <button class="sbtn sb-x" onclick="shareX()"><svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>X / Twitter</button>
+          <button class="sbtn sb-fb" onclick="captureAndShare('fb')"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>Facebook</button>
+          <button class="sbtn sb-x" onclick="captureAndShare('x')"><svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>X / Twitter</button>
           <button class="sbtn sb-ig" onclick="shareIG()"><svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>Instagram</button>
           <button class="sbtn sb-cp" onclick="copyLink()">🔗 Copiar</button>
+          <button class="sbtn sb-cp" onclick="captureAndShare('download')" style="background:rgba(246,201,14,.1);border-color:rgba(246,201,14,.3);color:var(--gold)">📸 PNG</button>
         </div>
       </div>
       <a href="/" class="cta-big">🏆 Crea tu Polla con amigos — $3.99 →</a>
@@ -329,6 +331,77 @@ function showResult(b){
     phaseCol('Round of 32',r32.slice(8,16),'right')
 
   document.getElementById('resultArea').scrollIntoView({behavior:'smooth',block:'start'})
+  // Auto-scale bracket to fit viewport width without scroll
+  setTimeout(scaleBracket, 100)
+}
+
+function scaleBracket(){
+  const wrap = document.querySelector('.bk-wrap')
+  const outer = document.getElementById('bkOuter')
+  if(!wrap||!outer) return
+  const wrapW = wrap.clientWidth - 32  // padding
+  const outerW = outer.scrollWidth
+  if(outerW > wrapW){
+    const scale = wrapW / outerW
+    outer.style.transform = `scale(${scale})`
+    outer.style.transformOrigin = 'top left'
+    wrap.style.height = (outer.scrollHeight * scale + 24) + 'px'
+  } else {
+    outer.style.transform = ''
+    wrap.style.height = ''
+  }
+}
+window.addEventListener('resize', scaleBracket)
+
+async function captureAndShare(action){
+  const card = document.getElementById('bracketCard')
+  if(!card || typeof html2canvas === 'undefined'){
+    if(action==='fb') shareFB()
+    else if(action==='x') shareX()
+    return
+  }
+  try{
+    // Temporarily reset scale for capture
+    const outer = document.getElementById('bkOuter')
+    const savedTransform = outer.style.transform
+    const savedHeight = document.querySelector('.bk-wrap').style.height
+    outer.style.transform = ''
+    document.querySelector('.bk-wrap').style.overflow = 'visible'
+    document.querySelector('.bk-wrap').style.height = 'auto'
+
+    const canvas = await html2canvas(card, {
+      backgroundColor:'#111827',
+      scale:1.5,
+      useCORS:true,
+      allowTaint:true,
+      scrollX:0, scrollY:0
+    })
+
+    // Restore
+    outer.style.transform = savedTransform
+    document.querySelector('.bk-wrap').style.overflow = 'hidden'
+    document.querySelector('.bk-wrap').style.height = savedHeight
+
+    if(action==='download'){
+      const link = document.createElement('a')
+      link.download = 'mi-bracket-mundial-2026.png'
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+      return
+    }
+    // For social: download + open share
+    const link = document.createElement('a')
+    link.download = 'mi-bracket-mundial-2026.png'
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+    await new Promise(r=>setTimeout(r,500))
+    if(action==='fb') shareFB()
+    else if(action==='x') shareX()
+  } catch(e){
+    console.error('capture error', e)
+    if(action==='fb') shareFB()
+    else if(action==='x') shareX()
+  }
 }
 
 function shareFB(){
