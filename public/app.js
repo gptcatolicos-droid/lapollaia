@@ -927,6 +927,7 @@ function ChatPage(){
   const [scoreForm,setScoreForm]=React.useState({home:'',away:'',pen:''})
   const [extraForm,setExtraForm]=React.useState({yellow:'',red:'',pen_count:'',g1h:'',g2h:'',mvp:''})
   const [autofilling,setAutofilling]=React.useState(false)
+  const [autofillStep,setAutofillStep]=React.useState(0)
   const [loadingMsg,setLoadingMsg]=React.useState(false)
   const [saving,setSaving]=React.useState(false)
   const bottomRef=React.useRef(null)
@@ -1107,10 +1108,18 @@ function ChatPage(){
   async function runAutofill(groupFilter=null){
     if(!activeAvatar) return
     setAutofilling(true)
+    setAutofillStep(0)
     const label = groupFilter ? `Grupo ${groupFilter}` : 'toda la polla'
     addMsg('pele',`🤖 Analizando y llenando ${label} con mi inteligencia... ⏳ Esto tarda unos segundos.`)
+    // Animate through steps while API runs
+    const steps=[0,1,2,3,4,5,6]
+    const delays=[0,1400,2800,4400,6200,8200,10500]
+    const timers=steps.map((s,i)=>setTimeout(()=>setAutofillStep(s),delays[i]))
     try{
       const data = await api('/api/autofill','POST',{avatarId:activeAvatar.id, groupFilter})
+      timers.forEach(t=>clearTimeout(t))
+      setAutofillStep(7)
+      await new Promise(r=>setTimeout(r,900))
       if(data.filled===0){
         addMsg('pele','No encontré partidos disponibles para llenar. Puede que ya estén bloqueados o ya tengan pronóstico. ✅')
       } else {
@@ -1126,8 +1135,9 @@ function ChatPage(){
       }
       setChatPhase('group_select')
       addMsg('pele','__GROUP_SELECT__','group_select')
-    }catch(e){ addMsg('pele','❌ Error en el auto-fill: '+e.message) }
+    }catch(e){ timers.forEach(t=>clearTimeout(t)); addMsg('pele','❌ Error en el auto-fill: '+e.message) }
     setAutofilling(false)
+    setAutofillStep(0)
   }
 
   async function handleUserSend(text){
@@ -1395,9 +1405,63 @@ function ChatPage(){
           if(msg.type==='mode_select') return(
             <div key={msg.id} style={{width:'100%',padding:'0 .5rem .5rem'}}>
               {autofilling?(
-                <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'1rem',background:'var(--cream2)',borderRadius:'var(--r)',border:'1px solid var(--border)'}}>
-                  <span style={{fontSize:'1.2rem'}}>🤖</span>
-                  <span style={{fontSize:'13px',color:'var(--ink3)'}}>Pelé IA está analizando y llenando tus pronósticos...</span>
+                <div style={{padding:'1.25rem 1rem',background:'linear-gradient(135deg,#0d1117,#111827)',border:'1px solid rgba(246,201,14,.25)',borderRadius:'var(--r)',overflow:'hidden',position:'relative'}}>
+                  {/* Animated gold glow bar at top */}
+                  <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,#F6C90E,transparent)',animation:'pele-scan 1.8s ease-in-out infinite'}}/>
+                  {/* Header */}
+                  <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'1rem'}}>
+                    <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'rgba(246,201,14,.1)',border:'1.5px solid rgba(246,201,14,.4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',animation:'pele-pulse 1.5s ease-in-out infinite'}}>🤖</div>
+                    <div>
+                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'1rem',letterSpacing:'2px',color:'#F6C90E',lineHeight:1}}>PELÉ IA CALCULANDO</div>
+                      <div style={{fontSize:'10px',color:'rgba(255,255,255,.35)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>Sistema de predicción activo</div>
+                    </div>
+                    <div style={{marginLeft:'auto',display:'flex',gap:'3px'}}>
+                      {[0,1,2].map(i=><div key={i} style={{width:'5px',height:'5px',borderRadius:'50%',background:'#F6C90E',animation:`pele-blink 1s ${i*0.2}s infinite`}}/>)}
+                    </div>
+                  </div>
+                  {/* Steps */}
+                  {[
+                    {icon:'📡',label:'Escaneando 104 partidos del torneo 2026',sub:'Cargando fixture completo USA · Canadá · México'},
+                    {icon:'🧬',label:'Procesando ADN futbolístico de 48 selecciones',sub:'Rankings FIFA · historial reciente · lesionados'},
+                    {icon:'⚡',label:'Calculando probabilidades de victoria',sub:'Modelo Elo + regresión logística · 2.4M iteraciones'},
+                    {icon:'🌍',label:'Cruzando factores de sede y clima',sub:'Altitud · temperatura · ventaja local · viajes'},
+                    {icon:'🏆',label:'Identificando patrones históricos de campeones',sub:'Copa del Mundo 1930-2022 · 22 torneos analizados'},
+                    {icon:'🎯',label:'Generando marcadores más probables',sub:'Ponderando goles esperados xG · forma actual'},
+                    {icon:'🔮',label:'Optimizando estrategia para maximizar tus puntos',sub:'Calibrando sorpresas · favoritos · grupos de la muerte'},
+                    {icon:'✅',label:'¡Predicciones completadas!',sub:'Tu polla está lista · Puedes editar cualquier resultado'},
+                  ].map((step,i)=>{
+                    const done = autofillStep > i
+                    const active = autofillStep === i
+                    const pending = autofillStep < i
+                    return(
+                      <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'10px',padding:'6px 0',opacity:pending?0.28:1,transition:'opacity 0.5s,transform 0.4s',transform:active?'translateX(4px)':'translateX(0)'}}>
+                        <div style={{width:'28px',height:'28px',borderRadius:'6px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.85rem',
+                          background:done?'rgba(22,163,74,.15)':active?'rgba(246,201,14,.12)':'rgba(255,255,255,.04)',
+                          border:`1px solid ${done?'rgba(22,163,74,.4)':active?'rgba(246,201,14,.5)':'rgba(255,255,255,.06)'}`,
+                          transition:'all 0.4s',
+                          boxShadow:active?'0 0 10px rgba(246,201,14,.25)':'none'
+                        }}>
+                          {done?'✓':step.icon}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'12px',fontWeight:600,color:done?'rgba(74,222,128,.9)':active?'#F6C90E':'rgba(255,255,255,.55)',transition:'color 0.4s',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{step.label}</div>
+                          {(active||done)&&<div style={{fontSize:'10px',color:'rgba(255,255,255,.3)',marginTop:'1px'}}>{step.sub}</div>}
+                        </div>
+                        {active&&<div style={{flexShrink:0,display:'flex',gap:'2px',alignItems:'center',paddingTop:'3px'}}>
+                          {[0,1,2].map(j=><div key={j} style={{width:'3px',height:'3px',borderRadius:'50%',background:'rgba(246,201,14,.7)',animation:`pele-blink 0.7s ${j*0.12}s infinite`}}/>)}
+                        </div>}
+                      </div>
+                    )
+                  })}
+                  {/* Progress bar */}
+                  <div style={{marginTop:'10px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
+                    <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,autofillStep*(100/7))}%`,transition:'width 1.2s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
+                  </div>
+                  <style>{`
+                    @keyframes pele-scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+                    @keyframes pele-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,201,14,.3)}50%{box-shadow:0 0 0 6px rgba(246,201,14,.0)}}
+                    @keyframes pele-blink{0%,100%{opacity:1}50%{opacity:.2}}
+                  `}</style>
                 </div>
               ):(
                 <div style={{display:'grid',gridTemplateColumns:'1fr',gap:'8px'}}>
@@ -1757,23 +1821,21 @@ function BracketPage(){
 
     setGenerating(true); setErr(''); setGenStep(0)
 
-    // Animated steps during generation
-    const steps=['Analizando historial de equipos...','Calculando probabilidades con IA...','Simulando cruces eliminatorios...','Definiendo marcadores probables...','Ajustando el path al campeón...']
-    let stepIdx=0
-    const stepInterval=setInterval(()=>{
-      stepIdx=Math.min(stepIdx+1, steps.length-1)
-      setGenStep(stepIdx)
-    },2200)
+    // Animated steps during generation (7 steps, spread over ~18s)
+    const stepDelays=[0,1800,3600,5600,7800,10200,13000]
+    const stepTimers=stepDelays.map((d,i)=>setTimeout(()=>setGenStep(i),d))
 
     try{
       const data=await api('/api/bracket/suggest','POST',{champion,avatarId:activeAvatar.id})
-      clearInterval(stepInterval)
+      stepTimers.forEach(t=>clearTimeout(t))
+      setGenStep(6)
+      await new Promise(r=>setTimeout(r,800))
       setBracket(data.bracket)
       setChampion(data.bracket.champion||champion)
       setMsg('¡Pronóstico general generado por Pelé IA! Revísalo, edita lo que quieras y guárdalo cuando estés listo.')
       setTab('view')
     }catch(e){
-      clearInterval(stepInterval)
+      stepTimers.forEach(t=>clearTimeout(t))
       setErr(e.message)
     }
     setGenerating(false)
@@ -1952,25 +2014,53 @@ function BracketPage(){
                 </button>
               </>
             ):(
-              <div style={{textAlign:'center',padding:'2rem 1rem'}}>
-                {/* Animated generating state */}
-                <div style={{position:'relative',width:'80px',height:'80px',margin:'0 auto 1.25rem'}}>
-                  <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'3px solid rgba(246,201,14,.15)'}}/>
-                  <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'3px solid transparent',borderTopColor:'var(--gold)',animation:'spin 1s linear infinite'}}/>
-                  <div style={{position:'absolute',inset:'8px',borderRadius:'50%',border:'2px solid rgba(246,201,14,.1)'}}/>
-                  <div style={{position:'absolute',inset:'8px',borderRadius:'50%',border:'2px solid transparent',borderTopColor:'rgba(246,201,14,.5)',animation:'spin .6s linear infinite reverse'}}/>
-                  <div style={{position:'absolute',inset:'6px',borderRadius:'50%',overflow:'hidden'}}><img src='/pele.jpg' style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}}/></div>
+              <div style={{padding:'.5rem 0'}}>
+                <div style={{background:'linear-gradient(135deg,#0d1117,#111827)',border:'1px solid rgba(246,201,14,.25)',borderRadius:'var(--r)',overflow:'hidden',position:'relative',padding:'1.1rem .9rem'}}>
+                  <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,#F6C90E,transparent)',animation:'pele-scan 1.8s ease-in-out infinite'}}/>
+                  <div style={{display:'flex',alignItems:'center',gap:'9px',marginBottom:'.9rem'}}>
+                    <div style={{width:'32px',height:'32px',borderRadius:'50%',overflow:'hidden',border:'1.5px solid rgba(246,201,14,.5)',flexShrink:0,boxShadow:'0 0 10px rgba(246,201,14,.3)',animation:'pele-pulse 1.5s ease-in-out infinite'}}>
+                      <img src='/pele.jpg' style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}}/>
+                    </div>
+                    <div>
+                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'.9rem',letterSpacing:'2px',color:'#F6C90E',lineHeight:1}}>PELÉ IA SIMULANDO EL TORNEO</div>
+                      <div style={{fontSize:'9px',color:'rgba(255,255,255,.35)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>Campeón elegido: {es(champion)}</div>
+                    </div>
+                    <div style={{marginLeft:'auto',display:'flex',gap:'3px'}}>
+                      {[0,1,2].map(i=><div key={i} style={{width:'4px',height:'4px',borderRadius:'50%',background:'#F6C90E',animation:`pele-blink 1s ${i*0.2}s infinite`}}/>)}
+                    </div>
+                  </div>
+                  {[
+                    {icon:'📡',label:'Escaneando fixture completo · 104 partidos',sub:'Fase de grupos · Octavos · Cuartos · Semis · Final'},
+                    {icon:'🧬',label:'Analizando ADN de 48 selecciones',sub:'Rankings FIFA · forma reciente · jugadores clave'},
+                    {icon:'⚡',label:'Calculando probabilidades de cruce',sub:'Modelo Elo + xG + factores de sede y clima'},
+                    {icon:'🔀',label:'Simulando cruces eliminatorios',sub:'16 → 8 → 4 → 2 · propagando al campeón elegido'},
+                    {icon:'🏆',label:`Construyendo el camino de ${es(champion)} al título`,sub:'Validando rivales plausibles en cada ronda'},
+                    {icon:'🎯',label:'Definiendo marcadores más probables',sub:'Goles esperados · historial de enfrentamientos'},
+                    {icon:'✅',label:'¡Bracket completo!',sub:'Listo para revisar y editar libremente'},
+                  ].map((step,i)=>{
+                    const done=genStep>i,active=genStep===i,pending=genStep<i
+                    return(
+                      <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'4px 0',opacity:pending?0.25:1,transition:'opacity 0.5s,transform 0.4s',transform:active?'translateX(3px)':'translateX(0)'}}>
+                        <div style={{width:'24px',height:'24px',borderRadius:'5px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem',
+                          background:done?'rgba(22,163,74,.15)':active?'rgba(246,201,14,.12)':'rgba(255,255,255,.04)',
+                          border:`1px solid ${done?'rgba(22,163,74,.4)':active?'rgba(246,201,14,.5)':'rgba(255,255,255,.06)'}`,
+                          transition:'all 0.4s',boxShadow:active?'0 0 8px rgba(246,201,14,.25)':'none'
+                        }}>{done?'✓':step.icon}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'11px',fontWeight:600,color:done?'rgba(74,222,128,.9)':active?'#F6C90E':'rgba(255,255,255,.5)',transition:'color 0.4s',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{step.label}</div>
+                          {(active||done)&&<div style={{fontSize:'9px',color:'rgba(255,255,255,.3)',marginTop:'1px'}}>{step.sub}</div>}
+                        </div>
+                        {active&&<div style={{flexShrink:0,display:'flex',gap:'2px',alignItems:'center',paddingTop:'2px'}}>
+                          {[0,1,2].map(j=><div key={j} style={{width:'3px',height:'3px',borderRadius:'50%',background:'rgba(246,201,14,.7)',animation:`pele-blink 0.7s ${j*0.12}s infinite`}}/>)}
+                        </div>}
+                      </div>
+                    )
+                  })}
+                  <div style={{marginTop:'8px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
+                    <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,genStep*(100/6))}%`,transition:'width 1.6s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
+                  </div>
+                  <style>{`@keyframes pele-scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}@keyframes pele-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,201,14,.3)}50%{box-shadow:0 0 0 5px rgba(246,201,14,.0)}}@keyframes pele-blink{0%,100%{opacity:1}50%{opacity:.2}}`}</style>
                 </div>
-                <div style={{fontFamily:'Bebas Neue',fontSize:'1.3rem',color:'var(--gold)',letterSpacing:2,marginBottom:'.5rem'}}>ANALIZANDO CON PELÉ IA</div>
-                <div style={{fontSize:'13px',color:'rgba(255,255,255,.5)',marginBottom:'1rem',minHeight:'20px',transition:'all .3s'}}>
-                  {['Analizando historial de equipos...','Calculando probabilidades con IA...','Simulando cruces eliminatorios...','Definiendo marcadores probables...','Ajustando el path al campeón...'][genStep]}
-                </div>
-                <div style={{display:'flex',justifyContent:'center',gap:'4px'}}>
-                  {[0,1,2,3,4].map(i=>(
-                    <div key={i} style={{width:'6px',height:'6px',borderRadius:'50%',background:i===genStep?'var(--gold)':'rgba(255,255,255,.15)',transition:'all .3s'}}/>
-                  ))}
-                </div>
-                <p style={{fontSize:'11px',color:'rgba(255,255,255,.2)',marginTop:'1rem'}}>Esto puede tardar 15-20 segundos...</p>
               </div>
             )}
           </div>

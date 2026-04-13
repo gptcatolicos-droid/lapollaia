@@ -386,6 +386,7 @@ function getWinner(h,a){ return +h>+a?'home':+h<+a?'away':'draw' }
 // Marketing home
 app.get('/', (req,res) => res.sendFile(path.join(__dirname,'public','index.html')))
 app.get('/pele', (req,res) => res.sendFile(path.join(__dirname,'public','pele.html')))
+app.get('/bracket', (req,res) => res.sendFile(path.join(__dirname,'public','bracket-demo.html')))
 
 // Game SPA — serve app.html for all /t/:slug routes
 app.get('/t/:slug', (req,res) => res.sendFile(path.join(__dirname,'public','app.html')))
@@ -1252,6 +1253,40 @@ app.post('/api/bracket/lock', auth, async(req,res)=>{
       'UPDATE bracket_predictions SET locked_at=NOW(),updated_at=NOW() WHERE avatar_id=$1',[avatarId])
     res.json({success:true})
   }catch(e){ res.status(500).json({error:'Error'}) }
+})
+
+// ─── BRACKET PÚBLICO — sin auth, rate-limited ────────────────────────────────
+app.post('/api/bracket/public-suggest', async(req,res)=>{
+  const {champion} = req.body
+  if(!champion) return res.status(400).json({error:'Selecciona un campeón'})
+  // Simple IP rate limit: max 5 brackets/hora por IP
+  const ip = req.ip||req.connection.remoteAddress||'unknown'
+  if(!global._bracketPubRate) global._bracketPubRate={}
+  const key = ip+':'+Math.floor(Date.now()/3600000)
+  global._bracketPubRate[key]=(global._bracketPubRate[key]||0)+1
+  if(global._bracketPubRate[key]>5) return res.status(429).json({error:'Límite alcanzado. Crea tu polla en lapollaia.com para más pronósticos.'})
+  const VALID=['Brazil','France','Argentina','England','Spain','Portugal','Germany','Uruguay','Colombia']
+  if(!VALID.includes(champion)) return res.status(400).json({error:'Campeón no válido'})
+  try{
+    const GROUPS={A:['Mexico','South Africa','Korea Republic','Czechia'],B:['Canada','Bosnia and Herzegovina','Qatar','Switzerland'],C:['Brazil','Morocco','Haiti','Scotland'],D:['USA','Paraguay','Australia','Turkey'],E:['Germany','Curaçao','Ivory Coast','Ecuador'],F:['Netherlands','Japan','Sweden','Tunisia'],G:['Belgium','Egypt','IR Iran','New Zealand'],H:['Spain','Cape Verde','Saudi Arabia','Uruguay'],I:['France','Senegal','Iraq','Norway'],J:['Argentina','Algeria','Austria','Jordan'],K:['Portugal','DR Congo','Uzbekistan','Colombia'],L:['England','Croatia','Ghana','Panama']}
+    const msg=await anthropic.messages.create({
+      model:'claude-sonnet-4-6',max_tokens:3200,
+      system:`Eres un experto en fútbol. Genera un bracket completo del Mundial FIFA 2026 donde ${champion} es CAMPEÓN.\nGRUPOS: ${JSON.stringify(GROUPS)}\nREGLAS: 1. ${champion} DEBE ganar la final. 2. Marcadores realistas (0-0 a 4-0). 3. Nombres en inglés exactos.\nResponde SOLO JSON válido sin markdown:\n{"round32":[{"match":1,"home":"T","away":"T","winner":"T","home_score":N,"away_score":N},...16 items],"round16":[...8],"quarters":[...4],"semis":[...2],"third":{"home":"T","away":"T","winner":"T","home_score":N,"away_score":N},"final":{"home":"T","away":"T","winner":"CHAMPION","home_score":N,"away_score":N},"champion":"CHAMPION"}`,
+      messages:[{role:'user',content:`Bracket completo. Campeón: ${champion}. Exactamente 16 en round32, 8 en round16, 4 en quarters, 2 en semis. Solo JSON.`}]
+    })
+    let text=msg.content[0].text.trim()
+    const m=text.match(/\{[\s\S]*\}/);if(m)text=m[0]
+    text=text.replace(/```json|```/g,'').trim()
+    const bracket=JSON.parse(text)
+    const emptyM=i=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})
+    const pad=(arr,len)=>{if(!Array.isArray(arr))arr=[];while(arr.length<len)arr.push(emptyM(arr.length));return arr.slice(0,len)}
+    bracket.round32=pad(bracket.round32,16);bracket.round16=pad(bracket.round16,8)
+    bracket.quarters=pad(bracket.quarters,4);bracket.semis=pad(bracket.semis,2)
+    if(!bracket.third)bracket.third={home:'',away:'',winner:'',home_score:0,away_score:0}
+    if(!bracket.final)bracket.final={home:'',away:'',winner:champion,home_score:1,away_score:0}
+    bracket.champion=champion;bracket.final.winner=champion
+    res.json({bracket})
+  }catch(e){console.error('public bracket:',e.message);res.status(500).json({error:'Error generando bracket: '+e.message})}
 })
 
 // AI bracket suggestion based on champion

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Mi Pronóstico Mundial 2026 — La Polla IA</title>
+<meta name="description" content="Genera tu bracket del Mundial 2026 con Inteligencia Artificial. Gratis, sin registro. Compártelo con tus amigos."/>
+<meta property="og:title" content="Mi Pronóstico Mundial 2026 — La Polla IA"/>
+<meta property="og:description" content="Genera tu bracket del Mundial 2026 con IA en 30 segundos. Gratis."/>
+<meta property="og:image" content="/logo.png"/>
+<link rel="icon" type="image/png" href="/logo.png"/>
+<meta name="theme-color" content="#0d1117"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--gold:#F6C90E;--ink:#0d1117;--ink2:#111827;--green:#16a34a}
+html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink);color:#fff}
+
+/* NAV */
+.nav{background:rgba(13,17,23,.96);backdrop-filter:blur(16px);border-bottom:1px solid rgba(246,201,14,.1);padding:.65rem 1.25rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.nav-brand{display:flex;align-items:center;gap:8px;text-decoration:none}
+.nav-logo{width:30px;height:30px;object-fit:contain}
+.nav-name{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--gold)}
+.nav-sub{font-size:8px;color:rgba(255,255,255,.3);letter-spacing:1px;text-transform:uppercase}
+.nav-cta{background:var(--gold);color:var(--ink);border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap}
+
+/* MAIN */
+.main{max-width:800px;margin:0 auto;padding:1.5rem 1rem 4rem}
+
+/* SETUP CARD */
+.setup-card{background:linear-gradient(135deg,#111827,#0f1923);border:1px solid rgba(246,201,14,.2);border-radius:20px;padding:2rem 1.5rem;margin-bottom:1.5rem;text-align:center}
+.setup-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(246,201,14,.1);border:1px solid rgba(246,201,14,.25);border-radius:100px;padding:4px 14px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase;margin-bottom:1.25rem}
+.bd{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:bdp 2s infinite}
+@keyframes bdp{0%,100%{opacity:1}50%{opacity:.25}}
+.setup-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(1.8rem,6vw,2.8rem);letter-spacing:3px;line-height:.95;margin-bottom:.75rem}
+.setup-title span{color:var(--gold)}
+.setup-sub{font-size:13px;color:rgba(255,255,255,.45);margin-bottom:1.5rem;line-height:1.6}
+.champ-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:.5rem;text-align:left}
+.champ-select{width:100%;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;padding:.75rem 1rem;color:#fff;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;transition:border-color .2s;margin-bottom:1rem;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23F6C90E' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.champ-select:focus{border-color:rgba(246,201,14,.5)}
+.champ-select option{background:#1a1f2e;color:#fff}
+.gen-btn{width:100%;background:var(--gold);color:var(--ink);border:none;border-radius:12px;padding:.9rem;font-size:15px;font-weight:800;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 24px rgba(246,201,14,.3)}
+.gen-btn:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(246,201,14,.45)}
+.gen-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* WOW ANIMATION */
+.anim-box{background:linear-gradient(135deg,#0d1117,#111827);border:1px solid rgba(246,201,14,.25);border-radius:14px;overflow:hidden;position:relative;padding:1.1rem .9rem;text-align:left;margin-top:.5rem}
+.anim-scan{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#F6C90E,transparent);animation:scan 1.8s ease-in-out infinite}
+@keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.anim-head{display:flex;align-items:center;gap:9px;margin-bottom:.85rem}
+.anim-av{width:32px;height:32px;border-radius:50%;overflow:hidden;border:1.5px solid rgba(246,201,14,.5);flex-shrink:0;box-shadow:0 0 10px rgba(246,201,14,.3);animation:av-pulse 1.5s ease-in-out infinite}
+@keyframes av-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,201,14,.3)}50%{box-shadow:0 0 0 5px rgba(246,201,14,.0)}}
+.anim-title{font-family:'Bebas Neue',sans-serif;font-size:.9rem;letter-spacing:2px;color:var(--gold);line-height:1}
+.anim-sub{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+.anim-dots{margin-left:auto;display:flex;gap:3px}
+.anim-dot{width:4px;height:4px;border-radius:50%;background:var(--gold)}
+.step-row{display:flex;align-items:flex-start;gap:8px;padding:4px 0;transition:opacity .5s,transform .4s}
+.step-row.pending{opacity:.22}
+.step-row.active{transform:translateX(3px)}
+.step-icon{width:26px;height:26px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.8rem;transition:all .4s}
+.step-icon.done{background:rgba(22,163,74,.15);border:1px solid rgba(22,163,74,.4)}
+.step-icon.active{background:rgba(246,201,14,.12);border:1px solid rgba(246,201,14,.5);box-shadow:0 0 8px rgba(246,201,14,.25)}
+.step-icon.pending{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}
+.step-label{font-size:11px;font-weight:600;transition:color .4s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step-label.done{color:rgba(74,222,128,.9)}
+.step-label.active{color:var(--gold)}
+.step-label.pending{color:rgba(255,255,255,.45)}
+.step-hint{font-size:9px;color:rgba(255,255,255,.3);margin-top:1px}
+.step-spinner{display:flex;gap:2px;align-items:center;padding-top:2px;flex-shrink:0}
+.step-spinner span{width:3px;height:3px;border-radius:50%;background:rgba(246,201,14,.7);animation:blink .7s infinite}
+.progress-bar{margin-top:8px;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),#ffdd55);border-radius:2px;transition:width 1.6s cubic-bezier(.4,0,.2,1);box-shadow:0 0 8px rgba(246,201,14,.5)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* RESULT CARD */
+.result-card{background:linear-gradient(135deg,#111827,#0f1923);border:1px solid rgba(246,201,14,.2);border-radius:20px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6)}
+.result-bar{background:rgba(13,17,23,.95);padding:.65rem 1rem;display:flex;align-items:center;gap:6px;border-bottom:1px solid rgba(255,255,255,.07)}
+.result-bar-dot{width:8px;height:8px;border-radius:50%}
+.result-bar-label{font-size:9px;color:rgba(255,255,255,.3);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-left:6px}
+.bracket-wrap{padding:1rem;overflow-x:auto}
+.bracket-inner{display:flex;gap:5px;align-items:center;min-width:520px}
+.bracket-col{display:flex;flex-direction:column}
+.col-label{font-size:7px;color:rgba(246,201,14,.6);font-weight:700;text-align:center;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.bk{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:5px;padding:4px 7px;font-size:9px;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .2s;flex-shrink:0}
+.bk.w{background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.3);color:rgba(74,222,128,.9);font-weight:600}
+.final-box{background:linear-gradient(135deg,rgba(246,201,14,.2),rgba(246,201,14,.06));border:1.5px solid var(--gold);border-radius:10px;padding:10px 8px;text-align:center;width:90px;box-shadow:0 0 20px rgba(246,201,14,.25)}
+.final-trophy{font-size:1.4rem;margin-bottom:3px}
+.final-name{font-size:10px;font-weight:800;color:var(--gold);letter-spacing:.3px}
+.final-score{font-size:8px;color:rgba(255,255,255,.4);margin-top:2px}
+.champ-banner{text-align:center;padding:1rem;background:linear-gradient(135deg,rgba(246,201,14,.12),rgba(246,201,14,.04));border-top:1px solid rgba(246,201,14,.15)}
+.champ-banner-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--gold)}
+.champ-banner-sub{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
+
+/* SHARE SECTION */
+.share-box{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:1.25rem;margin-top:1rem}
+.share-title{font-size:13px;font-weight:700;color:#fff;margin-bottom:.75rem}
+.share-row{display:flex;gap:8px;flex-wrap:wrap}
+.share-btn{display:flex;align-items:center;gap:7px;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;flex:1;min-width:120px;justify-content:center}
+.share-btn:hover{transform:translateY(-1px);filter:brightness(1.1)}
+.share-fb{background:#1877F2;color:#fff}
+.share-x{background:#000;color:#fff;border:1px solid #333}
+.share-ig{background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);color:#fff}
+.share-copy{background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.12)}
+.cta-big{display:block;width:100%;background:var(--gold);color:var(--ink);border:none;border-radius:14px;padding:1rem;font-size:15px;font-weight:800;cursor:pointer;text-decoration:none;text-align:center;transition:all .2s;box-shadow:0 8px 28px rgba(246,201,14,.3);margin-top:1rem}
+.cta-big:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(246,201,14,.45)}
+.err{background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);border-radius:8px;padding:.65rem 1rem;font-size:12px;color:#fca5a5;margin-top:.5rem}
+
+/* Copied toast */
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);background:#16a34a;color:#fff;padding:.65rem 1.5rem;border-radius:100px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-brand" href="/">
+    <img src="/logo.png" alt="" class="nav-logo"/>
+    <div>
+      <div class="nav-name">LA POLLA IA</div>
+      <div class="nav-sub">Torneo de Fútbol 2026</div>
+    </div>
+  </a>
+  <a class="nav-cta" href="/">🏆 Crear mi Polla</a>
+</nav>
+
+<div class="main">
+
+  <!-- SETUP CARD -->
+  <div class="setup-card" id="setupCard">
+    <div class="setup-badge"><div class="bd"></div>GRATIS &middot; SIN REGISTRO</div>
+    <h1 class="setup-title">TU PRONÓSTICO<br/><span>MUNDIAL 2026</span><br/>CON IA</h1>
+    <p class="setup-sub">Elige quién será el campeón y Pelé IA genera tu bracket completo con análisis real. ¡Compártelo con todos!</p>
+
+    <div id="formArea">
+      <div class="champ-label">¿Quién ganará el Mundial 2026?</div>
+      <select class="champ-select" id="champSelect">
+        <option value="">— Elige el campeón —</option>
+        <option value="Brazil">🇧🇷 Brasil</option>
+        <option value="France">🇫🇷 Francia</option>
+        <option value="Argentina">🇦🇷 Argentina</option>
+        <option value="England">🏴󠁧󠁢󠁥󠁮󠁧󠁿 Inglaterra</option>
+        <option value="Spain">🇪🇸 España</option>
+        <option value="Portugal">🇵🇹 Portugal</option>
+        <option value="Germany">🇩🇪 Alemania</option>
+        <option value="Uruguay">🇺🇾 Uruguay</option>
+        <option value="Colombia">🇨🇴 Colombia</option>
+      </select>
+      <button class="gen-btn" id="genBtn" onclick="generate()">
+        <img src="/pele.jpg" style="width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:top" alt=""/>
+        Generar mi Bracket con Pelé IA ✨
+      </button>
+      <div class="err" id="errMsg" style="display:none"></div>
+    </div>
+
+    <!-- WOW ANIMATION (hidden initially) -->
+    <div class="anim-box" id="animBox" style="display:none">
+      <div class="anim-scan"></div>
+      <div class="anim-head">
+        <div class="anim-av"><img src="/pele.jpg" style="width:100%;height:100%;object-fit:cover;object-position:top" alt="Pelé"/></div>
+        <div>
+          <div class="anim-title">PELÉ IA SIMULANDO EL TORNEO</div>
+          <div class="anim-sub" id="animSub">Iniciando motor predictivo...</div>
+        </div>
+        <div class="anim-dots">
+          <div class="anim-dot" style="animation:blink 1s 0s infinite"></div>
+          <div class="anim-dot" style="animation:blink 1s .2s infinite"></div>
+          <div class="anim-dot" style="animation:blink 1s .4s infinite"></div>
+        </div>
+      </div>
+      <div id="stepsContainer"></div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- RESULT (hidden initially) -->
+  <div id="resultArea" style="display:none">
+    <div class="result-card" id="bracketCard">
+      <div class="result-bar">
+        <div class="result-bar-dot" style="background:#ff5f57"></div>
+        <div class="result-bar-dot" style="background:#ffbd2e"></div>
+        <div class="result-bar-dot" style="background:#28c840"></div>
+        <div class="result-bar-label" id="resultBarLabel">🏆 MI PRONÓSTICO MUNDIAL 2026 — Pelé IA</div>
+      </div>
+
+      <!-- Bracket visual rendered by JS -->
+      <div class="bracket-wrap">
+        <div class="bracket-inner" id="bracketViz"></div>
+      </div>
+
+      <!-- Champion banner -->
+      <div class="champ-banner" id="champBanner"></div>
+    </div>
+
+    <!-- Share -->
+    <div class="share-box">
+      <div class="share-title">📤 Comparte tu bracket</div>
+      <div class="share-row">
+        <button class="share-btn share-fb" onclick="shareFB()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+          Facebook
+        </button>
+        <button class="share-btn share-x" onclick="shareX()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          X / Twitter
+        </button>
+        <button class="share-btn share-ig" onclick="shareIG()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          Instagram
+        </button>
+        <button class="share-btn share-copy" onclick="copyLink()" id="copyBtn">
+          🔗 Copiar Link
+        </button>
+      </div>
+    </div>
+
+    <a href="/" class="cta-big">🏆 Crea tu Polla con amigos — $3.99 →</a>
+
+    <div style="text-align:center;margin-top:.75rem;font-size:11px;color:rgba(255,255,255,.2)">
+      El bracket público es solo para compartir · No acumula puntos
+    </div>
+
+    <!-- Reset -->
+    <div style="text-align:center;margin-top:1.5rem">
+      <button onclick="resetAll()" style="background:none;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.4);border-radius:8px;padding:8px 18px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s" onmouseover="this.style.borderColor='rgba(246,201,14,.3)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)';this.style.color='rgba(255,255,255,.4)'">
+        ↺ Generar otro bracket
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">✅ Link copiado</div>
+
+<script>
+const FLAGS={
+  'Mexico':'🇲🇽','South Africa':'🇿🇦','Korea Republic':'🇰🇷','Czechia':'🇨🇿',
+  'Canada':'🇨🇦','Bosnia and Herzegovina':'🇧🇦','Qatar':'🇶🇦','Switzerland':'🇨🇭',
+  'Brazil':'🇧🇷','Morocco':'🇲🇦','Haiti':'🇭🇹','Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+  'USA':'🇺🇸','Paraguay':'🇵🇾','Australia':'🇦🇺','Turkey':'🇹🇷',
+  'Germany':'🇩🇪','Curaçao':'🇨🇼','Ivory Coast':'🇨🇮','Ecuador':'🇪🇨',
+  'Netherlands':'🇳🇱','Japan':'🇯🇵','Sweden':'🇸🇪','Tunisia':'🇹🇳',
+  'Belgium':'🇧🇪','Egypt':'🇪🇬','IR Iran':'🇮🇷','New Zealand':'🇳🇿',
+  'Spain':'🇪🇸','Cape Verde':'🇨🇻','Saudi Arabia':'🇸🇦','Uruguay':'🇺🇾',
+  'France':'🇫🇷','Senegal':'🇸🇳','Iraq':'🇮🇶','Norway':'🇳🇴',
+  'Argentina':'🇦🇷','Algeria':'🇩🇿','Austria':'🇦🇹','Jordan':'🇯🇴',
+  'Portugal':'🇵🇹','DR Congo':'🇨🇩','Uzbekistan':'🇺🇿','Colombia':'🇨🇴',
+  'England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Croatia':'🇭🇷','Ghana':'🇬🇭','Panama':'🇵🇦'
+}
+const ES={
+  'Mexico':'México','South Africa':'Sudáfrica','Korea Republic':'Corea del Sur','Czechia':'Rep. Checa',
+  'Canada':'Canadá','Bosnia and Herzegovina':'Bosnia','Qatar':'Qatar','Switzerland':'Suiza',
+  'Brazil':'Brasil','Morocco':'Marruecos','Haiti':'Haití','Scotland':'Escocia',
+  'USA':'EE.UU.','Paraguay':'Paraguay','Australia':'Australia','Turkey':'Turquía',
+  'Germany':'Alemania','Curaçao':'Curazao','Ivory Coast':'Costa de Marfil','Ecuador':'Ecuador',
+  'Netherlands':'P. Bajos','Japan':'Japón','Sweden':'Suecia','Tunisia':'Túnez',
+  'Belgium':'Bélgica','Egypt':'Egipto','IR Iran':'Irán','New Zealand':'N. Zelanda',
+  'Spain':'España','Cape Verde':'Cabo Verde','Saudi Arabia':'Arabia S.','Uruguay':'Uruguay',
+  'France':'Francia','Senegal':'Senegal','Iraq':'Irak','Norway':'Noruega',
+  'Argentina':'Argentina','Algeria':'Argelia','Austria':'Austria','Jordan':'Jordania',
+  'Portugal':'Portugal','DR Congo':'RD Congo','Uzbekistan':'Uzbekistán','Colombia':'Colombia',
+  'England':'Inglaterra','Croatia':'Croacia','Ghana':'Ghana','Panama':'Panamá'
+}
+const f = n => n ? (FLAGS[n]||'🏳️') : '?'
+const es = n => n ? (ES[n]||n) : 'Por definir'
+const ft = n => n ? `${f(n)} ${es(n)}` : '?'
+
+const STEPS = [
+  {icon:'📡', label:'Escaneando fixture completo 2026 · 104 partidos', sub:'Fase de grupos · Octavos · Cuartos · Semis · Final'},
+  {icon:'🧬', label:'Analizando ADN de 48 selecciones', sub:'Rankings FIFA · forma reciente · jugadores clave'},
+  {icon:'⚡', label:'Calculando probabilidades de cada cruce', sub:'Modelo Elo + xG + factores de sede y clima'},
+  {icon:'🔀', label:'Simulando cruces eliminatorios', sub:'16 → 8 → 4 → 2 · propagando al campeón'},
+  {icon:'🏆', label:'Construyendo el camino al título', sub:'Validando rivales plausibles en cada ronda'},
+  {icon:'🎯', label:'Definiendo marcadores más probables', sub:'Goles esperados · historial de enfrentamientos'},
+  {icon:'✅', label:'¡Bracket completo!', sub:'Listo para compartir'},
+]
+
+let currentStep = 0
+let stepTimers = []
+let bracketData = null
+let selectedChamp = ''
+
+function renderSteps(activeStep) {
+  const container = document.getElementById('stepsContainer')
+  container.innerHTML = STEPS.map((s, i) => {
+    const done = activeStep > i, active = activeStep === i, pending = activeStep < i
+    return `<div class="step-row ${done?'done':active?'active':'pending'}" style="display:flex;align-items:flex-start;gap:8px;padding:4px 0;opacity:${pending?'0.22':'1'};transition:opacity .5s,transform .4s;transform:${active?'translateX(3px)':'translateX(0)'}">
+      <div class="step-icon ${done?'done':active?'active':'pending'}">${done?'✓':s.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div class="step-label ${done?'done':active?'active':'pending'}">${s.label}</div>
+        ${(active||done)?`<div class="step-hint">${s.sub}</div>`:''}
+      </div>
+      ${active?`<div class="step-spinner"><span style="animation-delay:0s"></span><span style="animation-delay:.12s"></span><span style="animation-delay:.24s"></span></div>`:''}
+    </div>`
+  }).join('')
+  document.getElementById('progressFill').style.width = `${Math.min(100, activeStep * (100/6))}%`
+  const champ = document.getElementById('champSelect').value
+  document.getElementById('animSub').textContent = `Motor predictivo activo · Campeón: ${es(champ)}`
+}
+
+async function generate() {
+  const champ = document.getElementById('champSelect').value
+  if (!champ) { showErr('Elige un campeón primero'); return }
+  selectedChamp = champ
+  document.getElementById('errMsg').style.display = 'none'
+  document.getElementById('formArea').style.display = 'none'
+  document.getElementById('animBox').style.display = 'block'
+
+  currentStep = 0
+  renderSteps(0)
+
+  const delays = [0, 1800, 3600, 5600, 7800, 10200, 13000]
+  stepTimers = delays.map((d, i) => setTimeout(() => { currentStep = i; renderSteps(i) }, d))
+
+  try {
+    const res = await fetch('/api/bracket/public-suggest', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({champion: champ})
+    })
+    const data = await res.json()
+    stepTimers.forEach(t => clearTimeout(t))
+
+    if (!res.ok) {
+      showErr(data.error || 'Error generando bracket'); resetForm(); return
+    }
+
+    renderSteps(6)
+    bracketData = data.bracket
+    await new Promise(r => setTimeout(r, 700))
+    document.getElementById('animBox').style.display = 'none'
+    showResult(data.bracket)
+  } catch(e) {
+    stepTimers.forEach(t => clearTimeout(t))
+    showErr('No pude conectarme. Intenta de nuevo.')
+    resetForm()
+  }
+}
+
+function showResult(bracket) {
+  document.getElementById('setupCard').style.display = 'none'
+  const resultArea = document.getElementById('resultArea')
+  resultArea.style.display = 'block'
+
+  // Champion banner
+  const champ = bracket.champion || selectedChamp
+  document.getElementById('champBanner').innerHTML = `
+    <div style="font-size:2rem;margin-bottom:.25rem">🏆</div>
+    <div class="champ-banner-title">${f(champ)} CAMPEÓN: ${es(champ).toUpperCase()}</div>
+    <div class="champ-banner-sub">Pronóstico generado por Pelé IA · lapollaia.com</div>
+  `
+  document.getElementById('resultBarLabel').textContent = `🏆 MI PRONÓSTICO MUNDIAL 2026 — ${es(champ)}`
+
+  // Build bracket visualization
+  renderBracket(bracket)
+  resultArea.scrollIntoView({behavior:'smooth', block:'start'})
+}
+
+function renderBracket(b) {
+  const viz = document.getElementById('bracketViz')
+  const r32 = b.round32 || []
+  const r16 = b.round16 || []
+  const qf  = b.quarters || []
+  const sf  = b.semis || []
+  const fin = b.final || {}
+  const champ = b.champion || ''
+
+  const mkCol = (items, gapPx, colClass='') => {
+    const slots = items.map(m => {
+      const isWin = m && m.winner
+      const name = m ? ft(m.winner || m.home) : '?'
+      const score = (m && m.home_score != null) ? ` ${m.home_score}-${m.away_score}` : ''
+      return `<div class="bk ${isWin?'w':''}">${name}${score}</div>`
+    }).join('')
+    return `<div class="bracket-col" style="gap:${gapPx}px;flex:1">${slots}</div>`
+  }
+
+  // R32 — show 8 winners (top half)
+  const r32col = `<div class="bracket-col" style="gap:3px;flex:1">
+    <div class="col-label">R32</div>
+    ${r32.slice(0,8).map(m=>`<div class="bk ${m&&m.winner?'w':''}">${m?ft(m.winner||m.home):'?'}</div>`).join('')}
+  </div>`
+
+  // R16 — 4 winners
+  const r16col = `<div class="bracket-col" style="gap:12px;flex:1">
+    <div class="col-label">R16</div>
+    ${r16.slice(0,4).map(m=>`<div class="bk ${m&&m.winner?'w':''}" style="margin-top:${r16.indexOf(m)===0?'0':'0'}px">${m?ft(m.winner||m.home)+(m.home_score!=null?` ${m.home_score}-${m.away_score}`:''): '?'}</div>`).join('')}
+  </div>`
+
+  // QF — 2 winners
+  const qfcol = `<div class="bracket-col" style="gap:28px;flex:1">
+    <div class="col-label">QF</div>
+    ${qf.slice(0,2).map(m=>`<div class="bk ${m&&m.winner?'w':''}">${m?ft(m.winner||m.home)+(m.home_score!=null?` ${m.home_score}-${m.away_score}`:''): '?'}</div>`).join('')}
+  </div>`
+
+  // SF — 2 items
+  const sfcol = `<div class="bracket-col" style="gap:16px;flex:1">
+    <div class="col-label">SF</div>
+    ${sf.slice(0,2).map((m,i)=>`<div class="bk ${m&&m.winner?'w':''}" style="margin-top:${i===0?'12px':'22px'}">${m?ft(m.winner||m.home): '?'}</div>`).join('')}
+  </div>`
+
+  // Final box
+  const finalBox = `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;width:90px">
+    <div class="col-label">FINAL</div>
+    <div class="final-box" style="margin-top:28px">
+      <div class="final-trophy">🏆</div>
+      <div class="final-name">${f(champ)} ${es(champ).toUpperCase()}</div>
+      <div class="final-score">${fin.home_score != null ? fin.home_score+' – '+fin.away_score : ''} ${ft(fin.home===champ ? fin.away : fin.home)}</div>
+    </div>
+  </div>`
+
+  viz.innerHTML = r32col + r16col + qfcol + sfcol + finalBox
+}
+
+function shareText() {
+  const champ = es(selectedChamp || bracketData?.champion || '')
+  return `🏆 Mi pronóstico del Mundial 2026: ${f(selectedChamp)} ${champ} CAMPEÓN!\nGenerado con IA en lapollaia.com — ¿Cuál es el tuyo? 👇\n${window.location.origin}/bracket`
+}
+
+function shareFB() {
+  const url = encodeURIComponent(window.location.origin + '/bracket')
+  const quote = encodeURIComponent(`🏆 Mi pronóstico del Mundial 2026: ${es(selectedChamp)} campeón! Crea el tuyo gratis en www.lapollaia.com`)
+  window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${quote}`, '_blank', 'width=600,height=450')
+}
+
+function shareX() {
+  const champ = es(selectedChamp || bracketData?.champion || '')
+  const text = encodeURIComponent(`🏆 Mi pronóstico del Mundial 2026: ${f(selectedChamp)} ${champ} CAMPEÓN! ¿Cuál es el tuyo? Crea tu bracket gratis en www.lapollaia.com 🤖⚽ #Mundial2026 #PolllaIA`)
+  window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'width=600,height=400')
+}
+
+function shareIG() {
+  copyLink()
+  showToast('📋 Link copiado — pégalo en tu bio o historia de Instagram')
+}
+
+function copyLink() {
+  const text = shareText()
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => showToast('✅ Texto copiado'))
+  } else {
+    const ta = document.createElement('textarea')
+    ta.value = text; document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); document.body.removeChild(ta)
+    showToast('✅ Texto copiado')
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast')
+  t.textContent = msg; t.classList.add('show')
+  setTimeout(() => t.classList.remove('show'), 2800)
+}
+
+function showErr(msg) {
+  const el = document.getElementById('errMsg')
+  el.textContent = msg; el.style.display = 'block'
+}
+
+function resetForm() {
+  document.getElementById('animBox').style.display = 'none'
+  document.getElementById('formArea').style.display = 'block'
+}
+
+function resetAll() {
+  bracketData = null; selectedChamp = ''
+  document.getElementById('setupCard').style.display = 'block'
+  document.getElementById('resultArea').style.display = 'none'
+  document.getElementById('formArea').style.display = 'block'
+  document.getElementById('animBox').style.display = 'none'
+  document.getElementById('champSelect').value = ''
+  document.getElementById('errMsg').style.display = 'none'
+  window.scrollTo({top:0, behavior:'smooth'})
+}
+</script>
+</body>
+</html>
