@@ -1176,29 +1176,31 @@ app.post('/api/autofill', auth, async(req,res)=>{
 
     if(pending.length===0) return res.json({filled:0, message:'No hay partidos disponibles para llenar'})
 
-    // Call AI for each match (batch, up to 20 to avoid timeout)
-    const toProcess = pending.slice(0, 20)
+    // Process ALL pending matches in parallel batches of 8
+    const BATCH_SIZE = 8
     const results = []
-
-    for(const m of toProcess){
-      const t1stats = TEAM_STATS_SERVER[m.team1]||{rank:50,notes:'Datos no disponibles'}
-      const t2stats = TEAM_STATS_SERVER[m.team2]||{rank:50,notes:'Datos no disponibles'}
-      try{
-        const msg = await anthropic.messages.create({
-          model:'claude-sonnet-4-6', max_tokens:150,
-          system:`Eres un analista de fútbol. Responde SOLO JSON válido sin markdown: {"home":N,"away":N}`,
-          messages:[{role:'user',content:`${m.team1}(#${t1stats.rank},${t1stats.notes}) vs ${m.team2}(#${t2stats.rank},${t2stats.notes}). Fase:${m.phase}. Grupo:${m.group_name||''}. Sede:${m.venue||''}. Marcador más probable:`}]
-        })
-        const text = msg.content[0].text.trim().replace(/```json|```/g,'').trim()
-        const parsed = JSON.parse(text)
-        const h = Math.max(0,Math.min(9,parseInt(parsed.home)||0))
-        const a = Math.max(0,Math.min(9,parseInt(parsed.away)||0))
-        results.push({matchId:m.id, home:h, away:a})
-      } catch(e){
-        // Fallback: use ranking logic
-        const r1 = t1stats.rank||50, r2 = t2stats.rank||50
-        results.push({matchId:m.id, home:r1<r2?2:r1>r2?1:1, away:r1<r2?0:r1>r2?2:1})
-      }
+    for(let i=0; i<pending.length; i+=BATCH_SIZE){
+      const batch = pending.slice(i, i+BATCH_SIZE)
+      const batchResults = await Promise.all(batch.map(async m=>{
+        const t1stats = TEAM_STATS_SERVER[m.team1]||{rank:50,notes:'Datos no disponibles'}
+        const t2stats = TEAM_STATS_SERVER[m.team2]||{rank:50,notes:'Datos no disponibles'}
+        try{
+          const msg = await anthropic.messages.create({
+            model:'claude-sonnet-4-6', max_tokens:80,
+            system:`Eres analista de fútbol. Responde SOLO JSON: {"home":N,"away":N}`,
+            messages:[{role:'user',content:`${m.team1}(#${t1stats.rank}) vs ${m.team2}(#${t2stats.rank}). Fase:${m.phase}. Grupo:${m.group_name||''}. Marcador probable:`}]
+          })
+          const text = msg.content[0].text.trim().replace(/```json|```/g,'').trim()
+          const parsed = JSON.parse(text)
+          const h = Math.max(0,Math.min(9,parseInt(parsed.home)||0))
+          const a = Math.max(0,Math.min(9,parseInt(parsed.away)||0))
+          return {matchId:m.id, home:h, away:a}
+        } catch(e){
+          const r1 = t1stats.rank||50, r2 = t2stats.rank||50
+          return {matchId:m.id, home:r1<r2?2:r1>r2?1:1, away:r1<r2?0:r1>r2?2:1}
+        }
+      }))
+      results.push(...batchResults)
     }
 
     // Save all predictions

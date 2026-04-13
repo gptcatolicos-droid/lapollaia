@@ -1109,12 +1109,22 @@ function ChatPage(){
     if(!activeAvatar) return
     setAutofilling(true)
     setAutofillStep(0)
-    const label = groupFilter ? `Grupo ${groupFilter}` : 'toda la polla'
+    const now2 = Date.now()
+    const pendingCount = (matches||[]).filter(m=>{
+      if(!m.match_date) return false
+      const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
+      if(m.phase_locked||now2>=lt) return false
+      if(predictions[m.id]!=null) return false
+      if(groupFilter&&groupFilter.length===1) return m.phase==='group'&&m.group_name===groupFilter
+      return true
+    }).length
+    const label = groupFilter ? `Grupo ${groupFilter}` : `${pendingCount} partidos disponibles`
     addMsg('pele',`🤖 Analizando y llenando ${label} con mi inteligencia... ⏳ Esto tarda unos segundos.`)
     // Animate through steps while API runs
-    const steps=[0,1,2,3,4,5,6]
-    const delays=[0,1400,2800,4400,6200,8200,10500]
-    const timers=steps.map((s,i)=>setTimeout(()=>setAutofillStep(s),delays[i]))
+    // Scale delays to match expected duration (48 group matches ~30s, knockout ~8s per batch)
+    const estTime = pendingCount > 20 ? 28000 : pendingCount > 8 ? 16000 : 8000
+    const delays=[0, estTime*.1, estTime*.22, estTime*.36, estTime*.52, estTime*.68, estTime*.84].map(Math.round)
+    const timers=delays.map((d,i)=>setTimeout(()=>setAutofillStep(i),d))
     try{
       const data = await api('/api/autofill','POST',{avatarId:activeAvatar.id, groupFilter})
       timers.forEach(t=>clearTimeout(t))
@@ -1499,20 +1509,80 @@ function ChatPage(){
           )
           if(msg.type==='group_select') return(
             <div key={msg.id} style={{width:'100%'}}>
-              <div className="group-grid">
-                {allGroups.map(g=>{
-                  const done=isGroupDone(g)
-                  const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
-                  return(
-                    <div key={g} className={`grp-btn ${done?'grp-btn-done':currentGroupKey===g?'grp-btn-on':''}`}
-                      onClick={()=>selectGroup(g)}>
-                      <div className={`grp-lbl ${done?'grp-lbl-g':currentGroupKey===g?'grp-lbl-w':''}`}>{done?'✓':''}{g}</div>
-                      <div className="grp-flags">{GRPS[g]}</div>
-                      <div className="grp-count">{doneCounts[g]||0}/6</div>
-                    </div>
-                  )
-                })}
-              </div>
+              {(()=>{
+                const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
+                const now = Date.now()
+                const KNOCKOUT_PHASES=['round32','round16','quarters','semis','third','final']
+                const KNOCKOUT_LABELS={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Gran Final'}
+                const availableKnockout = KNOCKOUT_PHASES.filter(ph=>(matches||[]).some(m=>{
+                  if(m.phase!==ph||!m.match_date) return false
+                  const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
+                  return !m.phase_locked && now<lt && !predictions[m.id]
+                }))
+                const pendingGroupCount = allGroups.filter(g=>!isGroupDone(g)&&availableCounts[g]>0).length
+                const hasPending = pendingGroupCount>0 || availableKnockout.length>0
+                return(
+                  <>
+                    {hasPending && !autofilling && (
+                      <button onClick={()=>runAutofill(null)}
+                        style={{width:'100%',display:'flex',alignItems:'center',gap:'12px',padding:'11px 16px',
+                          background:'linear-gradient(135deg,var(--ink),#1a1f30)',
+                          border:'1.5px solid var(--gold)',borderRadius:'var(--r)',cursor:'pointer',
+                          marginBottom:'10px',textAlign:'left',fontFamily:'inherit'}}>
+                        <span style={{fontSize:'1.3rem'}}>🤖</span>
+                        <div>
+                          <div style={{fontWeight:700,color:'var(--gold)',fontSize:'12px'}}>
+                            {`Pellé IA llena ${pendingGroupCount>0?`los ${pendingGroupCount} grupos pendientes`:availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', ')} — automático`}
+                          </div>
+                          <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)',marginTop:'1px'}}>Analiza y completa todos los pronósticos disponibles. Puedes editar después.</div>
+                        </div>
+                      </button>
+                    )}
+                    {(pendingGroupCount>0 || allGroups.some(g=>doneCounts[g]>0)) && (
+                      <div className="group-grid">
+                        {allGroups.map(g=>{
+                          const done=isGroupDone(g)
+                          return(
+                            <div key={g} className={`grp-btn ${done?'grp-btn-done':currentGroupKey===g?'grp-btn-on':''}`}
+                              onClick={()=>selectGroup(g)}>
+                              <div className={`grp-lbl ${done?'grp-lbl-g':currentGroupKey===g?'grp-lbl-w':''}`}>{done?'✓':''}{g}</div>
+                              <div className="grp-flags">{GRPS[g]}</div>
+                              <div className="grp-count">{doneCounts[g]||0}/6</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {availableKnockout.length>0 && (
+                      <div style={{marginTop:'10px'}}>
+                        <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'1px',color:'rgba(255,255,255,.3)',textTransform:'uppercase',marginBottom:'6px'}}>Fases eliminatorias disponibles</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'6px'}}>
+                          {availableKnockout.map(ph=>{
+                            const phMs=(matches||[]).filter(m=>m.phase===ph)
+                            const phDone=phMs.filter(m=>predictions[m.id]!=null).length
+                            const phTotal=phMs.filter(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
+                            return(
+                              <button key={ph}
+                                onClick={()=>{
+                                  setCurrentGroupKey(ph)
+                                  const ms=(matches||[]).filter(m=>m.phase===ph)
+                                  const first=ms.find(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
+                                  if(first){addMsg('pele',`⚽ ${KNOCKOUT_LABELS[ph]} — ¡Vamos!`);setChatPhase('stats');setTimeout(()=>showMatchStats(first,ms.indexOf(first)),400)}
+                                }}
+                                style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:'2px',padding:'8px 10px',
+                                  background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.1)',
+                                  borderRadius:'var(--r)',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
+                                <div style={{fontWeight:700,fontSize:'12px',color:'#fff'}}>{KNOCKOUT_LABELS[ph]}</div>
+                                <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)'}}>{phDone}/{phTotal} completados</div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )
           if(msg.type==='stats'){
@@ -1560,20 +1630,80 @@ function ChatPage(){
           )
           if(msg.type==='group_done') return(
             <div key={msg.id} style={{width:'100%'}}>
-              <div className="group-grid">
-                {allGroups.filter(g=>g!==currentGroupKey).map(g=>{
-                  const done=isGroupDone(g)
-                  const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
-                  return(
-                    <div key={g} className={`grp-btn ${done?'grp-btn-done':''}`}
-                      onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
-                      <div className={`grp-lbl ${done?'grp-lbl-g':''}`}>{done?'✓':''}{g}</div>
-                      <div className="grp-flags">{GRPS[g]}</div>
-                      <div className="grp-count">{doneCounts[g]||0}/6</div>
-                    </div>
-                  )
-                })}
-              </div>
+              {(()=>{
+                const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
+                const now = Date.now()
+                const KNOCKOUT_PHASES=['round32','round16','quarters','semis','third','final']
+                const KNOCKOUT_LABELS={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Gran Final'}
+                const availableKnockout = KNOCKOUT_PHASES.filter(ph=>(matches||[]).some(m=>{
+                  if(m.phase!==ph||!m.match_date) return false
+                  const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
+                  return !m.phase_locked && now<lt && !predictions[m.id]
+                }))
+                const remaining = allGroups.filter(g=>g!==currentGroupKey&&!isGroupDone(g)&&availableCounts[g]>0)
+                const hasPending = remaining.length>0 || availableKnockout.length>0
+                return(
+                  <>
+                    {hasPending && !autofilling && (
+                      <button onClick={()=>runAutofill(null)}
+                        style={{width:'100%',display:'flex',alignItems:'center',gap:'12px',padding:'11px 16px',
+                          background:'linear-gradient(135deg,var(--ink),#1a1f30)',
+                          border:'1.5px solid var(--gold)',borderRadius:'var(--r)',cursor:'pointer',
+                          marginBottom:'10px',textAlign:'left',fontFamily:'inherit'}}>
+                        <span style={{fontSize:'1.3rem'}}>🤖</span>
+                        <div>
+                          <div style={{fontWeight:700,color:'var(--gold)',fontSize:'12px'}}>
+                            {`Pelé IA llena ${remaining.length>0?`los ${remaining.length} grupos restantes`:availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', ')} — automático`}
+                          </div>
+                          <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)',marginTop:'1px'}}>Analiza y completa todos. Puedes editar después.</div>
+                        </div>
+                      </button>
+                    )}
+                    {allGroups.filter(g=>g!==currentGroupKey).some(g=>!isGroupDone(g)||doneCounts[g]>0) && (
+                      <div className="group-grid">
+                        {allGroups.filter(g=>g!==currentGroupKey).map(g=>{
+                          const done=isGroupDone(g)
+                          return(
+                            <div key={g} className={`grp-btn ${done?'grp-btn-done':''}`}
+                              onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
+                              <div className={`grp-lbl ${done?'grp-lbl-g':''}`}>{done?'✓':''}{g}</div>
+                              <div className="grp-flags">{GRPS[g]}</div>
+                              <div className="grp-count">{doneCounts[g]||0}/6</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {availableKnockout.length>0 && (
+                      <div style={{marginTop:'10px'}}>
+                        <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'1px',color:'rgba(255,255,255,.3)',textTransform:'uppercase',marginBottom:'6px'}}>Fases eliminatorias disponibles</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'6px'}}>
+                          {availableKnockout.map(ph=>{
+                            const phMs=(matches||[]).filter(m=>m.phase===ph)
+                            const phDone=phMs.filter(m=>predictions[m.id]!=null).length
+                            const phTotal=phMs.filter(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
+                            return(
+                              <button key={ph}
+                                onClick={()=>{
+                                  setCurrentGroupKey(ph)
+                                  const ms=(matches||[]).filter(m=>m.phase===ph)
+                                  const first=ms.find(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
+                                  if(first){addMsg('pele',`⚽ ${KNOCKOUT_LABELS[ph]} — ¡Vamos!`);setChatPhase('stats');setTimeout(()=>showMatchStats(first,ms.indexOf(first)),400)}
+                                }}
+                                style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:'2px',padding:'8px 10px',
+                                  background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.1)',
+                                  borderRadius:'var(--r)',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
+                                <div style={{fontWeight:700,fontSize:'12px',color:'#fff'}}>{KNOCKOUT_LABELS[ph]}</div>
+                                <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)'}}>{phDone}/{phTotal} completados</div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )
           return(
