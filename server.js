@@ -1009,7 +1009,7 @@ app.post('/api/pele', auth, async(req,res)=>{
 PARTIDO ACTUAL: ${matchContext.team1||'?'} vs ${matchContext.team2||'?'} · Fase: ${matchContext.phase||'grupos'} · Sede: ${matchContext.venue||'?'}`
       :''
     const msg=await anthropic.messages.create({
-      model:'claude-sonnet-4-20250514', max_tokens:400,
+      model:'claude-sonnet-4-6', max_tokens:400,
       system:PELE_SYSTEM+`
 TORNEO: "${t?.name||'La Polla IA'}"
 JUGADOR: ${avatarName||'el usuario'}${contextExtra}`,
@@ -1024,7 +1024,7 @@ app.post('/api/pele/suggest', auth, async(req,res)=>{
   const {team1,team2,rank1,rank2,notes1,notes2,venue,matchDate,group}=req.body
   try{
     const msg=await anthropic.messages.create({
-      model:'claude-sonnet-4-20250514', max_tokens:500,
+      model:'claude-sonnet-4-6', max_tokens:500,
       system:`Eres un analista experto de fútbol internacional. Cuando sugieras un marcador SIEMPRE debes explicar el razonamiento.
 Responde SOLO en JSON válido (sin markdown): {"home":NUMERO,"away":NUMERO,"reason":"2-3 líneas en español explicando POR QUÉ ese marcador: ranking, historial entre equipos, forma reciente, ventaja de sede, jugadores clave"}`,
       messages:[{role:'user',content:`Partido del Grupo ${group}: ${team1} (ranking #${rank1}, ${notes1}) vs ${team2} (ranking #${rank2}, ${notes2}). Sede: ${venue}. Fecha: ${matchDate}. Analiza el partido considerando: ranking FIFA, historial directo, jugadores estrella, sede y contexto del grupo. Sugiere el marcador más probable y explica el razonamiento.`}]
@@ -1057,7 +1057,7 @@ app.post('/api/pele/public', async(req,res)=>{
       {role:'user',content:message}
     ]
     const resp=await anthropic.messages.create({
-      model:'claude-sonnet-4-20250514', max_tokens:600,
+      model:'claude-sonnet-4-6', max_tokens:600,
       system:`Eres Pelé IA, el mayor experto en fútbol del mundo. Hablas en español con pasión y conocimiento profundo.
 
 CONTEXTO TEMPORAL CRÍTICO — MUY IMPORTANTE:
@@ -1104,7 +1104,7 @@ app.post('/api/pele/free', auth, async(req,res)=>{
     ]
 
     const msg=await anthropic.messages.create({
-      model:'claude-sonnet-4-20250514', max_tokens:600,
+      model:'claude-sonnet-4-6', max_tokens:600,
       system:PELE_SYSTEM+`
 JUGADOR: ${avatarName||'el usuario'}
 MODO: Chat libre de fútbol. El usuario puede preguntar CUALQUIER cosa sobre fútbol. Responde con datos precisos y análisis de calidad. Si tienes datos de Football API disponibles en el mensaje, úsalos para enriquecer tu respuesta.`,
@@ -1184,7 +1184,7 @@ app.post('/api/autofill', auth, async(req,res)=>{
       const t2stats = TEAM_STATS_SERVER[m.team2]||{rank:50,notes:'Datos no disponibles'}
       try{
         const msg = await anthropic.messages.create({
-          model:'claude-sonnet-4-20250514', max_tokens:150,
+          model:'claude-sonnet-4-6', max_tokens:150,
           system:`Eres un analista de fútbol. Responde SOLO JSON válido sin markdown: {"home":N,"away":N}`,
           messages:[{role:'user',content:`${m.team1}(#${t1stats.rank},${t1stats.notes}) vs ${m.team2}(#${t2stats.rank},${t2stats.notes}). Fase:${m.phase}. Grupo:${m.group_name||''}. Sede:${m.venue||''}. Marcador más probable:`}]
         })

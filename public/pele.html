@@ -17,8 +17,8 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--gold:#F6C90E;--ink:#0d1117;--ink2:#1a1f2e;--green:#16a34a}
-html,body{height:100%;overflow:hidden}
-body{font-family:'DM Sans',sans-serif;background:var(--ink);color:#fff;display:flex;flex-direction:column}
+html{height:100%}
+body{font-family:'DM Sans',sans-serif;background:var(--ink);color:#fff;display:flex;flex-direction:column;height:100%;height:100dvh;overflow:hidden}
 /* NAV */
 .nav{background:rgba(13,17,23,.95);backdrop-filter:blur(16px);border-bottom:1px solid rgba(246,201,14,.12);padding:.65rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .nav-brand{display:flex;align-items:center;gap:8px;text-decoration:none}
@@ -27,7 +27,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--ink);color:#fff;display:f
 .nav-sub{font-size:8px;color:rgba(255,255,255,.35);letter-spacing:1px;text-transform:uppercase}
 .nav-cta{background:var(--gold);color:var(--ink);border:none;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap}
 /* CHAT LAYOUT */
-.chat-wrap{display:flex;flex-direction:column;flex:1;overflow:hidden;max-width:720px;width:100%;margin:0 auto;padding:0}
+.chat-wrap{display:flex;flex-direction:column;flex:1;overflow:hidden;max-width:720px;width:100%;margin:0 auto;padding:0;min-height:0}
 /* HERO */
 .chat-hero{text-align:center;padding:1.5rem 1rem .75rem;flex-shrink:0;background:linear-gradient(180deg,rgba(246,201,14,.04),transparent)}
 .pele-avatar{width:70px;height:70px;border-radius:50%;object-fit:cover;object-position:top;border:3px solid var(--gold);box-shadow:0 0 24px rgba(246,201,14,.35);margin-bottom:.6rem}
