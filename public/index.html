@@ -717,14 +717,9 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
       <div class="fg"><label>Tu nombre completo</label><input type="text" id="cf-aname" placeholder="Tu nombre"/></div>
       <div class="fg"><label>Tu correo (seras el administrador)</label><input type="email" id="cf-email" placeholder="tu@correo.com"/></div>
       <div class="fg"><label>Contrasena</label><input type="password" id="cf-pass" placeholder="Minimo 6 caracteres"/></div>
-      <!-- Math captcha -->
-      <div class="fg">
-        <label id="captcha-label">Verificacion: ¿Cuanto es <span id="cq">...</span>?</label>
-        <input type="number" id="cf-captcha" placeholder="Respuesta" style="max-width:120px"/>
-      </div>
       <!-- Payment buttons -->
       <div style="margin-top:1rem;display:flex;flex-direction:column;gap:8px;">
-        <button class="btn-main btn-full" id="createBtn" onclick="doCreate('mp')">&#128179; Pagar $3.99 con MercadoPago</button>
+        <button class="btn-main btn-full" id="createBtn" onclick="doCreate()">&#128179; Pagar $3.99 con MercadoPago</button>
         <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.25);margin:2px 0">— o —</div>
         <div id="paypal-btn-container" style="display:none;"></div>
         <button class="btn-sec btn-full" id="ppShowBtn" onclick="showPayPalBtn()">&#128178; Pagar $3.99 con PayPal</button>
@@ -806,16 +801,6 @@ function renderFaq(items){document.getElementById('faq-list').innerHTML=items.ma
 function toggleFaq(i){const a=document.getElementById('fa'+i),ic=document.getElementById('fi'+i);const open=a.classList.toggle('open');ic.textContent=open?'-':'+'}
 renderFaq(FAQS)
 
-// ─── CAPTCHA ──────────────────────────────────────────────────────────────────
-let _captchaAns=0
-function genCaptcha(){
-  const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1
-  _captchaAns=a+b
-  const el=document.getElementById('cq')
-  if(el) el.textContent=`${a} + ${b}`
-}
-genCaptcha()
-
 function showCreate(){
   const f=document.getElementById('createForm');f.style.display='block'
   setTimeout(()=>f.scrollIntoView({behavior:'smooth',block:'start'}),100)
@@ -829,17 +814,15 @@ function validateForm(){
   const adminName=document.getElementById('cf-aname').value.trim()
   const email=document.getElementById('cf-email').value.trim()
   const pass=document.getElementById('cf-pass').value
-  const captchaVal=parseInt(document.getElementById('cf-captcha').value)
   const errEl=document.getElementById('fErr')
   errEl.style.display='none'
   if(!name||!adminName||!email||!pass){errEl.textContent='Complete todos los campos.';errEl.style.display='block';return null}
   if(pass.length<6){errEl.textContent='La contrasena debe tener al menos 6 caracteres.';errEl.style.display='block';return null}
   if(slug.length<3){errEl.textContent='El nombre debe tener al menos 3 caracteres.';errEl.style.display='block';return null}
-  if(isNaN(captchaVal)||captchaVal!==_captchaAns){errEl.textContent='La respuesta de verificacion es incorrecta.';errEl.style.display='block';genCaptcha();document.getElementById('cf-captcha').value='';return null}
   return {name,slug,adminName,email,password:pass}
 }
 
-async function doCreate(provider){
+async function doCreate(){
   const data=validateForm(); if(!data) return
   const btn=document.getElementById('createBtn'),errEl=document.getElementById('fErr')
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Creando tu Polla...'
@@ -854,7 +837,7 @@ async function doCreate(provider){
   }
 }
 
-// ─── PAYPAL FLOW ──────────────────────────────────────────────────────────────
+// ─── PAYPAL FLOW (client-side order creation — no server secret needed) ───────
 let _ppTournamentId='',_ppSlug=''
 
 async function showPayPalBtn(){
@@ -863,7 +846,6 @@ async function showPayPalBtn(){
   const ppBtn=document.getElementById('ppShowBtn')
   ppBtn.disabled=true;ppBtn.innerHTML='<span class="spinner"></span>Preparando PayPal...'
 
-  // Step 1: create tournament (pending)
   try{
     const r=await fetch('/api/tournaments/create-paypal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
     const d=await r.json()
@@ -879,30 +861,51 @@ async function showPayPalBtn(){
   const container=document.getElementById('paypal-btn-container')
   container.style.display='block'; container.innerHTML=''
 
-  // Step 2: render PayPal button
-  if(typeof paypal==='undefined'){errEl.textContent='PayPal no disponible. Usa MercadoPago.';errEl.style.display='block';return}
+  if(typeof paypal==='undefined'){
+    errEl.textContent='PayPal no disponible. Por favor usa MercadoPago o recarga la pagina.';errEl.style.display='block'
+    ppBtn.style.display='block';ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
+    return
+  }
+
   paypal.Buttons({
     style:{color:'blue',shape:'rect',label:'pay',height:44},
-    createOrder:async()=>{
-      const r=await fetch('/api/paypal/create-order',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({tournamentId:_ppTournamentId,tournamentName:document.getElementById('cf-name').value.trim()})})
-      const d=await r.json()
-      if(!d.orderId) throw new Error(d.error||'Error PayPal')
-      return d.orderId
+    createOrder:function(data,actions){
+      return actions.order.create({
+        purchase_units:[{
+          custom_id:_ppTournamentId,
+          description:'La Polla IA — Torneo Mundial 2026',
+          amount:{currency_code:'USD',value:'3.99'}
+        }],
+        application_context:{brand_name:'La Polla IA',shipping_preference:'NO_SHIPPING'}
+      })
     },
-    onApprove:async(data)=>{
-      container.innerHTML='<div style="text-align:center;padding:12px;font-size:13px;color:#4ade80">Procesando pago...</div>'
-      const r=await fetch('/api/paypal/capture-order',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({orderId:data.orderID,tournamentId:_ppTournamentId})})
-      const d=await r.json()
-      if(d.success) window.location.href=`/confirmacionpagopaypal?slug=${_ppSlug}`
-      else {errEl.textContent='Error al capturar pago: '+(d.error||'');errEl.style.display='block'}
+    onApprove:function(data,actions){
+      container.innerHTML='<div style="text-align:center;padding:12px;font-size:13px;color:#4ade80">Procesando tu pago...</div>'
+      return actions.order.capture().then(async function(captureData){
+        const orderId=captureData.id||data.orderID
+        try{
+          const r=await fetch('/api/paypal/capture-order',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({orderId,tournamentId:_ppTournamentId})})
+          const result=await r.json()
+          if(result.success) window.location.href='/confirmacionpagopaypal?slug='+(_ppSlug||'')+'&orderId='+orderId
+          else{errEl.textContent='Error activando polla: '+(result.error||'');errEl.style.display='block';container.innerHTML=''}
+        }catch(fetchErr){errEl.textContent='Error de red. Contacta soporte con tu ID: '+orderId;errEl.style.display='block';container.innerHTML=''}
+      }).catch(function(err){errEl.textContent='Error al capturar pago.';errEl.style.display='block';container.innerHTML=''})
     },
-    onError:(err)=>{errEl.textContent='Error PayPal: '+err;errEl.style.display='block'}
+    onError:function(err){
+      errEl.textContent='Error PayPal. Intenta de nuevo o usa MercadoPago.';errEl.style.display='block'
+      ppBtn.style.display='block';ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
+      container.innerHTML=''
+    },
+    onCancel:function(){
+      ppBtn.style.display='block';ppBtn.disabled=false;ppBtn.innerHTML='&#128178; Pagar $3.99 con PayPal'
+      container.innerHTML=''
+    }
   }).render('#paypal-btn-container')
 }
 
 function toggleLang(){const btn=document.getElementById('langBtn');btn.textContent=btn.textContent==='EN'?'ES':'EN'}
+
 </script>
 </body>
 </html>

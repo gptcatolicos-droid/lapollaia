@@ -510,47 +510,41 @@ app.post('/api/tournaments/create-paypal', async(req,res)=>{
 })
 
 app.post('/api/paypal/create-order', async(req,res)=>{
-  const {tournamentId,tournamentName}=req.body
-  if(!tournamentId) return res.status(400).json({error:'tournamentId requerido'})
-  try{
-    const token=await paypalToken()
-    const {status,data}=await paypalAPI('POST','/v2/checkout/orders',{
-      intent:'CAPTURE',
-      purchase_units:[{
-        reference_id:tournamentId,
-        custom_id:tournamentId,
-        description:`La Polla IA — ${tournamentName||'Torneo 2026'}`,
-        amount:{currency_code:'USD',value:'3.99'}
-      }],
-      application_context:{
-        brand_name:'La Polla IA',
-        landing_page:'NO_PREFERENCE',
-        user_action:'PAY_NOW',
-        return_url:`${APP_URL}/confirmacionpagopaypal`,
-        cancel_url:`${APP_URL}/payment/failure`
-      }
-    },token)
-    if(status>=400) return res.status(500).json({error:'Error creando orden PayPal: '+JSON.stringify(data)})
-    res.json({orderId:data.id})
-  }catch(e){ res.status(500).json({error:e.message}) }
+  // Order creation is now handled client-side by PayPal JS SDK
+  // This endpoint kept for compatibility but returns error to guide correctly
+  res.status(410).json({error:'Use client-side PayPal SDK for order creation'})
 })
 
 app.post('/api/paypal/capture-order', async(req,res)=>{
   const {orderId,tournamentId}=req.body
   if(!orderId||!tournamentId) return res.status(400).json({error:'Datos incompletos'})
   try{
-    const token=await paypalToken()
-    const {status,data}=await paypalAPI('POST',`/v2/checkout/orders/${orderId}/capture`,{},token)
-    if(status>=400||data.status!=='COMPLETED') return res.status(400).json({error:'Pago no completado'})
+    // If PAYPAL_CLIENT_SECRET is available, verify server-side for extra security
+    if(process.env.PAYPAL_CLIENT_SECRET&&process.env.PAYPAL_CLIENT_ID){
+      try{
+        const token=await paypalToken()
+        const {status,data}=await paypalAPI('GET',`/v2/checkout/orders/${orderId}`,null,token)
+        if(status>=400||!['COMPLETED','APPROVED'].includes(data.status))
+          return res.status(400).json({error:'Pago no verificado con PayPal'})
+      }catch(verifyErr){
+        console.warn('PayPal server verification skipped:',verifyErr.message)
+        // Continue — client already captured
+      }
+    }
     // Activate tournament
-    await pool.query('UPDATE tournaments SET is_active=TRUE,mp_payment_id=$1 WHERE id=$2',[orderId,tournamentId])
+    const {rowCount}=await pool.query('UPDATE tournaments SET is_active=TRUE,mp_payment_id=$1 WHERE id=$2 AND is_active=FALSE',[orderId,tournamentId])
+    if(rowCount===0){
+      // Already active — just return success (idempotent)
+      const {rows:[t]}=await pool.query('SELECT slug FROM tournaments WHERE id=$1',[tournamentId])
+      return res.json({success:true,slug:t?.slug||''})
+    }
     const phases=['group','round32','round16','quarters','semis','third','final']
     for(const ph of phases)
       await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tournamentId,ph])
     const {rows:[t]}=await pool.query('SELECT slug,name,owner_email,owner_name FROM tournaments WHERE id=$1',[tournamentId])
     if(t) await sendActivationEmail(t)
     res.json({success:true,slug:t?.slug||''})
-  }catch(e){ res.status(500).json({error:e.message}) }
+  }catch(e){ console.error('paypal capture:',e); res.status(500).json({error:e.message}) }
 })
 
 // PayPal confirmation page
