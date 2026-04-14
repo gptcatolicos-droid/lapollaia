@@ -68,7 +68,26 @@ async function sendMail(to, subject, html){
 
 
 
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: '2mb' }))
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  process.env.APP_URL || 'http://localhost:3000',
+  'https://lapollaia.com',
+  'https://www.lapollaia.com',
+  'https://lapollaia.onrender.com'
+]
+app.use((req,res,next)=>{
+  const origin = req.headers.origin
+  if(origin && ALLOWED_ORIGINS.some(o=>origin.startsWith(o))){
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Access-Control-Allow-Credentials','true')
+    res.setHeader('Access-Control-Allow-Methods','GET,POST,PUT,DELETE,OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers','Content-Type,Authorization,x-super-key')
+  }
+  if(req.method==='OPTIONS'){ res.sendStatus(204); return }
+  next()
+})
 
 // ─── SECURITY HEADERS ─────────────────────────────────────────────────────────
 app.use((req,res,next)=>{
@@ -77,8 +96,30 @@ app.use((req,res,next)=>{
   res.setHeader('X-XSS-Protection','1; mode=block')
   res.setHeader('Referrer-Policy','strict-origin-when-cross-origin')
   res.setHeader('Permissions-Policy','camera=(),microphone=(),geolocation=()')
+  res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains')
   next()
 })
+
+// ─── RATE LIMITING (in-memory, no extra packages needed) ──────────────────────
+const _rl = {}
+function rateLimit(max, windowMs=60000){
+  return (req,res,next)=>{
+    const key = (req.ip||'unknown') + ':' + req.path + ':' + Math.floor(Date.now()/windowMs)
+    _rl[key] = (_rl[key]||0) + 1
+    if(_rl[key] > max) return res.status(429).json({error:'Demasiadas solicitudes. Intenta en un momento.'})
+    next()
+  }
+}
+// Throttle sensitive auth endpoints
+const authLimit = rateLimit(20, 60000)    // 20 req/min per IP on auth
+const apiLimit  = rateLimit(200, 60000)   // 200 req/min per IP on API
+app.use('/api/auth', authLimit)
+app.use('/api/', apiLimit)
+// Clean stale rate limit keys every 5 minutes
+setInterval(()=>{
+  const cutoff = Math.floor(Date.now()/60000) - 2
+  Object.keys(_rl).forEach(k=>{ if(parseInt(k.split(':').pop()) < cutoff) delete _rl[k] })
+}, 5*60*1000)
 
 // ─── PAYPAL HELPERS ───────────────────────────────────────────────────────────
 async function paypalToken(){

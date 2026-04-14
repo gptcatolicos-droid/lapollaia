@@ -864,35 +864,92 @@ function DashboardPage(){
         )}
 
         <div className="action-grid">
+
+          {/* Pronósticos */}
           <div className="action-card action-card-dark" onClick={()=>setView('chat')}>
-            <div className="ac-icon">💬</div>
-            <div className="ac-label ac-label-w">Pronósticos</div>
-            <div className="ac-desc ac-desc-w">Chat con Pelé IA · Stats</div>
+            <div className="ac-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 8v4l3 3"/>
+                <path d="M3.05 12a9 9 0 0 0 9 9 9 9 0 0 0 0-18"/>
+                <circle cx="12" cy="12" r="2" fill="#C8A84B"/>
+              </svg>
+            </div>
+            <div className="ac-label ac-label-w">Mis Pronósticos</div>
+            <div className="ac-desc ac-desc-w">Ingresa tus marcadores partido a partido con ayuda de Pelé IA</div>
+            <div className="ac-badge">⚽ Pelé IA incluido</div>
           </div>
+
+          {/* Tablero */}
           <div className="action-card" onClick={()=>setView('board')}>
-            <div className="ac-icon">📋</div>
-            <div className="ac-label">Tablero</div>
-            <div className="ac-desc">Todos los partidos</div>
+            <div className="ac-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <path d="M14 17.5h7M17.5 14v7"/>
+              </svg>
+            </div>
+            <div className="ac-label">Tablero de Partidos</div>
+            <div className="ac-desc">Revisa y edita tus marcadores en todos los grupos y fases</div>
           </div>
+
+          {/* Resultados */}
           <div className="action-card" onClick={()=>setView('results')}>
-            <div className="ac-icon">📊</div>
-            <div className="ac-label">Resultados</div>
-            <div className="ac-desc">Mis puntos y stats</div>
+            <div className="ac-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 20V10M12 20V4M6 20v-6"/>
+                <circle cx="6" cy="11" r="1.5" fill="#C8A84B"/>
+                <circle cx="12" cy="1.5" r="1.5" fill="#C8A84B"/>
+                <circle cx="18" cy="7" r="1.5" fill="#C8A84B"/>
+              </svg>
+            </div>
+            <div className="ac-label">Mis Resultados</div>
+            <div className="ac-desc">Ve tus puntos acumulados, aciertos y comparación por partido</div>
           </div>
+
+          {/* Ranking */}
           <div className="action-card" onClick={()=>setView('ranking')}>
-            <div className="ac-icon">🏅</div>
-            <div className="ac-label">Ranking</div>
-            <div className="ac-desc">Tabla de posiciones</div>
+            <div className="ac-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 21h8M12 21V9"/>
+                <path d="M12 9a5 5 0 0 0 5-5H7a5 5 0 0 0 5 5z"/>
+                <path d="M5 6H3l1 3"/>
+                <path d="M19 6h2l-1 3"/>
+              </svg>
+            </div>
+            <div className="ac-label">Ranking General</div>
+            <div className="ac-desc">Tabla de posiciones en tiempo real de todos los participantes</div>
           </div>
+
+          {/* Especiales */}
           <div className="action-card" onClick={()=>setView('special')}>
-            <div className="ac-icon">🌟</div>
+            <div className="ac-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+              </svg>
+            </div>
             <div className="ac-label">Predicciones Especiales</div>
-            <div className="ac-desc">Campeón · Premios individuales</div>
+            <div className="ac-desc">Pronostica el campeón, Balón de Oro, Bota de Oro y el equipo sorpresa</div>
           </div>
-          <div className="action-card action-card-dark" onClick={()=>setView('bracket')} style={{gridColumn:'span 2',background:'linear-gradient(135deg,#1a1a2a,#0f1923)',border:'1.5px solid var(--gold)'}}>
-            <div className="ac-icon">🏆</div>
-            <div className="ac-label ac-label-w">Mi Pronóstico General</div>
-            <div className="ac-desc ac-desc-w">Define el camino al título · 100 pts si aciertas · Comparte tu pronóstico general</div>
+
+          {/* Bracket — full width */}
+          <div className="action-card action-card-dark" onClick={()=>setView('bracket')}
+            style={{gridColumn:'span 2',background:'linear-gradient(135deg,#1A1814,#2a2218)',border:'1.5px solid var(--gold)'}}>
+            <div className="ac-icon" style={{background:'rgba(200,168,75,.18)',borderColor:'rgba(200,168,75,.4)'}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
+                <path d="M20 9h-2a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
+                <path d="M12 21h-2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2z"/>
+                <path d="M6 9v3h6v3M18 9v3h-6"/>
+              </svg>
+            </div>
+            <div className="ac-label ac-label-w" style={{fontSize:'15px'}}>Mi Pronóstico General del Torneo</div>
+            <div className="ac-desc ac-desc-w">Define quién llega a cada ronda y quién es el campeón. ¡Hasta 100 pts extra si aciertas el camino completo!</div>
+            <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+              <div className="ac-badge" style={{background:'rgba(200,168,75,.2)',borderColor:'rgba(200,168,75,.4)',color:'var(--gold)'}}>+100 pts camino completo</div>
+              <div className="ac-badge" style={{background:'rgba(200,168,75,.2)',borderColor:'rgba(200,168,75,.4)',color:'var(--gold)'}}>📲 Compartible</div>
+            </div>
           </div>
 
         </div>

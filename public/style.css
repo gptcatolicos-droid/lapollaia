@@ -179,15 +179,22 @@ a{color:var(--gold);text-decoration:none;}
 .stat-n{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:var(--ink);line-height:1;}
 .stat-n-gold{color:var(--gold);}
 .stat-l{font-size:9px;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
-.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;}
-.action-card{background:var(--cream);border:1px solid var(--border);border-radius:var(--r);padding:1rem;cursor:pointer;transition:all .15s;}
-.action-card:hover{border-color:var(--border2);transform:translateY(-1px);}
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;}
+.action-card{background:var(--cream);border:1.5px solid var(--border);border-radius:16px;padding:1.25rem 1rem;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:flex-start;gap:.3rem;position:relative;overflow:hidden;}
+.action-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(200,168,75,.06),transparent);opacity:0;transition:opacity .2s;}
+.action-card:hover{border-color:rgba(200,168,75,.5);transform:translateY(-3px);box-shadow:0 8px 24px rgba(26,24,20,.1);}
+.action-card:hover::after{opacity:1;}
+.action-card:active{transform:translateY(-1px);}
 .action-card-dark{background:var(--ink);border-color:var(--ink);}
-.ac-icon{font-size:1.4rem;margin-bottom:.4rem;}
-.ac-label{font-size:13px;font-weight:700;color:var(--ink);}
+.action-card-dark:hover{border-color:var(--gold);box-shadow:0 8px 24px rgba(26,24,20,.25);}
+.ac-icon{width:44px;height:44px;border-radius:12px;background:rgba(200,168,75,.1);border:1px solid rgba(200,168,75,.2);display:flex;align-items:center;justify-content:center;margin-bottom:.5rem;flex-shrink:0;}
+.ac-icon svg{width:22px;height:22px;}
+.action-card-dark .ac-icon{background:rgba(200,168,75,.15);border-color:rgba(200,168,75,.3);}
+.ac-label{font-size:14px;font-weight:700;color:var(--ink);line-height:1.2;}
 .ac-label-w{color:var(--cream);}
-.ac-desc{font-size:10px;color:var(--ink3);margin-top:2px;}
-.ac-desc-w{color:rgba(247,244,238,.5);}
+.ac-desc{font-size:11px;color:var(--ink3);margin-top:3px;line-height:1.4;}
+.ac-desc-w{color:rgba(247,244,238,.55);}
+.ac-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(200,168,75,.12);border:1px solid rgba(200,168,75,.25);border-radius:20px;padding:2px 8px;font-size:9px;font-weight:700;color:var(--gold);margin-top:4px;text-transform:uppercase;letter-spacing:.4px;}
 
 /* ── PELÉ CHAT ─────────────────────── */
 .chat-topbar{background:var(--cream);border-bottom:1px solid var(--border);
@@ -428,10 +435,11 @@ a{color:var(--gold);text-decoration:none;}
   .dash-stats{grid-template-columns:repeat(3,1fr);gap:.4rem;}
   .stat-card{padding:.6rem .4rem;}
   .stat-n{font-size:1.5rem;}
-  .action-card{padding:.75rem .6rem;}
-  .ac-icon{font-size:1.2rem;margin-bottom:.2rem;}
-  .ac-label{font-size:11px;}
-  .ac-desc{font-size:9px;}
+  .action-card{padding:1rem .85rem;border-radius:14px;}
+  .ac-icon{width:38px;height:38px;border-radius:10px;}
+  .ac-icon svg{width:19px;height:19px;}
+  .ac-label{font-size:12px;}
+  .ac-desc{font-size:10px;}
 
   /* Score inputs */
   .inp-score{width:44px;height:44px;font-size:1.25rem;}
