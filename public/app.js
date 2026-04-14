@@ -1646,11 +1646,7 @@ function ChatPage(){
                   <div style={{marginTop:'10px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
                     <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,autofillStep*(100/7))}%`,transition:'width 1.2s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
                   </div>
-                  <style>{`
-                    @keyframes pele-scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
-                    @keyframes pele-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,201,14,.3)}50%{box-shadow:0 0 0 6px rgba(246,201,14,.0)}}
-                    @keyframes pele-blink{0%,100%{opacity:1}50%{opacity:.2}}
-                  `}</style>
+
                 </div>
               ):(
                 <div style={{display:'grid',gridTemplateColumns:'1fr',gap:'8px'}}>
@@ -2417,7 +2413,7 @@ function BracketPage(){
                   <div style={{marginTop:'8px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
                     <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,genStep*(100/6))}%`,transition:'width 1.6s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
                   </div>
-                  <style>{`@keyframes pele-scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}@keyframes pele-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,201,14,.3)}50%{box-shadow:0 0 0 5px rgba(246,201,14,.0)}}@keyframes pele-blink{0%,100%{opacity:1}50%{opacity:.2}}`}</style>
+
                 </div>
               </div>
             )}
@@ -3858,18 +3854,9 @@ function AppRoot(){
   const ctx={view,setView,user,setUser,avatars,setAvatars,activeAvatar,setActiveAvatar,
     matches,setMatches,settings,setSettings,logout,tournament,setTournament}
 
-  // Animated chat bounce keyframes
-  const bounceStyle=`.bounce-dot{width:6px;height:6px;border-radius:50%;background:var(--ink3);}
-@keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
-@keyframes spin{to{transform:rotate(360deg)}}`
 
   return(
     <AppCtx.Provider value={ctx}>
-      <style>{bounceStyle+`
-        [class*="bounce"]{animation:bounce .9s infinite;}
-        .bounce-1{animation-delay:.15s!important;}
-        .bounce-2{animation-delay:.3s!important;}
-      `}</style>
 
       {view==='landing'&&<LandingPage/>}
 

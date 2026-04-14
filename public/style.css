@@ -479,3 +479,14 @@ a{color:var(--gold);text-decoration:none;}
   .adm-nav-label{display:none;}
   .adm-nav-btn{padding:8px;min-width:36px;justify-content:center;}
 }
+
+/* Pelé IA animation keyframes */
+@keyframes pele-scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+@keyframes pele-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,201,14,.3)}50%{box-shadow:0 0 0 6px rgba(246,201,14,0)}}
+@keyframes pele-blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* Bounce animation */
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+[class*="bounce"]{animation:bounce .9s infinite}
+.bounce-1{animation-delay:.15s!important}
+.bounce-2{animation-delay:.3s!important}
