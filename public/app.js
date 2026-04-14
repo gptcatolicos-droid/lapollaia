@@ -977,6 +977,7 @@ function DashboardPage(){
 
       </div>
     </div>
+  </div>
   )
 }
 
