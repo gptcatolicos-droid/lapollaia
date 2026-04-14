@@ -1230,7 +1230,7 @@ function ChatPage(){
         // Has some predictions but no group in progress — pick next
         addPeleMsgs([
           `¡Hola de nuevo, ${nombre}! 👋 Soy **Pelé IA** 🏆`,
-          `Llevas **${donePreds}** pronósticos ingresados. ${nextPending?`¿Seguimos con el Grupo ${nextPending}?`:'¿Cuál grupo quieres hacer ahora?'} 🎯`
+          ('Llevas **'+donePreds+'** pronósticos ingresados. '+(nextPending?('¿Seguimos con el Grupo '+nextPending+'?'):'¿Cuál grupo quieres hacer ahora?')+' 🎯')
         ], 'group_select')
         addMsg('pele','__GROUP_SELECT__','group_select')
       } else {
@@ -1711,7 +1711,7 @@ function ChatPage(){
                         <span style={{fontSize:'1.3rem'}}>🤖</span>
                         <div>
                           <div style={{fontWeight:700,color:'var(--gold)',fontSize:'12px'}}>
-                            {`Pellé IA llena ${pendingGroupCount>0?`los ${pendingGroupCount} grupos pendientes`:availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', ')} — automático`}
+                            {'Pelé IA llena '+(pendingGroupCount>0?('los '+pendingGroupCount+' grupos pendientes'):availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', '))+' — automático'}
                           </div>
                           <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)',marginTop:'1px'}}>Analiza y completa todos los pronósticos disponibles. Puedes editar después.</div>
                         </div>
@@ -1832,7 +1832,7 @@ function ChatPage(){
                         <span style={{fontSize:'1.3rem'}}>🤖</span>
                         <div>
                           <div style={{fontWeight:700,color:'var(--gold)',fontSize:'12px'}}>
-                            {`Pelé IA llena ${remaining.length>0?`los ${remaining.length} grupos restantes`:availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', ')} — automático`}
+                            {'Pelé IA llena '+(remaining.length>0?('los '+remaining.length+' grupos restantes'):availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', '))+' — automático'}
                           </div>
                           <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)',marginTop:'1px'}}>Analiza y completa todos. Puedes editar después.</div>
                         </div>
@@ -2690,7 +2690,7 @@ function BoardPage(){
                     {pred&&(
                       <div className="match-pred">
                         <span style={{color:'var(--ink3)'}}>Pronóstico: {pred.score_home}–{pred.score_away}</span>
-                        {hasResult&&<span className={`pts-badge ${pts>=PHASE_PTS[ph]?.exact?'pts-exact':pts>0?'pts-win':'pts-miss'}`}>{pts>0?`+${pts}pts`:'Sin pts'}</span>}
+                        {hasResult&&<span className={('pts-badge '+(pts>=PHASE_PTS[ph]?.exact?'pts-exact':pts>0?'pts-win':'pts-miss'))}>{pts>0?`+${pts}pts`:'Sin pts'}</span>}
                         <span className={`chip ${locked?'chip-r':'chip-g'}`} style={{fontSize:'8px'}}>{locked?'🔒 Bloqueado':'✏️ Editable'}</span>
                       </div>
                     )}
