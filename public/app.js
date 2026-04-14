@@ -865,110 +865,111 @@ function DashboardPage(){
 
         <div className="action-grid">
 
-          {/* Pronósticos */}
-          <div className="action-card action-card-dark" onClick={()=>setView('chat')}>
-            <div className="ac-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 8v4l3 3"/>
-                <path d="M3.05 12a9 9 0 0 0 9 9 9 9 0 0 0 0-18"/>
-                <circle cx="12" cy="12" r="2" fill="#C8A84B"/>
+          {/* Pronósticos — Verde vibrante */}
+          <div className="action-card" onClick={()=>setView('chat')}
+            style={{background:'linear-gradient(135deg,#0f4c2a,#16a34a)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(22,163,74,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" strokeWidth="1.5"/>
+                <polygon points="10,8 16,12 10,16" fill="#fff" stroke="none"/>
               </svg>
             </div>
-            <div className="ac-label ac-label-w">Mis Pronósticos</div>
-            <div className="ac-desc ac-desc-w">Ingresa tus marcadores partido a partido con ayuda de Pelé IA</div>
-            <div className="ac-badge">⚽ Pelé IA incluido</div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Mis Pronósticos</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Ingresa tus marcadores con Pelé IA partido a partido</div>
+            <div style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(255,255,255,.2)',borderRadius:20,padding:'3px 10px',fontSize:9,fontWeight:700,color:'#fff',marginTop:6,textTransform:'uppercase',letterSpacing:'.5px'}}>⚽ Pelé IA incluido</div>
           </div>
 
-          {/* Tablero */}
-          <div className="action-card" onClick={()=>setView('board')}>
-            <div className="ac-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <path d="M14 17.5h7M17.5 14v7"/>
+          {/* Tablero — Azul */}
+          <div className="action-card" onClick={()=>setView('board')}
+            style={{background:'linear-gradient(135deg,#1e3a5f,#2563eb)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(37,99,235,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/>
+                <rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>
               </svg>
             </div>
-            <div className="ac-label">Tablero de Partidos</div>
-            <div className="ac-desc">Revisa y edita tus marcadores en todos los grupos y fases</div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Tablero de Partidos</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Revisa y edita tus marcadores en todos los grupos y fases</div>
           </div>
 
-          {/* Resultados */}
-          <div className="action-card" onClick={()=>setView('results')}>
-            <div className="ac-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {/* Resultados — Naranja */}
+          <div className="action-card" onClick={()=>setView('results')}
+            style={{background:'linear-gradient(135deg,#7c2d12,#ea580c)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(234,88,12,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 20V10M12 20V4M6 20v-6"/>
-                <circle cx="6" cy="11" r="1.5" fill="#C8A84B"/>
-                <circle cx="12" cy="1.5" r="1.5" fill="#C8A84B"/>
-                <circle cx="18" cy="7" r="1.5" fill="#C8A84B"/>
+                <circle cx="6" cy="11" r="2" fill="#fff"/><circle cx="12" cy="1.5" r="2" fill="#fff"/><circle cx="18" cy="7" r="2" fill="#fff"/>
               </svg>
             </div>
-            <div className="ac-label">Mis Resultados</div>
-            <div className="ac-desc">Ve tus puntos acumulados, aciertos y comparación por partido</div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Mis Resultados</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Puntos acumulados, aciertos y estadísticas por partido</div>
           </div>
 
-          {/* Ranking */}
-          <div className="action-card" onClick={()=>setView('ranking')}>
-            <div className="ac-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {/* Ranking — Fucsia/Rosa */}
+          <div className="action-card" onClick={()=>setView('ranking')}
+            style={{background:'linear-gradient(135deg,#701a75,#c026d3)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(192,38,211,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M8 21h8M12 21V9"/>
                 <path d="M12 9a5 5 0 0 0 5-5H7a5 5 0 0 0 5 5z"/>
-                <path d="M5 6H3l1 3"/>
-                <path d="M19 6h2l-1 3"/>
+                <path d="M5 6H3l1 3M19 6h2l-1 3"/>
               </svg>
             </div>
-            <div className="ac-label">Ranking General</div>
-            <div className="ac-desc">Tabla de posiciones en tiempo real de todos los participantes</div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Ranking General</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Tabla de posiciones en tiempo real de todos los jugadores</div>
           </div>
 
-          {/* Especiales */}
-          <div className="action-card" onClick={()=>setView('special')}>
-            <div className="ac-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+          {/* Especiales — Amarillo dorado */}
+          <div className="action-card" onClick={()=>setView('special')}
+            style={{background:'linear-gradient(135deg,#713f12,#ca8a04)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(202,138,4,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff" stroke="none">
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
               </svg>
             </div>
-            <div className="ac-label">Predicciones Especiales</div>
-            <div className="ac-desc">Pronostica el campeón, Balón de Oro, Bota de Oro y el equipo sorpresa</div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Predicciones Especiales</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Pronostica el campeón, Balón de Oro, Bota de Oro y sorpresa</div>
           </div>
 
-          {/* Bracket — full width */}
-          <div className="action-card action-card-dark" onClick={()=>setView('bracket')}
-            style={{gridColumn:'span 2',background:'linear-gradient(135deg,#1A1814,#2a2218)',border:'1.5px solid var(--gold)'}}>
-            <div className="ac-icon" style={{background:'rgba(200,168,75,.18)',borderColor:'rgba(200,168,75,.4)'}}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
-                <path d="M20 9h-2a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
-                <path d="M12 21h-2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2z"/>
-                <path d="M6 9v3h6v3M18 9v3h-6"/>
-              </svg>
+          {/* Bracket — Full width oscuro premium */}
+          <div className="action-card" onClick={()=>setView('bracket')}
+            style={{gridColumn:'span 2',background:'linear-gradient(135deg,#1A1814,#2d2416)',border:'2px solid var(--gold)',borderRadius:'18px',boxShadow:'0 8px 28px rgba(200,168,75,.2)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:14}}>
+              <div style={{width:56,height:56,borderRadius:14,background:'rgba(200,168,75,.15)',border:'1.5px solid rgba(200,168,75,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
+                  <path d="M20 9h-2a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
+                  <path d="M12 21h-2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2z"/>
+                  <path d="M6 9v3h6v3M18 9v3h-6"/>
+                </svg>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:16,fontWeight:800,color:'var(--gold)',lineHeight:1.2}}>Mi Pronóstico General del Torneo</div>
+                <div style={{fontSize:11,color:'rgba(247,244,238,.55)',marginTop:4,lineHeight:1.5}}>Define quién llega a cada ronda y quién es el campeón. ¡Hasta 100 pts extra si aciertas el camino completo!</div>
+                <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+                  <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(200,168,75,.2)',border:'1px solid rgba(200,168,75,.4)',borderRadius:20,padding:'2px 10px',fontSize:9,fontWeight:700,color:'var(--gold)',textTransform:'uppercase',letterSpacing:'.4px'}}>+100 pts camino completo</span>
+                  <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(200,168,75,.2)',border:'1px solid rgba(200,168,75,.4)',borderRadius:20,padding:'2px 10px',fontSize:9,fontWeight:700,color:'var(--gold)',textTransform:'uppercase',letterSpacing:'.4px'}}>📲 Compartible</span>
+                </div>
+              </div>
             </div>
-            <div className="ac-label ac-label-w" style={{fontSize:'15px'}}>Mi Pronóstico General del Torneo</div>
-            <div className="ac-desc ac-desc-w">Define quién llega a cada ronda y quién es el campeón. ¡Hasta 100 pts extra si aciertas el camino completo!</div>
-            <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
-              <div className="ac-badge" style={{background:'rgba(200,168,75,.2)',borderColor:'rgba(200,168,75,.4)',color:'var(--gold)'}}>+100 pts camino completo</div>
-              <div className="ac-badge" style={{background:'rgba(200,168,75,.2)',borderColor:'rgba(200,168,75,.4)',color:'var(--gold)'}}>📲 Compartible</div>
-            </div>
-          </div>
-
         </div>
 
         {/* Registration bonus + Trivia cards */}
         <TriviaSection/>
 
-        {/* Pelé IA free chat CTA */}}
-        <div style={{marginTop:'1.25rem',background:'linear-gradient(135deg,#1a1a2a,#0f1923)',
-          border:'1.5px solid var(--gold)',borderRadius:'var(--r-lg)',padding:'1rem 1.25rem',
-          display:'flex',alignItems:'center',gap:'1rem',cursor:'pointer'}}
+        {/* Pelé IA free chat CTA */}
+        <div style={{marginTop:'1.25rem',background:'linear-gradient(135deg,#1A1814,#2d2416)',
+          border:'2px solid rgba(200,168,75,.4)',borderRadius:'18px',padding:'1rem 1.25rem',
+          display:'flex',alignItems:'center',gap:'1rem',cursor:'pointer',
+          boxShadow:'0 6px 20px rgba(26,24,20,.15)',transition:'all .2s'}}
           onClick={()=>setView('pele_chat')}>
           <img src="/pele.jpg" alt="Pelé IA"
             style={{width:52,height:52,borderRadius:'50%',objectFit:'cover',objectPosition:'top',
-              border:'2px solid var(--gold)',flexShrink:0}}/>
+              border:'2px solid var(--gold)',flexShrink:0,boxShadow:'0 0 14px rgba(200,168,75,.4)'}}/>
           <div style={{flex:1}}>
-            <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',letterSpacing:1}}>Hablar con Pelé IA</div>
-            <div style={{fontSize:'11px',color:'rgba(255,255,255,.55)',lineHeight:1.4}}>
-              Pregúntale cualquier cosa sobre fútbol — estadísticas, historial, jugadores, tácticas…
+            <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',letterSpacing:1}}>Chat libre con Pelé IA</div>
+            <div style={{fontSize:'11px',color:'rgba(247,244,238,.55)',lineHeight:1.5,marginTop:2}}>
+              Pregúntale cualquier cosa de fútbol — estadísticas, historial, jugadores, tácticas…
             </div>
           </div>
           <div style={{fontSize:'1.5rem'}}>💬</div>
@@ -2317,22 +2318,22 @@ function BracketPage(){
             {locked?(hasBeenEdited?'✏️ Editado · +10 pts':'🔒 Confirmado · +100 pts'):'Confirma para optar por +100 pts'}
           </div>
         </div>
-        <div style={{display:'flex',gap:'5px',flexWrap:'wrap',alignItems:'center',flexShrink:0}}>
+        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center',flexShrink:0}}>
           {/* Ver tab */}
           <button onClick={()=>setTab('view')}
-            style={{padding:'5px 10px',fontWeight:700,fontSize:'11px',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',borderRadius:'6px',transition:'all .2s',
+            style={{padding:'7px 14px',fontWeight:700,fontSize:'12px',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',borderRadius:'8px',transition:'all .2s',
               background:tab==='view'?'var(--gold)':'rgba(255,255,255,.06)',
               color:tab==='view'?'#0d1117':'rgba(255,255,255,.7)'}}>
-            🏆 Ver
+            🏆 Ver bracket
           </button>
-          {/* Big green Pelé IA button */}
+          {/* BIG Pelé IA generate button */}
           <button onClick={()=>setTab('setup')}
-            style={{padding:'5px 10px',fontWeight:700,fontSize:'11px',border:'none',cursor:'pointer',
-              borderRadius:'8px',display:'flex',alignItems:'center',gap:'5px',transition:'all .2s',
+            style={{padding:'9px 18px',fontWeight:800,fontSize:'13px',border:'none',cursor:'pointer',
+              borderRadius:'10px',display:'flex',alignItems:'center',gap:'8px',transition:'all .2s',
               background:tab==='setup'?'#15803d':'#16a34a',
-              color:'#fff',boxShadow:'0 0 12px rgba(22,163,74,.35)'}}>
-            <img src='/pele.jpg' style={{width:'18px',height:'18px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1.5px solid rgba(255,255,255,.4)'}}/>
-            <span style={{whiteSpace:'nowrap'}}>Pelé IA</span>
+              color:'#fff',boxShadow:'0 4px 16px rgba(22,163,74,.4)',letterSpacing:'.2px'}}>
+            <img src='/pele.jpg' style={{width:'24px',height:'24px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'2px solid rgba(255,255,255,.5)'}}/>
+            <span style={{whiteSpace:'nowrap'}}>Generar Pronóstico con Pelé IA</span>
           </button>
           <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 8px',fontSize:'11px',cursor:'pointer'}} onClick={exportPNG}>📸</button>
           {!locked?(
@@ -2365,8 +2366,9 @@ function BracketPage(){
                   </select>
                   <p style={{fontSize:'11px',color:'rgba(255,255,255,.25)',marginTop:'5px'}}>Solo se aceptan los 9 equipos con posibilidades reales según la IA</p>
                 </div>
-                <button style={{width:'100%',background:champion?'var(--gold)':'rgba(255,255,255,.1)',color:champion?'#0d1117':'rgba(255,255,255,.3)',border:'none',borderRadius:'8px',padding:'.8rem',fontSize:'14px',fontWeight:700,cursor:champion?'pointer':'not-allowed',transition:'all .2s'}} onClick={generateWithAI} disabled={!champion}>
-                  <img src='/pele.jpg' style={{width:'20px',height:'20px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',marginRight:'6px'}}/> Generar con Pelé IA
+                <button style={{width:'100%',background:champion?'#16a34a':'rgba(255,255,255,.1)',color:champion?'#fff':'rgba(255,255,255,.3)',border:'none',borderRadius:'12px',padding:'1rem',fontSize:'15px',fontWeight:800,cursor:champion?'pointer':'not-allowed',transition:'all .2s',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',boxShadow:champion?'0 4px 20px rgba(22,163,74,.4)':'none'}} onClick={generateWithAI} disabled={!champion}>
+                  <img src='/pele.jpg' style={{width:'28px',height:'28px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'2px solid rgba(255,255,255,.5)'}}/>
+                  <span>Generar Pronóstico con Pelé IA ✨</span>
                 </button>
               </>
             ):(

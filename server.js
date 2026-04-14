@@ -1363,9 +1363,23 @@ app.post('/api/bracket/public-suggest', async(req,res)=>{
       messages:[{role:'user',content:`Bracket completo. Campeón: ${champion}. Exactamente 16 en round32, 8 en round16, 4 en quarters, 2 en semis. Solo JSON.`}]
     })
     let text=msg.content[0].text.trim()
-    const m=text.match(/\{[\s\S]*\}/);if(m)text=m[0]
+    // Robust JSON extraction: strip markdown, find outermost {...}
     text=text.replace(/```json|```/g,'').trim()
-    const bracket=JSON.parse(text)
+    const m=text.match(/\{[\s\S]*\}/)
+    if(!m) throw new Error('No JSON found in response')
+    // Try progressive truncation if parse fails due to trailing content
+    let bracket
+    let jsonStr=m[0]
+    try{ bracket=JSON.parse(jsonStr) }catch(e1){
+      // Find last valid closing brace
+      let depth=0,lastValid=-1
+      for(let i=0;i<jsonStr.length;i++){
+        if(jsonStr[i]==='{')depth++
+        else if(jsonStr[i]==='}'){depth--;if(depth===0){lastValid=i;break}}
+      }
+      if(lastValid>0) bracket=JSON.parse(jsonStr.slice(0,lastValid+1))
+      else throw e1
+    }
     const emptyM=i=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})
     const pad=(arr,len)=>{if(!Array.isArray(arr))arr=[];while(arr.length<len)arr.push(emptyM(arr.length));return arr.slice(0,len)}
     bracket.round32=pad(bracket.round32,16);bracket.round16=pad(bracket.round16,8)

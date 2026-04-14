@@ -38,8 +38,8 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
 .champ-select{width:100%;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;padding:.75rem 1rem;color:#fff;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;transition:border-color .2s;margin-bottom:1rem;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23F6C90E' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
 .champ-select:focus{border-color:rgba(246,201,14,.5)}
 .champ-select option{background:#1a1f2e;color:#fff}
-.gen-btn{width:100%;background:var(--gold);color:var(--ink);border:none;border-radius:12px;padding:.9rem;font-size:15px;font-weight:800;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 24px rgba(246,201,14,.3);font-family:'DM Sans',sans-serif}
-.gen-btn:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(246,201,14,.45)}
+.gen-btn{width:100%;background:#16a34a;color:#fff;border:none;border-radius:12px;padding:1rem;font-size:15px;font-weight:800;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 24px rgba(22,163,74,.4);font-family:'DM Sans',sans-serif}
+.gen-btn:hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(22,163,74,.55)}
 .err{background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);border-radius:8px;padding:.65rem 1rem;font-size:12px;color:#fca5a5;margin-top:.5rem}
 
 /* WOW ANIM */
@@ -144,7 +144,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
       </select>
       <button class="gen-btn" onclick="generate()">
         <img src="/pele.jpg" style="width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:top" alt=""/>
-        Generar mi Bracket con Pelé IA ✨
+        Generar Pronóstico con Pelé IA ✨
       </button>
       <div class="err" id="errMsg" style="display:none"></div>
     </div>
