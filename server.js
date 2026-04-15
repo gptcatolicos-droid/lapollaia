@@ -318,6 +318,7 @@ async function initDb() {
 
       -- Courtesy tournaments (created by superadmin, no payment required)
       ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS is_courtesy BOOLEAN DEFAULT FALSE;
+      ALTER TABLE trivia_questions ALTER COLUMN tournament_id DROP NOT NULL;
     `)
 
     const {rows:[{count}]} = await c.query('SELECT COUNT(*) FROM matches')
@@ -1727,12 +1728,15 @@ app.post('/api/admin/trivia/generate', auth, async(req,res)=>{
 // Get trivia for user (unanswered, active questions for their avatar)
 app.get('/api/trivia/:avatarId', auth, async(req,res)=>{
   try{
+    // Includes global questions (tournament_id IS NULL) + tournament-specific
     const {rows}=await pool.query(`
-      SELECT tq.id,tq.question,tq.options,tq.difficulty,tq.points
+      SELECT tq.id,tq.question,tq.options,tq.difficulty,tq.points,
+        CASE WHEN tq.tournament_id IS NULL THEN TRUE ELSE FALSE END as is_global
       FROM trivia_questions tq
-      WHERE tq.tournament_id=$1 AND tq.is_active=TRUE
+      WHERE (tq.tournament_id=$1 OR tq.tournament_id IS NULL)
+        AND tq.is_active=TRUE
         AND tq.id NOT IN (SELECT trivia_id FROM trivia_answers WHERE avatar_id=$2)
-      ORDER BY tq.created_at DESC`,
+      ORDER BY tq.tournament_id IS NULL DESC, tq.created_at DESC`,
       [req.user.tournamentId,req.params.avatarId])
     res.json(rows)
   }catch(e){res.status(500).json({error:e.message})}
@@ -1901,6 +1905,106 @@ app.get('/superadmin/courtesy', superAdmin, async(req,res)=>{
 })
 
 
+
+// ─── SUPERADMIN: RESULTADOS OFICIALES ─────────────────────────────────────────
+
+// GET all matches with their current result
+app.get('/superadmin/matches', superAdmin, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT m.id,m.match_num,m.phase,m.team1,m.team2,m.match_date,m.venue,m.group_name,m.label,
+        mr.score_home as res_home,mr.score_away as res_away,
+        mr.had_penalties,mr.penalty_winner,mr.entered_at
+      FROM matches m LEFT JOIN match_results mr ON mr.match_id=m.id
+      ORDER BY m.match_num ASC`)
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// POST official result → propagate to ALL active tournaments automatically
+app.post('/superadmin/results', superAdmin, async(req,res)=>{
+  const {matchId,home,away,hadPenalties,penaltyWinner,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
+  if(!matchId||home==null||away==null) return res.status(400).json({error:'Faltan matchId, home y away'})
+  try{
+    await pool.query(`
+      INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player,entered_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+      ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,yellow_cards=$6,red_cards=$7,penalties_count=$8,goals_first_half=$9,goals_second_half=$10,mvp_player=$11,entered_at=NOW()`,
+      [+matchId,+home,+away,!!hadPenalties,penaltyWinner||null,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
+    const result={match_id:+matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:penaltyWinner||null}
+    // Recalculate predictions across ALL tournaments
+    const {rows:preds}=await pool.query(
+      'SELECT p.*,m.phase FROM predictions p JOIN matches m ON m.id=p.match_id WHERE p.match_id=$1',[+matchId])
+    for(const p of preds){
+      const pts=calcPoints(p,result,p.phase)
+      await pool.query('UPDATE predictions SET points_earned=$1 WHERE id=$2',[pts,p.id])
+    }
+    // Recalculate extra_predictions
+    const {rows:extras}=await pool.query('SELECT * FROM extra_predictions WHERE match_id=$1',[+matchId])
+    for(const ep of extras){
+      const pts=calcExtraPoints(ep,result)
+      await pool.query('UPDATE extra_predictions SET points_earned=$1 WHERE id=$2',[pts,ep.id])
+    }
+    res.json({success:true,match_id:+matchId,predictions_updated:preds.length,extras_updated:extras.length})
+  }catch(e){console.error('superadmin/results:',e);res.status(500).json({error:e.message})}
+})
+
+// ─── SUPERADMIN: TRIVIA GLOBAL ──────────────────────────────────────────────
+
+app.get('/superadmin/trivia', superAdmin, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT tq.*,COUNT(ta.id) as answer_count,COUNT(ta.id) FILTER(WHERE ta.is_correct) as correct_count
+      FROM trivia_questions tq LEFT JOIN trivia_answers ta ON ta.trivia_id=tq.id
+      WHERE tq.tournament_id IS NULL GROUP BY tq.id ORDER BY tq.created_at DESC`)
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+app.post('/superadmin/trivia', superAdmin, async(req,res)=>{
+  const {question,options,correct_answer,difficulty}=req.body
+  if(!question||!options||options.length<2||correct_answer==null) return res.status(400).json({error:'Datos incompletos'})
+  const pts={easy:2,medium:3,hard:4}[difficulty]||2
+  try{
+    const id='gtrv-'+crypto.randomBytes(8).toString('hex')
+    const {rows:[q]}=await pool.query(
+      'INSERT INTO trivia_questions(id,tournament_id,question,options,correct_answer,difficulty,points,created_by,is_active) VALUES($1,NULL,$2,$3,$4,$5,$6,$7,TRUE) RETURNING *',
+      [id,question,JSON.stringify(options),+correct_answer,difficulty||'easy',pts,'superadmin'])
+    res.json(q)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+app.delete('/superadmin/trivia/:id', superAdmin, async(req,res)=>{
+  try{
+    await pool.query('DELETE FROM trivia_questions WHERE id=$1 AND tournament_id IS NULL',[req.params.id])
+    res.json({success:true})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+app.put('/superadmin/trivia/:id/toggle', superAdmin, async(req,res)=>{
+  try{
+    const {rows:[q]}=await pool.query('SELECT is_active FROM trivia_questions WHERE id=$1 AND tournament_id IS NULL',[req.params.id])
+    if(!q) return res.status(404).json({error:'No encontrada'})
+    await pool.query('UPDATE trivia_questions SET is_active=$1 WHERE id=$2',[!q.is_active,req.params.id])
+    res.json({is_active:!q.is_active})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+app.post('/superadmin/trivia/generate', superAdmin, async(req,res)=>{
+  const diff=req.body.difficulty||'easy'
+  const topic=req.body.topic||'futbol del Mundial 2026'
+  try{
+    const msg=await anthropic.messages.create({
+      model:'claude-sonnet-4-6',max_tokens:400,
+      system:'Eres Pele IA. Genera una pregunta de trivia de futbol en espanol. Responde SOLO JSON: {"question":"...","options":["A","B","C","D"],"correct_answer":0,"explanation":"..."} correct_answer es indice 0-3. Sin markdown.',
+      messages:[{role:'user',content:'Trivia. Dificultad: '+diff+'. Tema: '+topic+'. SOLO JSON.'}]
+    })
+    let text=msg.content[0].text.trim().replace(/```json|```/g,'').trim()
+    const m=text.match(/\{[\s\S]*\}/);if(m)text=m[0]
+    res.json(JSON.parse(text))
+  }catch(e){res.status(500).json({error:'Error generando: '+e.message})}
+})
+
 // Panel HTML del super admin
 app.get('/superadmin', superAdmin, async(req,res)=>{
   const key=req.query.key||''
@@ -2031,6 +2135,24 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
 .u-sub{font-size:10px;color:var(--ink3);margin-top:1px}
 .empty{text-align:center;padding:2.5rem;color:var(--ink3);font-size:13px}
 .spinner-txt{text-align:center;padding:2rem;color:var(--ink3);font-size:13px}
+.sa-tab{background:var(--cream3);color:var(--ink2);border:1px solid var(--border2);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.sa-tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sa-tab:hover:not(.active){background:var(--cream2)}
+.ph-btn{background:var(--cream2);color:var(--ink3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
+.ph-btn.active{background:var(--gold);color:#fff;border-color:var(--gold)}
+.match-card{background:var(--cream);border:1px solid var(--border);border-radius:var(--r);padding:.65rem 1rem;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s}
+.match-card:hover{border-color:var(--gold-border);background:var(--cream2)}
+.match-card.has-result{border-left:3px solid var(--green)}
+.match-num{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--ink3);min-width:28px}
+.match-teams{flex:1;font-size:12px;font-weight:700;color:var(--ink)}
+.match-result{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--green);min-width:54px;text-align:center}
+.match-result.empty-res{color:var(--ink3);font-size:11px;font-weight:400;font-family:inherit}
+.match-date{font-size:10px;color:var(--ink3)}
+.match-edit{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap}
+.gtv-card{background:var(--cream);border:1px solid var(--border);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:6px}
+.gtv-q{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:.35rem}
+.gtv-meta{font-size:10px;color:var(--ink3)}
+.gtv-actions{display:flex;gap:6px;margin-top:.5rem}
 .list-view{display:block}.list-view.hidden{display:none}
 .detail-view{display:none}.detail-view.on{display:block}
 @media(max-width:800px){
@@ -2054,6 +2176,166 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
 </nav>
 
 <div class="wrap">
+
+<!-- MAIN NAV TABS -->
+<div style="display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap">
+  <button class="sa-tab active" id="tab-pollas" onclick="showSASection('pollas')">&#128202; Pollas</button>
+  <button class="sa-tab" id="tab-results" onclick="showSASection('results')">&#9917; Resultados Oficiales</button>
+  <button class="sa-tab" id="tab-trivia" onclick="showSASection('trivia')">&#129504; Trivia Global</button>
+</div>
+
+<!-- RESULTS SECTION -->
+<div id="sa-results" style="display:none">
+  <div class="sec-label" style="margin-bottom:1rem">&#9917; Resultados Oficiales del Torneo</div>
+  <div style="background:var(--cream);border:1px solid var(--gold-border);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;color:var(--ink3);margin-bottom:1.25rem">
+    &#128161; Ingresa el resultado oficial de cada partido. Los puntos se recalculan automaticamente en <strong>todas las pollas activas</strong>.
+  </div>
+  <!-- Phase filter -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem" id="phase-filter">
+    <button class="ph-btn active" data-ph="group" onclick="filterPhase('group')">Grupos</button>
+    <button class="ph-btn" data-ph="round32" onclick="filterPhase('round32')">R32</button>
+    <button class="ph-btn" data-ph="round16" onclick="filterPhase('round16')">R16</button>
+    <button class="ph-btn" data-ph="quarters" onclick="filterPhase('quarters')">Cuartos</button>
+    <button class="ph-btn" data-ph="semis" onclick="filterPhase('semis')">Semis</button>
+    <button class="ph-btn" data-ph="third" onclick="filterPhase('third')">3er Puesto</button>
+    <button class="ph-btn" data-ph="final" onclick="filterPhase('final')">Final</button>
+  </div>
+  <div id="matches-list" style="display:flex;flex-direction:column;gap:6px">
+    <div style="font-size:12px;color:var(--ink3)">Cargando partidos...</div>
+  </div>
+  <!-- Inline result entry form -->
+  <div id="result-form-box" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:none;align-items:center;justify-content:center">
+    <div style="background:var(--cream);border-radius:var(--r-lg);padding:1.5rem;width:360px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:1px;margin-bottom:1rem;color:var(--ink)" id="rfb-title">Ingresa Resultado</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:1rem">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--ink3);text-align:center;margin-bottom:4px" id="rfb-home-label">Local</div>
+          <input id="rfb-home" type="number" min="0" max="99" placeholder="0"
+            style="width:100%;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:2rem;border:2px solid var(--gold-border);border-radius:8px;padding:.4rem;background:#fff;color:var(--ink);outline:none"/>
+        </div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--ink3)">-</div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--ink3);text-align:center;margin-bottom:4px" id="rfb-away-label">Visita</div>
+          <input id="rfb-away" type="number" min="0" max="99" placeholder="0"
+            style="width:100%;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:2rem;border:2px solid var(--gold-border);border-radius:8px;padding:.4rem;background:#fff;color:var(--ink);outline:none"/>
+        </div>
+      </div>
+      <!-- Penalties (only for knockout) -->
+      <div id="rfb-pen-row" style="display:none;margin-bottom:.75rem">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+          <input type="checkbox" id="rfb-pens"/> Hubo penales
+        </label>
+        <div id="rfb-pen-winner-row" style="display:none;margin-top:.5rem">
+          <div style="font-size:10px;font-weight:700;color:var(--ink3);margin-bottom:4px">Ganador en penales</div>
+          <select id="rfb-pen-winner" style="width:100%;padding:.4rem .6rem;border:1px solid var(--border2);border-radius:6px;font-size:12px;background:#fff">
+            <option value="">Seleccionar</option>
+            <option id="rfb-pen-opt1" value="">---</option>
+            <option id="rfb-pen-opt2" value="">---</option>
+          </select>
+        </div>
+      </div>
+      <!-- Extras (optional) -->
+      <details style="margin-bottom:1rem">
+        <summary style="font-size:11px;color:var(--ink3);cursor:pointer;font-weight:700">+ Extras (amarillas, rojas, MVP...)</summary>
+        <div style="margin-top:.5rem;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Amarillas</div><input id="rfb-yc" type="number" min="0" placeholder="—" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:12px"/></div>
+          <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Rojas</div><input id="rfb-rc" type="number" min="0" placeholder="—" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:12px"/></div>
+          <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Penales totales</div><input id="rfb-pc" type="number" min="0" placeholder="—" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:12px"/></div>
+          <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Goles 1T</div><input id="rfb-g1" type="number" min="0" placeholder="—" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:12px"/></div>
+          <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Goles 2T</div><input id="rfb-g2" type="number" min="0" placeholder="—" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:12px"/></div>
+          <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">MVP</div><input id="rfb-mvp" type="text" placeholder="Nombre jugador" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:12px"/></div>
+        </div>
+      </details>
+      <div id="rfb-err" style="display:none;color:var(--red);font-size:11px;margin-bottom:.5rem"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="submitResult()" style="flex:1;background:var(--green);color:#fff;border:none;border-radius:8px;padding:.65rem;font-size:13px;font-weight:700;cursor:pointer" id="rfb-save-btn">
+          &#9989; Guardar Resultado
+        </button>
+        <button onclick="closeResultForm()" style="background:var(--cream3);color:var(--ink3);border:1px solid var(--border2);border-radius:8px;padding:.65rem .9rem;font-size:13px;cursor:pointer">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TRIVIA GLOBAL SECTION -->
+<div id="sa-trivia" style="display:none">
+  <div class="sec-label" style="margin-bottom:1rem">&#129504; Trivia Global — Aparece en TODAS las pollas</div>
+  <div style="background:var(--cream);border:1px solid var(--gold-border);border-radius:var(--r);padding:.75rem 1rem;font-size:12px;color:var(--ink3);margin-bottom:1.25rem">
+    &#128161; Las preguntas que crees aqui aparecen automaticamente en <strong>todas las pollas activas</strong>, sin necesitar permiso del admin.
+  </div>
+
+  <!-- AI Generate form -->
+  <div style="background:var(--cream);border:1.5px solid var(--gold-border);border-radius:var(--r-lg);padding:1.25rem;margin-bottom:1rem">
+    <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.75rem">Generar con Pele IA</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+      <div>
+        <div style="font-size:10px;color:var(--ink3);margin-bottom:3px">Tema (opcional)</div>
+        <input id="gtv-topic" placeholder="ej: Copa del Mundo 2026, Messi..." style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit"/>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--ink3);margin-bottom:3px">Dificultad</div>
+        <select id="gtv-diff" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="easy">Facil (+2 pts)</option>
+          <option value="medium">Media (+3 pts)</option>
+          <option value="hard">Dificil (+4 pts)</option>
+        </select>
+      </div>
+      <button onclick="generateGlobalTrivia()" id="gtv-gen-btn"
+        style="background:var(--gold);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
+        &#129302; Generar
+      </button>
+    </div>
+    <!-- Preview area -->
+    <div id="gtv-preview" style="display:none;margin-top:1rem;background:#fff;border:1px solid var(--border2);border-radius:8px;padding:1rem">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:.5rem" id="gtv-prev-q"></div>
+      <div id="gtv-prev-opts" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.75rem"></div>
+      <div style="font-size:10px;color:var(--green);margin-bottom:.75rem" id="gtv-prev-explanation"></div>
+      <button onclick="saveGeneratedTrivia()" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:700;cursor:pointer">
+        &#9989; Publicar en todas las pollas
+      </button>
+    </div>
+    <div id="gtv-gen-err" style="display:none;color:var(--red);font-size:11px;margin-top:.5rem"></div>
+  </div>
+
+  <!-- Manual create form -->
+  <div style="background:var(--cream);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.25rem;margin-bottom:1rem">
+    <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.75rem">Crear manualmente</div>
+    <div style="margin-bottom:8px">
+      <div style="font-size:10px;color:var(--ink3);margin-bottom:3px">Pregunta</div>
+      <textarea id="mtv-q" rows="2" placeholder="Escribe la pregunta..." style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:7px;font-size:12px;font-family:inherit;resize:vertical"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+      <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Opcion A</div><input id="mtv-o0" placeholder="Opcion A" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:11px"/></div>
+      <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Opcion B</div><input id="mtv-o1" placeholder="Opcion B" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:11px"/></div>
+      <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Opcion C</div><input id="mtv-o2" placeholder="Opcion C (opcional)" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:11px"/></div>
+      <div><div style="font-size:9px;color:var(--ink3);margin-bottom:2px">Opcion D</div><input id="mtv-o3" placeholder="Opcion D (opcional)" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:11px"/></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+      <div>
+        <div style="font-size:10px;color:var(--ink3);margin-bottom:3px">Respuesta correcta</div>
+        <select id="mtv-correct" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:inherit">
+          <option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--ink3);margin-bottom:3px">Dificultad</div>
+        <select id="mtv-diff" style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:inherit">
+          <option value="easy">Facil (+2)</option><option value="medium">Media (+3)</option><option value="hard">Dificil (+4)</option>
+        </select>
+      </div>
+      <button onclick="saveManualTrivia()" style="background:var(--green);color:#fff;border:none;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">
+        Publicar
+      </button>
+    </div>
+    <div id="mtv-err" style="display:none;color:var(--red);font-size:11px;margin-top:.4rem"></div>
+  </div>
+
+  <!-- Global trivia list -->
+  <div class="sec-label" style="margin-bottom:.75rem">Preguntas globales activas</div>
+  <div id="gtv-list"><div style="font-size:12px;color:var(--ink3)">Cargando...</div></div>
+</div>
 
 <!-- LIST VIEW -->
 <div class="list-view" id="list-view">
@@ -2125,15 +2407,16 @@ async function viewTournament(id,name,slug){
   document.getElementById('list-view').classList.add('hidden')
   const dv=document.getElementById('detail-view')
   dv.classList.add('on')
-  document.getElementById('detail-header').innerHTML=\`
-    <div style="width:44px;height:44px;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🏆</div>
-    <div style="flex:1">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:1px">\${name}</div>
-      <div style="font-size:11px;color:var(--ink3);margin-top:2px">ID: \${id}</div>
-      <div style="font-family:monospace;font-size:11px;background:var(--cream2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--gold);display:inline-block;margin-top:4px">lapollaia.com/t/\${slug}</div>
-    </div>
-    <button class="btn-act btn-del" onclick="delTournament('\${id}','\${name}')">Eliminar polla completa</button>
-  \`
+  var hdr=document.getElementById('detail-header')
+  hdr.innerHTML=
+    '<div style="width:44px;height:44px;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">\u{1F3C6}</div>'+
+    '<div style="flex:1">'+
+      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.25rem;letter-spacing:1px">'+name+'</div>'+
+      '<div style="font-size:11px;color:var(--ink3);margin-top:2px">ID: '+id+'</div>'+
+      '<div style="font-family:monospace;font-size:11px;background:var(--cream2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--gold);display:inline-block;margin-top:4px">lapollaia.com/t/'+slug+'</div>'+
+    '</div>'+
+    '<button class="btn-act btn-del" id="hdr-del-btn">Eliminar polla completa</button>'
+  document.getElementById('hdr-del-btn').addEventListener('click',function(){ delTournament(id,name) })
   const uc=document.getElementById('users-container')
   uc.innerHTML='<div class="spinner-txt">Cargando participantes...</div>'
   try{
@@ -2259,6 +2542,241 @@ function copyCourtesyLink(url){
   }).catch(function(){
     prompt('Copia este link:',url)
   })
+}
+
+// ═══ SECTION NAVIGATION ═══════════════════════════════════════════════════
+function showSASection(name){
+  ['pollas','results','trivia'].forEach(function(s){
+    var el=document.getElementById('sa-'+s)||document.getElementById('list-view')
+    if(s==='pollas'){
+      document.getElementById('list-view').style.display=(name==='pollas'?'':'none')
+      document.getElementById('detail-view').style.display='none'
+    } else {
+      if(el) el.style.display=(name===s?'block':'none')
+    }
+    var tab=document.getElementById('tab-'+s)
+    if(tab) tab.classList.toggle('active',name===s)
+  })
+  if(name==='results') loadMatches()
+  if(name==='trivia') loadGlobalTrivia()
+}
+
+// ═══ RESULTADOS OFICIALES ══════════════════════════════════════════════════
+var _allMatches=[]
+var _currentMatchId=null
+var _currentPhase='group'
+
+async function loadMatches(){
+  try{
+    var r=await fetch('/superadmin/matches',{headers:{'x-super-key':KEY}})
+    _allMatches=await r.json()
+    renderMatches('group')
+  }catch(e){document.getElementById('matches-list').innerHTML='<div style="color:var(--red);font-size:12px">Error: '+e.message+'</div>'}
+}
+
+function filterPhase(ph){
+  _currentPhase=ph
+  document.querySelectorAll('.ph-btn').forEach(function(b){ b.classList.toggle('active',b.dataset.ph===ph) })
+  renderMatches(ph)
+}
+
+function renderMatches(ph){
+  var matches=_allMatches.filter(function(m){ return m.phase===ph })
+  var container=document.getElementById('matches-list')
+  if(!matches.length){ container.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay partidos en esta fase aun.</div>'; return }
+  container.innerHTML=matches.map(function(m){
+    var teams=m.team1&&m.team2 ? m.team1+' vs '+m.team2 : (m.label||'Partido '+m.match_num)
+    var hasResult=m.res_home!=null
+    var resultTxt=hasResult ? m.res_home+' - '+m.res_away+(m.had_penalties?' (pen)':'') : 'Sin resultado'
+    var dateStr=m.match_date ? new Date(m.match_date).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''
+    return '<div class="match-card'+(hasResult?' has-result':'')+'" data-mid="'+m.id+'" onclick="openResultForm('+JSON.stringify(m)+')">'+
+      '<div class="match-num">#'+m.match_num+'</div>'+
+      '<div style="flex:1">'+
+        '<div class="match-teams">'+teams+'</div>'+
+        '<div class="match-date">'+dateStr+(m.group_name?' &middot; Grupo '+m.group_name:'')+(m.venue?' &middot; '+m.venue.split(',')[0]:'')+'</div>'+
+      '</div>'+
+      '<div class="match-result'+(hasResult?'':' empty-res')+'">'+resultTxt+'</div>'+
+      '<button class="match-edit">'+( hasResult ? '&#9998; Editar' : '+ Ingresar')+'</button>'+
+    '</div>'
+  }).join('')
+}
+
+function openResultForm(m){
+  _currentMatchId=m.id
+  var isKnockout=m.phase!=='group'
+  var teams=m.team1&&m.team2 ? m.team1+' vs '+m.team2 : (m.label||'Partido '+m.id)
+  document.getElementById('rfb-title').textContent='Resultado: '+teams
+  document.getElementById('rfb-home-label').textContent=m.team1||'Local'
+  document.getElementById('rfb-away-label').textContent=m.team2||'Visita'
+  document.getElementById('rfb-home').value=m.res_home!=null?m.res_home:''
+  document.getElementById('rfb-away').value=m.res_away!=null?m.res_away:''
+  document.getElementById('rfb-pens').checked=!!m.had_penalties
+  document.getElementById('rfb-pen-row').style.display=isKnockout?'block':'none'
+  document.getElementById('rfb-pen-winner-row').style.display=m.had_penalties?'block':'none'
+  if(m.team1){ document.getElementById('rfb-pen-opt1').textContent=m.team1; document.getElementById('rfb-pen-opt1').value=m.team1 }
+  if(m.team2){ document.getElementById('rfb-pen-opt2').textContent=m.team2; document.getElementById('rfb-pen-opt2').value=m.team2 }
+  document.getElementById('rfb-pen-winner').value=m.penalty_winner||''
+  document.getElementById('rfb-yc').value=m.yellow_cards!=null?m.yellow_cards:''
+  document.getElementById('rfb-rc').value=m.red_cards!=null?m.red_cards:''
+  document.getElementById('rfb-pc').value=m.penalties_count!=null?m.penalties_count:''
+  document.getElementById('rfb-g1').value=m.goals_first_half!=null?m.goals_first_half:''
+  document.getElementById('rfb-g2').value=m.goals_second_half!=null?m.goals_second_half:''
+  document.getElementById('rfb-mvp').value=m.mvp_player||''
+  document.getElementById('rfb-err').style.display='none'
+  document.getElementById('rfb-save-btn').textContent='\u2705 Guardar Resultado'
+  document.getElementById('rfb-save-btn').disabled=false
+  var box=document.getElementById('result-form-box')
+  box.style.display='flex'
+}
+document.getElementById('rfb-pens').addEventListener('change',function(){
+  document.getElementById('rfb-pen-winner-row').style.display=this.checked?'block':'none'
+})
+
+function closeResultForm(){ document.getElementById('result-form-box').style.display='none' }
+
+async function submitResult(){
+  var home=document.getElementById('rfb-home').value
+  var away=document.getElementById('rfb-away').value
+  if(home===''||away===''){ document.getElementById('rfb-err').textContent='Ingresa ambos marcadores'; document.getElementById('rfb-err').style.display='block'; return }
+  var hasPens=document.getElementById('rfb-pens').checked
+  var penWinner=hasPens?document.getElementById('rfb-pen-winner').value:null
+  var yc=document.getElementById('rfb-yc').value
+  var rc=document.getElementById('rfb-rc').value
+  var pc=document.getElementById('rfb-pc').value
+  var g1=document.getElementById('rfb-g1').value
+  var g2=document.getElementById('rfb-g2').value
+  var mvp=document.getElementById('rfb-mvp').value.trim()
+  var btn=document.getElementById('rfb-save-btn')
+  btn.disabled=true; btn.textContent='Guardando...'
+  try{
+    var r=await fetch('/superadmin/results',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
+      body:JSON.stringify({matchId:_currentMatchId,home:+home,away:+away,hadPenalties:hasPens,penaltyWinner:penWinner||null,
+        yellowCards:yc!==''?+yc:null,redCards:rc!==''?+rc:null,penaltiesCount:pc!==''?+pc:null,
+        goalsFirstHalf:g1!==''?+g1:null,goalsSecondHalf:g2!==''?+g2:null,mvpPlayer:mvp||null})})
+    var d=await r.json()
+    if(!r.ok) throw new Error(d.error||'Error')
+    closeResultForm()
+    alert('\u2705 Resultado guardado! Predicciones actualizadas: '+d.predictions_updated+' en todas las pollas.')
+    loadMatches()
+  }catch(e){
+    document.getElementById('rfb-err').textContent='Error: '+e.message
+    document.getElementById('rfb-err').style.display='block'
+    btn.disabled=false; btn.textContent='\u2705 Guardar Resultado'
+  }
+}
+
+// ═══ TRIVIA GLOBAL ═════════════════════════════════════════════════════════
+var _generatedTrivia=null
+
+async function generateGlobalTrivia(){
+  var btn=document.getElementById('gtv-gen-btn')
+  var err=document.getElementById('gtv-gen-err')
+  btn.disabled=true; btn.textContent='Generando...'
+  err.style.display='none'
+  document.getElementById('gtv-preview').style.display='none'
+  try{
+    var diff=document.getElementById('gtv-diff').value
+    var topic=document.getElementById('gtv-topic').value.trim()||'futbol del Mundial 2026'
+    var r=await fetch('/superadmin/trivia/generate',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
+      body:JSON.stringify({difficulty:diff,topic:topic})})
+    var d=await r.json()
+    if(!r.ok) throw new Error(d.error)
+    _generatedTrivia={question:d.question,options:d.options,correct_answer:d.correct_answer,difficulty:diff,explanation:d.explanation}
+    document.getElementById('gtv-prev-q').textContent=d.question
+    var letters=['A','B','C','D']
+    document.getElementById('gtv-prev-opts').innerHTML=d.options.map(function(opt,i){
+      return '<div style="background:'+(i===d.correct_answer?'var(--green-bg)':'var(--cream2)')+';border:1px solid '+(i===d.correct_answer?'var(--green-border)':'var(--border)')+';border-radius:5px;padding:4px 8px;font-size:11px"><strong>'+letters[i]+'.</strong> '+opt+'</div>'
+    }).join('')
+    document.getElementById('gtv-prev-explanation').textContent=d.explanation?'\u2705 '+d.explanation:''
+    document.getElementById('gtv-preview').style.display='block'
+  }catch(e){ err.textContent='Error: '+e.message; err.style.display='block' }
+  finally{ btn.disabled=false; btn.textContent='\u{1F916} Generar' }
+}
+
+async function saveGeneratedTrivia(){
+  if(!_generatedTrivia) return
+  try{
+    var r=await fetch('/superadmin/trivia',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
+      body:JSON.stringify(_generatedTrivia)})
+    var d=await r.json()
+    if(!r.ok) throw new Error(d.error)
+    document.getElementById('gtv-preview').style.display='none'
+    _generatedTrivia=null
+    document.getElementById('gtv-topic').value=''
+    loadGlobalTrivia()
+    alert('\u2705 Trivia publicada en todas las pollas!')
+  }catch(e){ alert('Error: '+e.message) }
+}
+
+async function saveManualTrivia(){
+  var q=document.getElementById('mtv-q').value.trim()
+  var o0=document.getElementById('mtv-o0').value.trim()
+  var o1=document.getElementById('mtv-o1').value.trim()
+  var o2=document.getElementById('mtv-o2').value.trim()
+  var o3=document.getElementById('mtv-o3').value.trim()
+  var correct=+document.getElementById('mtv-correct').value
+  var diff=document.getElementById('mtv-diff').value
+  var err=document.getElementById('mtv-err')
+  err.style.display='none'
+  if(!q||!o0||!o1){ err.textContent='Pregunta y al menos 2 opciones son requeridas'; err.style.display='block'; return }
+  var options=[o0,o1]
+  if(o2) options.push(o2)
+  if(o3) options.push(o3)
+  if(correct>=options.length){ err.textContent='La respuesta correcta no existe en las opciones'; err.style.display='block'; return }
+  try{
+    var r=await fetch('/superadmin/trivia',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
+      body:JSON.stringify({question:q,options:options,correct_answer:correct,difficulty:diff})})
+    var d=await r.json()
+    if(!r.ok) throw new Error(d.error)
+    ['mtv-q','mtv-o0','mtv-o1','mtv-o2','mtv-o3'].forEach(function(id){ document.getElementById(id).value='' })
+    loadGlobalTrivia()
+    alert('\u2705 Trivia publicada!')
+  }catch(e){ err.textContent='Error: '+e.message; err.style.display='block' }
+}
+
+async function loadGlobalTrivia(){
+  var el=document.getElementById('gtv-list')
+  try{
+    var r=await fetch('/superadmin/trivia',{headers:{'x-super-key':KEY}})
+    var rows=await r.json()
+    if(!rows.length){ el.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay preguntas globales aun.</div>'; return }
+    var letters=['A','B','C','D']
+    el.innerHTML=rows.map(function(q){
+      var opts=typeof q.options==='string'?JSON.parse(q.options):q.options
+      var diffLabel={easy:'Facil +2',medium:'Media +3',hard:'Dificil +4'}[q.difficulty]||q.difficulty
+      return '<div class="gtv-card">'+
+        '<div style="display:flex;align-items:flex-start;gap:8px">'+
+          '<div style="flex:1">'+
+            '<div class="gtv-q">'+q.question+'</div>'+
+            '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:.3rem">'+
+              opts.map(function(o,i){ return '<span style="font-size:10px;background:'+(i===+q.correct_answer?'var(--green-bg)':'var(--cream2)')+';border:1px solid '+(i===+q.correct_answer?'var(--green-border)':'var(--border)')+';border-radius:4px;padding:2px 7px">'+letters[i]+'. '+o+'</span>' }).join('')+
+            '</div>'+
+            '<div class="gtv-meta">'+diffLabel+' &middot; '+q.answer_count+' respuestas &middot; '+(q.is_active?'<span style=\"color:var(--green)\">Activa</span>':'<span style=\"color:var(--red)\">Inactiva</span>')+'</div>'+
+          '</div>'+
+          '<div style="display:flex;flex-direction:column;gap:4px">'+
+            '<button data-id="'+q.id+'" data-active="'+q.is_active+'" onclick="toggleGlobalTrivia(this)" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">'+
+              (q.is_active?'Pausar':'Activar')+'</button>'+
+            '<button data-id="'+q.id+'" onclick="deleteGlobalTrivia(this)" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">Borrar</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'
+    }).join('')
+  }catch(e){ el.innerHTML='<div style="color:var(--red);font-size:12px">Error: '+e.message+'</div>' }
+}
+
+async function toggleGlobalTrivia(btn){
+  try{
+    var r=await fetch('/superadmin/trivia/'+btn.dataset.id+'/toggle',{method:'PUT',headers:{'x-super-key':KEY}})
+    if(r.ok) loadGlobalTrivia()
+  }catch(e){ alert('Error: '+e.message) }
+}
+
+async function deleteGlobalTrivia(btn){
+  if(!confirm('Eliminar esta pregunta de todas las pollas?')) return
+  try{
+    var r=await fetch('/superadmin/trivia/'+btn.dataset.id,{method:'DELETE',headers:{'x-super-key':KEY}})
+    if(r.ok) loadGlobalTrivia()
+  }catch(e){ alert('Error: '+e.message) }
 }
 
 loadCourtesy()
