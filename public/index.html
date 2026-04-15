@@ -9,7 +9,24 @@
 <link rel="apple-touch-icon" href="/logo.png"/>
 <meta name="theme-color" content="#F6C90E"/>
 <!-- SEO Primary -->
-<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large"/>
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<!-- Canonical & hreflang multiidioma -->
+<link rel="canonical" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-CO" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-MX" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-AR" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-CL" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-PE" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-VE" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-EC" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="es-US" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="pt-BR" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="en" href="https://lapollaia.com/"/>
+<link rel="alternate" hreflang="x-default" href="https://lapollaia.com/"/>
+<!-- Performance hints -->
+<link rel="preconnect" href="https://www.googletagmanager.com"/>
+<link rel="dns-prefetch" href="https://www.google-analytics.com"/>
 <meta name="author" content="La Polla IA"/>
 <meta name="keywords" content="polla de futbol, porra de futbol, pronosticos futbol 2026, polla mundial, torneo de pronosticos, hacer pronosticos futbol, polla familiar, polla de oficina, pronosticos deportivos, bracket futbol, copa del mundo pronosticos, quiniela futbol, polla online, crear polla futbol, porra online, pronosticos con inteligencia artificial, polla Colombia, polla Mexico, polla Argentina, polla gratis"/>
 <!-- Open Graph -->
@@ -18,10 +35,14 @@
 <meta property="og:title" content="La Polla IA — Pronosticos de Futbol 2026 con Inteligencia Artificial"/>
 <meta property="og:description" content="Crea tu polla de futbol privada para el torneo 2026. IA que analiza cada partido, bracket interactivo, ranking automatico. Para tu familia y amigos. Pago unico $3.99."/>
 <meta property="og:image" content="https://lapollaia.com/logo.png"/>
+<meta property="og:image:width" content="512"/>
+<meta property="og:image:height" content="512"/>
+<meta property="og:image:alt" content="La Polla IA — Polla de Fútbol 2026"/>
 <meta property="og:site_name" content="La Polla IA"/>
 <meta property="og:locale" content="es_CO"/>
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:site" content="@lapollaia"/>
 <meta name="twitter:title" content="La Polla IA — Pronosticos de Futbol 2026"/>
 <meta name="twitter:description" content="La polla de futbol mas inteligente. IA analiza cada partido. Bracket interactivo. $3.99 pago unico."/>
 <meta name="twitter:image" content="https://lapollaia.com/logo.png"/>
@@ -303,6 +324,14 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
   .nav-cta{padding:6px 11px;font-size:11px}
 }
 </style>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-R9KEGLJKVD"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-R9KEGLJKVD');
+</script>
 </head>
 <body>
 
@@ -339,7 +368,7 @@ footer p{color:rgba(255,255,255,.18);font-size:11px}
   <div class="hcd-wrap" id="cd"></div>
   <div class="hero-ctas">
     <button class="btn-main" onclick="showCreate();document.getElementById('crear').scrollIntoView({behavior:'smooth'})">&#127942; Crear mi Polla &mdash; $3.99</button>
-    <button class="btn-demo" onclick="window.location.href='/t/demo'">&#9889; Probar GRATIS</button>
+    <button class="btn-demo" onclick="gtag('event','cta_probar_demo',{'event_category':'engagement','event_label':'hero_demo'});window.location.href='/t/demo'">&#9889; Probar GRATIS</button>
     <button class="btn-sec" onclick="document.getElementById('entrar').scrollIntoView({behavior:'smooth'})">Ya tengo una &rarr;</button>
   </div>
 </section>

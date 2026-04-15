@@ -2143,36 +2143,37 @@ async function viewTournament(id,name,slug){
       uc.innerHTML='<div class="u-table"><div class="empty">No hay participantes aún.</div></div>'
       return
     }
-    const rows=users.map(u=>{
+    const rows=users.map(function(u){
       const av=(u.avatars||[])[0]
       const approved=av?.is_active
       const isAdmin=u.is_admin
-      return \`<div class="u-row">
-        <div class="u-cell"><div class="u-name">\${u.name}\${isAdmin?' <span style="font-size:9px;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:4px;padding:1px 5px;margin-left:4px">Admin</span>':''}</div></div>
-        <div class="u-cell"><div class="u-sub">\${u.email}</div></div>
-        <div class="u-cell">
-          \${approved
-            ?'<span class="badge badge-green" style="font-size:9px">✅ Aprobado</span>'
-            :'<span class="badge badge-amber" style="font-size:9px">⏳ Pendiente</span>'}
-        </div>
-        <div class="u-cell u-sub">\${new Date(u.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
-        <div class="u-cell">
-          \${!isAdmin
-            ?'<button class="btn-del-u" onclick="delUser(\\\''+u.id+'\\\',\\\''+u.name.replace(/'/g,"\\\\'")+'\\\')">Eliminar</button>'
-            :'<span style="font-size:10px;color:var(--ink3)">—</span>'}
-        </div>
-      </div>\`
+      const safeN=String(u.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      const safeE=String(u.email||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+      const delBtn=!isAdmin
+        ? '<button class="btn-del-u" data-uid="'+u.id+'" data-uname="'+safeN+'">Eliminar</button>'
+        : '<span style="font-size:10px;color:var(--ink3)">—</span>'
+      const dateFmt=new Date(u.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+      return '<div class="u-row">'+
+        '<div class="u-cell"><div class="u-name">'+safeN+(isAdmin?' <span style="font-size:9px;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:4px;padding:1px 5px;margin-left:4px">Admin</span>':'')+'</div></div>'+
+        '<div class="u-cell"><div class="u-sub">'+safeE+'</div></div>'+
+        '<div class="u-cell">'+(approved?'<span class="badge badge-green" style="font-size:9px">\u2705 Aprobado</span>':'<span class="badge badge-amber" style="font-size:9px">\u23f3 Pendiente</span>')+'</div>'+
+        '<div class="u-cell u-sub">'+dateFmt+'</div>'+
+        '<div class="u-cell">'+delBtn+'</div>'+
+      '</div>'
     }).join('')
-    uc.innerHTML=\`<div class="u-table">
-      <div class="u-head">
-        <div class="u-th">Nombre</div>
-        <div class="u-th">Correo</div>
-        <div class="u-th">Estado</div>
-        <div class="u-th">Se unió</div>
-        <div class="u-th">Acción</div>
-      </div>
-      \${rows}
-    </div>\`
+    uc.innerHTML='<div class="u-table">'+
+      '<div class="u-head">'+
+        '<div class="u-th">Nombre</div>'+
+        '<div class="u-th">Correo</div>'+
+        '<div class="u-th">Estado</div>'+
+        '<div class="u-th">Se uni\u00f3</div>'+
+        '<div class="u-th">Acci\u00f3n</div>'+
+      '</div>'+
+      rows+
+    '</div>'
+    uc.querySelectorAll('.btn-del-u').forEach(function(btn){
+      btn.addEventListener('click',function(){ delUser(btn.dataset.uid, btn.dataset.uname) })
+    })
   }catch(e){ uc.innerHTML='<div class="empty">Error cargando: '+e.message+'</div>' }
 }
 
