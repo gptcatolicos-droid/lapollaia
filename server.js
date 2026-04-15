@@ -1863,16 +1863,17 @@ app.delete('/superadmin/users/:uid', superAdmin, async(req,res)=>{
 
 // ─── SUPERADMIN: CREATE COURTESY TOURNAMENT ───────────────────────────────────
 app.post('/superadmin/courtesy', superAdmin, async(req,res)=>{
-  const {name,ownerName,ownerEmail,slug}=req.body
+  const {name,ownerName,ownerEmail,slug,password}=req.body
   if(!name||!ownerName||!ownerEmail) return res.status(400).json({error:'Faltan datos'})
+  // Use provided password or generate a readable one
+  const plainPassword=password||(ownerName.split(' ')[0].toLowerCase()+crypto.randomBytes(3).toString('hex'))
   try{
-    // Generate slug if not provided
     const finalSlug=slug||(name.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-').slice(0,30)+'-'+crypto.randomBytes(3).toString('hex'))
     const {rows:[existing]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[finalSlug])
     if(existing) return res.status(400).json({error:'Slug ya existe: '+finalSlug})
 
     const tid='t-'+crypto.randomBytes(8).toString('hex')
-    const hash=await bcrypt.hash(crypto.randomBytes(12).toString('hex'),10)
+    const hash=await bcrypt.hash(plainPassword,10)
     const uid='u-'+crypto.randomBytes(8).toString('hex')
 
     await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,primary_color,inscription_fee,currency,is_active,is_courtesy)
@@ -1882,12 +1883,12 @@ app.post('/superadmin/courtesy', superAdmin, async(req,res)=>{
     for(const ph of phases)
       await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tid,ph])
 
-    // Create admin user for the tournament
     await pool.query('INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted) VALUES($1,$2,$3,$4,$5,TRUE,TRUE)',
       [uid,tid,ownerName,ownerEmail.toLowerCase(),hash])
 
-    const link=`${process.env.APP_URL||'https://lapollaia.onrender.com'}/t/${finalSlug}`
-    res.json({success:true,tournamentId:tid,slug:finalSlug,link})
+    const link=`${process.env.APP_URL||'https://lapollaia.com'}/t/${finalSlug}`
+    // Return password so superadmin can share it with the owner
+    res.json({success:true,tournamentId:tid,slug:finalSlug,link,adminEmail:ownerEmail.toLowerCase(),adminPassword:plainPassword})
   }catch(e){console.error('courtesy:',e);res.status(500).json({error:e.message})}
 })
 
@@ -2363,6 +2364,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
         <input id="c-slug" placeholder="slug-personalizado (opcional)" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:monospace"/>
         <input id="c-owner" placeholder="Nombre del admin" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit"/>
         <input id="c-email" placeholder="Email del admin" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit"/>
+        <input id="c-pass" type="text" placeholder="Contraseña del admin (opcional, se genera si no pones)" style="padding:8px 10px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:monospace;grid-column:span 2"/>
       </div>
       <button onclick="createCourtesy()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer;width:100%">🎁 Crear polla gratis y generar link</button>
       <div id="courtesy-result" style="margin-top:.75rem"></div>
@@ -2525,23 +2527,27 @@ async function createCourtesy(){
   var res_el=document.getElementById('courtesy-result')
   if(!name||!ownerName||!ownerEmail){res_el.innerHTML='<div style="color:red;font-size:12px">Completa todos los campos</div>';return}
   res_el.innerHTML='<div style="font-size:12px;color:var(--ink3)">Creando...</div>'
+  var password=document.getElementById('c-pass').value.trim()
   try{
     var r=await fetch('/superadmin/courtesy',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
-      body:JSON.stringify({name:name,slug:slug,ownerName:ownerName,ownerEmail:ownerEmail})})
+      body:JSON.stringify({name:name,slug:slug,ownerName:ownerName,ownerEmail:ownerEmail,password:password||undefined})})
     var d=await r.json()
     if(!r.ok){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+h(d.error)+'</div>';return}
     var link=d.link||('https://lapollaia.com/t/'+d.slug)
     res_el.innerHTML=
       '<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:.75rem 1rem">'+
-        '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">&#10003; Polla creada!</div>'+
-        '<div id="courtesy-link-box" style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:8px">'+h(link)+'</div>'+
+        '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:8px">&#10003; Polla creada exitosamente!</div>'+
+        '<div style="font-size:10px;color:var(--ink3);margin-bottom:3px">Link de la polla:</div>'+
+        '<div style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:6px">'+h(link)+'</div>'+
+        '<div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:6px;padding:8px 10px;margin-bottom:8px">'+
+          '<div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:4px">&#128272; Credenciales del Admin — guardalas!</div>'+
+          '<div style="font-size:11px;color:var(--ink)">Email: <strong>'+h(d.adminEmail)+'</strong></div>'+
+          '<div style="font-size:11px;color:var(--ink)">Contrasena: <strong style="font-family:monospace;background:#fff;padding:1px 6px;border-radius:4px;border:1px solid var(--border)">'+h(d.adminPassword)+'</strong></div>'+
+        '</div>'+
         '<button id="copy-new-link-btn" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">Copiar link</button>'+
       '</div>'
     document.getElementById('copy-new-link-btn').addEventListener('click',function(){ copyCourtesyLink(link) })
-    document.getElementById('c-name').value=''
-    document.getElementById('c-slug').value=''
-    document.getElementById('c-owner').value=''
-    document.getElementById('c-email').value=''
+    ;['c-name','c-slug','c-owner','c-email','c-pass'].forEach(function(id){ document.getElementById(id).value='' })
     loadCourtesy()
   }catch(e){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+h(e.message)+'</div>'}
 }

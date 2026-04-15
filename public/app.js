@@ -2872,10 +2872,11 @@ function ResultsPage(){
 // ─── ADMIN PAGE ───────────────────────────────────────────────────────────────
 function AdminPage(){
   const {user,tournament,setView}=useApp()
-  const [tab,setTab]=React.useState('users')
+  const [tab,setTab]=React.useState('guide')
   if(!user?.isAdmin) return null
 
   const navItems=[
+    {k:'guide',icon:'📖',l:'Guía Admin'},
     {k:'users',icon:'👥',l:'Participantes'},
     {k:'trivia',icon:'🧠',l:'Extra Points'},
     {k:'results',icon:'📊',l:'Resultados'},
@@ -2920,6 +2921,7 @@ function AdminPage(){
           </div>
         </div>
         <div style={{flex:1,padding:'1.1rem',overflow:'auto'}}>
+          {tab==='guide'&&<AdminGuide setTab={setTab}/>}
           {tab==='users'&&<AdminUsers/>}
           {tab==='locks'&&<AdminLocks/>}
           {tab==='teams'&&<AdminTeams/>}
@@ -2931,6 +2933,156 @@ function AdminPage(){
     </div>
   )
 }
+
+function AdminGuide({setTab}){
+  const {tournament}=useApp()
+  const slug=tournament?.slug||'tu-polla'
+  const link=`lapollaia.com/t/${slug}`
+
+  const steps=[
+    {
+      num:'01', icon:'🔗', color:'#2563eb', bg:'rgba(37,99,235,.08)', border:'rgba(37,99,235,.18)',
+      title:'Comparte el link',
+      desc:'Este es el link de tu polla. Mándalo por WhatsApp a todos. Cada persona se registra sola.',
+      action:null,
+      extra:<div style={{fontFamily:'monospace',fontSize:12,background:'#fff',border:'1px solid rgba(37,99,235,.2)',borderRadius:6,padding:'6px 10px',marginTop:6,color:'#1e40af',wordBreak:'break-all',userSelect:'all'}}>{link}</div>
+    },
+    {
+      num:'02', icon:'👥', color:'#7c3aed', bg:'rgba(124,58,237,.08)', border:'rgba(124,58,237,.18)',
+      title:'Aprueba participantes',
+      desc:'Cuando alguien se registre te llegará en la lista de Participantes como "Pendiente". Tú decides quién entra.',
+      action:{label:'Ir a Participantes', tab:'users', color:'#7c3aed'}
+    },
+    {
+      num:'03', icon:'📊', color:'#059669', bg:'rgba(5,150,105,.08)', border:'rgba(5,150,105,.18)',
+      title:'Ingresa los resultados',
+      desc:'Cuando termine cada partido, ve a Resultados e ingresa el marcador real. Los puntos se calculan automáticamente.',
+      action:{label:'Ir a Resultados', tab:'results', color:'#059669'}
+    },
+    {
+      num:'04', icon:'🧠', color:'#d97706', bg:'rgba(217,119,6,.08)', border:'rgba(217,119,6,.18)',
+      title:'Crea preguntas Extra Points',
+      desc:'Con Pelé IA puedes crear preguntas de trivia. Tus jugadores las responden para ganar puntos extra. Mantén el torneo emocionante.',
+      action:{label:'Crear trivia', tab:'trivia', color:'#d97706'}
+    },
+    {
+      num:'05', icon:'🔒', color:'#dc2626', bg:'rgba(220,38,38,.08)', border:'rgba(220,38,38,.18)',
+      title:'Controla las fases',
+      desc:'Puedes bloquear manualmente los pronósticos de una fase. Por defecto se bloquean automáticamente 2h antes de cada partido.',
+      action:{label:'Gestionar fases', tab:'locks', color:'#dc2626'}
+    },
+    {
+      num:'06', icon:'⚙️', color:'#4b5563', bg:'rgba(75,85,99,.08)', border:'rgba(75,85,99,.18)',
+      title:'Personaliza tu polla',
+      desc:'Cambia el nombre, colores y logo desde Configuración. Puedes editar el sistema de puntos si quieres algo distinto.',
+      action:{label:'Configuración', tab:'config', color:'#4b5563'}
+    },
+  ]
+
+  const tips=[
+    {icon:'💡', text:'El ranking se actualiza solo después de cada resultado. No tienes que hacer nada.'},
+    {icon:'📱', text:'Todo funciona en celular. Tus jugadores no necesitan instalar nada.'},
+    {icon:'🎁', text:'Cada jugador recibe 20 puntos de bienvenida automáticamente al registrarse.'},
+    {icon:'🏆', text:'El bracket del campeonato vale hasta 100 puntos extra si alguien lo acierta sin editar.'},
+    {icon:'✏️', text:'Los jugadores pueden editar sus pronósticos hasta 2 horas antes de cada partido.'},
+    {icon:'🤖', text:'Pelé IA analiza cada partido. Tus jugadores pueden pedirle sugerencias de marcadores.'},
+  ]
+
+  return(
+    <div style={{maxWidth:720,margin:'0 auto',paddingBottom:40}}>
+
+      {/* Header */}
+      <div style={{background:'linear-gradient(135deg,#1a1814 0%,#2d2a24 100%)',borderRadius:16,padding:'24px 24px 20px',marginBottom:20,position:'relative',overflow:'hidden'}}>
+        <div style={{position:'absolute',top:-20,right:-20,width:120,height:120,background:'rgba(200,168,75,.08)',borderRadius:'50%'}}/>
+        <div style={{position:'absolute',bottom:-30,right:40,width:80,height:80,background:'rgba(200,168,75,.05)',borderRadius:'50%'}}/>
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12,position:'relative'}}>
+          <div style={{width:44,height:44,background:'rgba(200,168,75,.15)',border:'1px solid rgba(200,168,75,.3)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>📖</div>
+          <div>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'1.4rem',letterSpacing:2,color:'#F6C90E',lineHeight:1}}>GUÍA DEL ADMINISTRADOR</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.45)',marginTop:3}}>Todo lo que necesitas saber para llevar tu polla</div>
+          </div>
+        </div>
+        <div style={{background:'rgba(200,168,75,.1)',border:'1px solid rgba(200,168,75,.2)',borderRadius:8,padding:'8px 12px',display:'flex',alignItems:'center',gap:8,position:'relative'}}>
+          <span style={{fontSize:14}}>🔗</span>
+          <div>
+            <div style={{fontSize:9,color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:1,marginBottom:2}}>Tu link de polla</div>
+            <div style={{fontFamily:'monospace',fontSize:12,color:'#F6C90E',wordBreak:'break-all'}}>{link}</div>
+          </div>
+          <button
+            onClick={()=>{ navigator.clipboard?.writeText('https://'+link); alert('Link copiado!') }}
+            style={{marginLeft:'auto',background:'rgba(200,168,75,.2)',border:'1px solid rgba(200,168,75,.35)',borderRadius:6,padding:'4px 10px',fontSize:10,fontWeight:700,color:'#F6C90E',cursor:'pointer',flexShrink:0}}>
+            Copiar
+          </button>
+        </div>
+      </div>
+
+      {/* Steps */}
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:11,fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:1,marginBottom:10,paddingLeft:2}}>Los 6 pasos clave</div>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {steps.map((s,i)=>(
+            <div key={i} style={{background:s.bg,border:`1px solid ${s.border}`,borderRadius:12,padding:'14px 16px',display:'flex',gap:14,alignItems:'flex-start'}}>
+              <div style={{flexShrink:0,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                <div style={{width:36,height:36,borderRadius:10,background:s.color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>
+                  {s.icon}
+                </div>
+                <div style={{fontFamily:'Bebas Neue',fontSize:'0.7rem',color:s.color,letterSpacing:1}}>{s.num}</div>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:800,color:'var(--ink)',marginBottom:4}}>{s.title}</div>
+                <div style={{fontSize:12,color:'var(--ink2)',lineHeight:1.6,marginBottom:s.action||s.extra?8:0}}>{s.desc}</div>
+                {s.extra}
+                {s.action&&(
+                  <button
+                    onClick={()=>setTab(s.action.tab)}
+                    style={{background:s.action.color,color:'#fff',border:'none',borderRadius:6,padding:'5px 12px',fontSize:11,fontWeight:700,cursor:'pointer',marginTop:s.extra?6:0}}>
+                    {s.action.label} →
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tips */}
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:1,marginBottom:10,paddingLeft:2}}>Cosas que pasan solas (no tienes que hacer nada)</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+          {tips.map((t,i)=>(
+            <div key={i} style={{background:'var(--cream)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px',display:'flex',gap:8,alignItems:'flex-start'}}>
+              <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{t.icon}</span>
+              <span style={{fontSize:11,color:'var(--ink2)',lineHeight:1.55}}>{t.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Sistema de puntos rápido */}
+      <div style={{marginTop:20,background:'var(--cream)',border:'1px solid var(--border)',borderRadius:12,padding:'14px 16px'}}>
+        <div style={{fontSize:11,fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:1,marginBottom:10}}>Sistema de puntos resumido</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+          {[
+            {pts:'3–10',label:'Marcador exacto',sub:'Según la fase'},
+            {pts:'2–5',label:'Ganador correcto',sub:'Sin acertar el score'},
+            {pts:'+1',label:'Extra points',sub:'Tarjetas, MVP, goles'},
+            {pts:'20',label:'Bono bienvenida',sub:'Al registrarse'},
+            {pts:'2–4',label:'Trivia',sub:'Preguntas del admin'},
+            {pts:'+100',label:'Bracket perfecto',sub:'Sin editar'},
+          ].map((p,i)=>(
+            <div key={i} style={{background:'#fff',border:'1px solid var(--border)',borderRadius:8,padding:'8px 10px',textAlign:'center'}}>
+              <div style={{fontFamily:'Bebas Neue',fontSize:'1.2rem',color:'var(--gold)',lineHeight:1}}>{p.pts}</div>
+              <div style={{fontSize:10,fontWeight:700,color:'var(--ink)',marginTop:2}}>{p.label}</div>
+              <div style={{fontSize:9,color:'var(--ink3)',marginTop:1}}>{p.sub}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
 
 function AdminTrivia(){
   const {activeAvatar}=useApp()
