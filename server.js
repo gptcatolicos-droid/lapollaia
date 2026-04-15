@@ -2411,7 +2411,7 @@ async function viewTournament(id,name,slug){
   hdr.innerHTML=
     '<div style="width:44px;height:44px;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">\u{1F3C6}</div>'+
     '<div style="flex:1">'+
-      '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.25rem;letter-spacing:1px">'+name+'</div>'+
+      '<div class="detail-title">'+name+'</div>'+
       '<div style="font-size:11px;color:var(--ink3);margin-top:2px">ID: '+id+'</div>'+
       '<div style="font-family:monospace;font-size:11px;background:var(--cream2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--gold);display:inline-block;margin-top:4px">lapollaia.com/t/'+slug+'</div>'+
     '</div>'+
@@ -2589,7 +2589,7 @@ function renderMatches(ph){
     var hasResult=m.res_home!=null
     var resultTxt=hasResult ? m.res_home+' - '+m.res_away+(m.had_penalties?' (pen)':'') : 'Sin resultado'
     var dateStr=m.match_date ? new Date(m.match_date).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''
-    return '<div class="match-card'+(hasResult?' has-result':'')+'" data-mid="'+m.id+'" onclick="openResultForm('+JSON.stringify(m)+')">'+
+    return '<div class="match-card'+(hasResult?' has-result':'')+'" data-mid="'+m.id+'">'+
       '<div class="match-num">#'+m.match_num+'</div>'+
       '<div style="flex:1">'+
         '<div class="match-teams">'+teams+'</div>'+
@@ -2599,6 +2599,14 @@ function renderMatches(ph){
       '<button class="match-edit">'+( hasResult ? '&#9998; Editar' : '+ Ingresar')+'</button>'+
     '</div>'
   }).join('')
+  // Attach click handlers using _allMatches lookup (avoids JSON in onclick)
+  container.querySelectorAll('.match-card').forEach(function(card){
+    card.addEventListener('click',function(){
+      var mid=+card.dataset.mid
+      var match=_allMatches.find(function(x){ return +x.id===mid })
+      if(match) openResultForm(match)
+    })
+  })
 }
 
 function openResultForm(m){
