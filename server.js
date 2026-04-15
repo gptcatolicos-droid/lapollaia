@@ -2396,118 +2396,125 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
 <script>
 const KEY='${key}'
 
+// ── utils ─────────────────────────────────────────────────────────────────
+function h(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
+// ── Section navigation ────────────────────────────────────────────────────
+function showSASection(name){
+  var sections={pollas:'list-view','results':'sa-results','trivia':'sa-trivia'}
+  Object.keys(sections).forEach(function(k){
+    var el=document.getElementById(sections[k])
+    if(el) el.style.display=(k===name?'':'none')
+    var tab=document.getElementById('tab-'+k)
+    if(tab) tab.classList.toggle('active',k===name)
+  })
+  document.getElementById('detail-view').style.display='none'
+  if(name==='results') loadMatches()
+  if(name==='trivia') loadGlobalTrivia()
+}
+
+// ── Delete tournament ─────────────────────────────────────────────────────
 async function delTournament(id,name){
-  if(!confirm('¿ELIMINAR "'+name+'" y TODOS sus datos? Esto no se puede deshacer.'))return
-  const r=await fetch('/superadmin/tournaments/'+id,{method:'DELETE',headers:{'x-super-key':KEY}})
-  const d=await r.json()
+  if(!confirm('ELIMINAR "'+name+'" y TODOS sus datos? Esto no se puede deshacer.'))return
+  var r=await fetch('/superadmin/tournaments/'+id,{method:'DELETE',headers:{'x-super-key':KEY}})
+  var d=await r.json()
   if(d.success)location.reload(); else alert('Error: '+d.error)
 }
 
+// ── View tournament detail ────────────────────────────────────────────────
 async function viewTournament(id,name,slug){
-  document.getElementById('list-view').classList.add('hidden')
-  const dv=document.getElementById('detail-view')
+  document.getElementById('list-view').style.display='none'
+  var dv=document.getElementById('detail-view')
   dv.classList.add('on')
   var hdr=document.getElementById('detail-header')
   hdr.innerHTML=
-    '<div style="width:44px;height:44px;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">\u{1F3C6}</div>'+
+    '<div style="width:44px;height:44px;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">&#127942;</div>'+
     '<div style="flex:1">'+
-      '<div class="detail-title">'+name+'</div>'+
-      '<div style="font-size:11px;color:var(--ink3);margin-top:2px">ID: '+id+'</div>'+
-      '<div style="font-family:monospace;font-size:11px;background:var(--cream2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--gold);display:inline-block;margin-top:4px">lapollaia.com/t/'+slug+'</div>'+
+      '<div class="detail-title">'+h(name)+'</div>'+
+      '<div style="font-size:11px;color:var(--ink3);margin-top:2px">ID: '+h(id)+'</div>'+
+      '<div style="font-family:monospace;font-size:11px;background:var(--cream2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;color:var(--gold);display:inline-block;margin-top:4px">lapollaia.com/t/'+h(slug)+'</div>'+
     '</div>'+
     '<button class="btn-act btn-del" id="hdr-del-btn">Eliminar polla completa</button>'
   document.getElementById('hdr-del-btn').addEventListener('click',function(){ delTournament(id,name) })
-  const uc=document.getElementById('users-container')
+  var uc=document.getElementById('users-container')
   uc.innerHTML='<div class="spinner-txt">Cargando participantes...</div>'
   try{
-    const r=await fetch('/superadmin/tournaments/'+id+'/users',{headers:{'x-super-key':KEY}})
-    const users=await r.json()
+    var r=await fetch('/superadmin/tournaments/'+id+'/users',{headers:{'x-super-key':KEY}})
+    var users=await r.json()
     if(!Array.isArray(users)||users.length===0){
-      uc.innerHTML='<div class="u-table"><div class="empty">No hay participantes aún.</div></div>'
+      uc.innerHTML='<div class="u-table"><div class="empty">No hay participantes aun.</div></div>'
       return
     }
-    const rows=users.map(function(u){
-      const av=(u.avatars||[])[0]
-      const approved=av?.is_active
-      const isAdmin=u.is_admin
-      const safeN=String(u.name||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-      const safeE=String(u.email||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')
-      const delBtn=!isAdmin
-        ? '<button class="btn-del-u" data-uid="'+u.id+'" data-uname="'+safeN+'">Eliminar</button>'
-        : '<span style="font-size:10px;color:var(--ink3)">—</span>'
-      const dateFmt=new Date(u.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
-      return '<div class="u-row">'+
-        '<div class="u-cell"><div class="u-name">'+safeN+(isAdmin?' <span style="font-size:9px;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:4px;padding:1px 5px;margin-left:4px">Admin</span>':'')+'</div></div>'+
-        '<div class="u-cell"><div class="u-sub">'+safeE+'</div></div>'+
-        '<div class="u-cell">'+(approved?'<span class="badge badge-green" style="font-size:9px">\u2705 Aprobado</span>':'<span class="badge badge-amber" style="font-size:9px">\u23f3 Pendiente</span>')+'</div>'+
-        '<div class="u-cell u-sub">'+dateFmt+'</div>'+
-        '<div class="u-cell">'+delBtn+'</div>'+
-      '</div>'
-    }).join('')
-    uc.innerHTML='<div class="u-table">'+
+    var html='<div class="u-table">'+
       '<div class="u-head">'+
         '<div class="u-th">Nombre</div>'+
         '<div class="u-th">Correo</div>'+
         '<div class="u-th">Estado</div>'+
-        '<div class="u-th">Se uni\u00f3</div>'+
-        '<div class="u-th">Acci\u00f3n</div>'+
-      '</div>'+
-      rows+
-    '</div>'
-    uc.querySelectorAll('.btn-del-u').forEach(function(btn){
-      btn.addEventListener('click',function(){ delUser(btn.dataset.uid, btn.dataset.uname) })
+        '<div class="u-th">Se unio</div>'+
+        '<div class="u-th">Accion</div>'+
+      '</div>'
+    users.forEach(function(u){
+      var av=(u.avatars||[])[0]
+      var approved=av&&av.is_active
+      var isAdm=u.is_admin
+      var dateFmt=new Date(u.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+      html+='<div class="u-row">'+
+        '<div class="u-cell"><div class="u-name">'+h(u.name)+(isAdm?' <span style="font-size:9px;background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:4px;padding:1px 5px">Admin</span>':'')+'</div></div>'+
+        '<div class="u-cell"><div class="u-sub">'+h(u.email)+'</div></div>'+
+        '<div class="u-cell">'+(approved?'<span class="badge badge-green" style="font-size:9px">&#10003; Aprobado</span>':'<span class="badge badge-amber" style="font-size:9px">&#8987; Pendiente</span>')+'</div>'+
+        '<div class="u-cell u-sub">'+dateFmt+'</div>'+
+        '<div class="u-cell">'+(isAdm?'<span style="font-size:10px;color:var(--ink3)">&#8212;</span>':'<button class="btn-del-u" data-uid="'+h(u.id)+'" data-uname="'+h(u.name)+'">Eliminar</button>')+'</div>'+
+      '</div>'
     })
-  }catch(e){ uc.innerHTML='<div class="empty">Error cargando: '+e.message+'</div>' }
+    html+='</div>'
+    uc.innerHTML=html
+    uc.querySelectorAll('.btn-del-u').forEach(function(btn){
+      btn.addEventListener('click',function(){ delUser(btn.dataset.uid,btn.dataset.uname) })
+    })
+  }catch(e){ uc.innerHTML='<div class="empty">Error cargando: '+h(e.message)+'</div>' }
 }
 
-window._currentTournamentId=null
 async function delUser(uid,name){
-  if(!confirm('¿Eliminar a "'+name+'" y todos sus pronósticos?'))return
-  const r=await fetch('/superadmin/users/'+uid,{method:'DELETE',headers:{'x-super-key':KEY}})
-  const d=await r.json()
-  if(d.success){
-    document.querySelectorAll('.u-row').forEach(row=>{
-      if(row.innerHTML.includes(uid)) row.remove()
-    })
-    // reload detail to refresh counts
-    const header=document.getElementById('detail-header')
-    const titleEl=header.querySelector('[style*="Bebas"]')
-    const slugEl=header.querySelector('[style*="lapollaia.com"]')
-    if(titleEl&&slugEl){
-      const tournamentName=titleEl.textContent
-      const slug=slugEl.textContent.replace('lapollaia.com/t/','')
-      // just refresh users section
-      location.reload()
-    }
-  } else alert('Error: '+d.error)
+  if(!confirm('Eliminar a "'+name+'" y todos sus pronosticos?'))return
+  var r=await fetch('/superadmin/users/'+uid,{method:'DELETE',headers:{'x-super-key':KEY}})
+  var d=await r.json()
+  if(d.success) location.reload()
+  else alert('Error: '+d.error)
 }
 
 function backToList(){
-  document.getElementById('list-view').classList.remove('hidden')
+  document.getElementById('list-view').style.display=''
   document.getElementById('detail-view').classList.remove('on')
 }
 
-// ── Courtesy tournaments ─────────────────────────────────────────────────────
+// ── Courtesy tournaments ──────────────────────────────────────────────────
 async function loadCourtesy(){
   try{
-    const r=await fetch('/superadmin/courtesy',{headers:{'x-super-key':KEY}})
-    const rows=await r.json()
-    const el=document.getElementById('courtesy-list')
+    var r=await fetch('/superadmin/courtesy',{headers:{'x-super-key':KEY}})
+    var rows=await r.json()
+    var el=document.getElementById('courtesy-list')
     if(!rows.length){el.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay pollas de cortesia aun.</div>';return}
-    el.innerHTML=rows.map(function(t){
+    var html=''
+    rows.forEach(function(t){
       var uc=t.user_count||0
-      var link='https://lapollaia.onrender.com/t/'+t.slug
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">'+
+      html+='<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap" data-cid="'+h(t.id)+'" data-cname="'+h(t.name)+'">'+
         '<div style="flex:1;min-width:0">'+
-          '<div style="font-size:12px;font-weight:700;color:var(--ink)">'+t.name+'</div>'+
-          '<div style="font-family:monospace;font-size:10px;color:var(--gold)">lapollaia.com/t/'+t.slug+'</div>'+
+          '<div style="font-size:12px;font-weight:700;color:var(--ink)">'+h(t.name)+'</div>'+
+          '<div style="font-family:monospace;font-size:10px;color:var(--gold)">lapollaia.com/t/'+h(t.slug)+'</div>'+
         '</div>'+
         '<div style="font-size:11px;'+(uc>0?'color:var(--green);font-weight:700':'color:var(--ink3)')+'">'+uc+' participantes</div>'+
-        '<button onclick="copyCourtesyLink(\''+link+'\')" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Copiar link</button>'+
-        '<button onclick="delTournament(\''+t.id+'\',\''+t.name+'\')" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Eliminar</button>'+
+        '<button class="c-copy-btn" data-link="https://lapollaia.com/t/'+h(t.slug)+'" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Copiar link</button>'+
+        '<button class="c-del-btn" data-cid="'+h(t.id)+'" data-cname="'+h(t.name)+'" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Eliminar</button>'+
       '</div>'
-    }).join('')
-  }catch(e){document.getElementById('courtesy-list').innerHTML='<div style="font-size:12px;color:red">Error: '+e.message+'</div>'}
+    })
+    el.innerHTML=html
+    el.querySelectorAll('.c-copy-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){ copyCourtesyLink(btn.dataset.link) })
+    })
+    el.querySelectorAll('.c-del-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){ delTournament(btn.dataset.cid,btn.dataset.cname) })
+    })
+  }catch(e){document.getElementById('courtesy-list').innerHTML='<div style="font-size:12px;color:red">Error: '+h(e.message)+'</div>'}
 }
 
 async function createCourtesy(){
@@ -2516,66 +2523,48 @@ async function createCourtesy(){
   var ownerName=document.getElementById('c-owner').value.trim()
   var ownerEmail=document.getElementById('c-email').value.trim()
   var res_el=document.getElementById('courtesy-result')
-  if(!name||!ownerName||!ownerEmail){res_el.innerHTML='<div style="color:red;font-size:12px">Completa todos los campos requeridos</div>';return}
+  if(!name||!ownerName||!ownerEmail){res_el.innerHTML='<div style="color:red;font-size:12px">Completa todos los campos</div>';return}
   res_el.innerHTML='<div style="font-size:12px;color:var(--ink3)">Creando...</div>'
   try{
-    var r=await fetch('/superadmin/courtesy',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},body:JSON.stringify({name:name,slug:slug,ownerName:ownerName,ownerEmail:ownerEmail})})
+    var r=await fetch('/superadmin/courtesy',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
+      body:JSON.stringify({name:name,slug:slug,ownerName:ownerName,ownerEmail:ownerEmail})})
     var d=await r.json()
-    if(!r.ok){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+d.error+'</div>';return}
-    var link=d.link||('https://lapollaia.onrender.com/t/'+d.slug)
-    res_el.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:.75rem 1rem">'+
-      '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">Polla creada exitosamente</div>'+
-      '<div id="courtesy-link-box" style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:8px">'+link+'</div>'+
-      '<button onclick="copyCourtesyLink(\''+link+'\')" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">Copiar link</button>'+
-    '</div>'
+    if(!r.ok){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+h(d.error)+'</div>';return}
+    var link=d.link||('https://lapollaia.com/t/'+d.slug)
+    res_el.innerHTML=
+      '<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:.75rem 1rem">'+
+        '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">&#10003; Polla creada!</div>'+
+        '<div id="courtesy-link-box" style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:8px">'+h(link)+'</div>'+
+        '<button id="copy-new-link-btn" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">Copiar link</button>'+
+      '</div>'
+    document.getElementById('copy-new-link-btn').addEventListener('click',function(){ copyCourtesyLink(link) })
     document.getElementById('c-name').value=''
     document.getElementById('c-slug').value=''
     document.getElementById('c-owner').value=''
     document.getElementById('c-email').value=''
     loadCourtesy()
-  }catch(e){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+e.message+'</div>'}
+  }catch(e){res_el.innerHTML='<div style="color:red;font-size:12px">Error: '+h(e.message)+'</div>'}
 }
 
 function copyCourtesyLink(url){
-  navigator.clipboard.writeText(url).then(function(){
-    alert('Link copiado: '+url)
-  }).catch(function(){
-    prompt('Copia este link:',url)
-  })
+  navigator.clipboard.writeText(url).then(function(){ alert('Link copiado: '+url) })
+    .catch(function(){ prompt('Copia este link:',url) })
 }
 
-// ═══ SECTION NAVIGATION ═══════════════════════════════════════════════════
-function showSASection(name){
-  ['pollas','results','trivia'].forEach(function(s){
-    var el=document.getElementById('sa-'+s)||document.getElementById('list-view')
-    if(s==='pollas'){
-      document.getElementById('list-view').style.display=(name==='pollas'?'':'none')
-      document.getElementById('detail-view').style.display='none'
-    } else {
-      if(el) el.style.display=(name===s?'block':'none')
-    }
-    var tab=document.getElementById('tab-'+s)
-    if(tab) tab.classList.toggle('active',name===s)
-  })
-  if(name==='results') loadMatches()
-  if(name==='trivia') loadGlobalTrivia()
-}
-
-// ═══ RESULTADOS OFICIALES ══════════════════════════════════════════════════
+// ── Resultados Oficiales ──────────────────────────────────────────────────
 var _allMatches=[]
 var _currentMatchId=null
-var _currentPhase='group'
 
 async function loadMatches(){
   try{
     var r=await fetch('/superadmin/matches',{headers:{'x-super-key':KEY}})
     _allMatches=await r.json()
     renderMatches('group')
-  }catch(e){document.getElementById('matches-list').innerHTML='<div style="color:var(--red);font-size:12px">Error: '+e.message+'</div>'}
+    document.querySelector('.ph-btn[data-ph="group"]').classList.add('active')
+  }catch(e){document.getElementById('matches-list').innerHTML='<div style="color:var(--red);font-size:12px">Error: '+h(e.message)+'</div>'}
 }
 
 function filterPhase(ph){
-  _currentPhase=ph
   document.querySelectorAll('.ph-btn').forEach(function(b){ b.classList.toggle('active',b.dataset.ph===ph) })
   renderMatches(ph)
 }
@@ -2583,23 +2572,24 @@ function filterPhase(ph){
 function renderMatches(ph){
   var matches=_allMatches.filter(function(m){ return m.phase===ph })
   var container=document.getElementById('matches-list')
-  if(!matches.length){ container.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay partidos en esta fase aun.</div>'; return }
-  container.innerHTML=matches.map(function(m){
-    var teams=m.team1&&m.team2 ? m.team1+' vs '+m.team2 : (m.label||'Partido '+m.match_num)
+  if(!matches.length){container.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay partidos en esta fase.</div>';return}
+  var html=''
+  matches.forEach(function(m){
+    var teams=m.team1&&m.team2 ? h(m.team1)+' vs '+h(m.team2) : h(m.label||'Partido '+m.match_num)
     var hasResult=m.res_home!=null
     var resultTxt=hasResult ? m.res_home+' - '+m.res_away+(m.had_penalties?' (pen)':'') : 'Sin resultado'
     var dateStr=m.match_date ? new Date(m.match_date).toLocaleDateString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''
-    return '<div class="match-card'+(hasResult?' has-result':'')+'" data-mid="'+m.id+'">'+
+    html+='<div class="match-card'+(hasResult?' has-result':'')+'" data-mid="'+m.id+'">'+
       '<div class="match-num">#'+m.match_num+'</div>'+
       '<div style="flex:1">'+
         '<div class="match-teams">'+teams+'</div>'+
-        '<div class="match-date">'+dateStr+(m.group_name?' &middot; Grupo '+m.group_name:'')+(m.venue?' &middot; '+m.venue.split(',')[0]:'')+'</div>'+
+        '<div class="match-date">'+dateStr+(m.group_name?' &middot; Grupo '+h(m.group_name):'')+(m.venue?' &middot; '+h(m.venue.split(',')[0]):'')+'</div>'+
       '</div>'+
       '<div class="match-result'+(hasResult?'':' empty-res')+'">'+resultTxt+'</div>'+
-      '<button class="match-edit">'+( hasResult ? '&#9998; Editar' : '+ Ingresar')+'</button>'+
+      '<button class="match-edit">'+(hasResult?'&#9998; Editar':'+ Ingresar')+'</button>'+
     '</div>'
-  }).join('')
-  // Attach click handlers using _allMatches lookup (avoids JSON in onclick)
+  })
+  container.innerHTML=html
   container.querySelectorAll('.match-card').forEach(function(card){
     card.addEventListener('click',function(){
       var mid=+card.dataset.mid
@@ -2621,8 +2611,9 @@ function openResultForm(m){
   document.getElementById('rfb-pens').checked=!!m.had_penalties
   document.getElementById('rfb-pen-row').style.display=isKnockout?'block':'none'
   document.getElementById('rfb-pen-winner-row').style.display=m.had_penalties?'block':'none'
-  if(m.team1){ document.getElementById('rfb-pen-opt1').textContent=m.team1; document.getElementById('rfb-pen-opt1').value=m.team1 }
-  if(m.team2){ document.getElementById('rfb-pen-opt2').textContent=m.team2; document.getElementById('rfb-pen-opt2').value=m.team2 }
+  var opt1=document.getElementById('rfb-pen-opt1'),opt2=document.getElementById('rfb-pen-opt2')
+  if(m.team1){opt1.textContent=m.team1;opt1.value=m.team1}
+  if(m.team2){opt2.textContent=m.team2;opt2.value=m.team2}
   document.getElementById('rfb-pen-winner').value=m.penalty_winner||''
   document.getElementById('rfb-yc').value=m.yellow_cards!=null?m.yellow_cards:''
   document.getElementById('rfb-rc').value=m.red_cards!=null?m.red_cards:''
@@ -2631,13 +2622,15 @@ function openResultForm(m){
   document.getElementById('rfb-g2').value=m.goals_second_half!=null?m.goals_second_half:''
   document.getElementById('rfb-mvp').value=m.mvp_player||''
   document.getElementById('rfb-err').style.display='none'
-  document.getElementById('rfb-save-btn').textContent='\u2705 Guardar Resultado'
+  document.getElementById('rfb-save-btn').textContent='Guardar Resultado'
   document.getElementById('rfb-save-btn').disabled=false
-  var box=document.getElementById('result-form-box')
-  box.style.display='flex'
+  document.getElementById('result-form-box').style.display='flex'
 }
-document.getElementById('rfb-pens').addEventListener('change',function(){
-  document.getElementById('rfb-pen-winner-row').style.display=this.checked?'block':'none'
+
+document.addEventListener('DOMContentLoaded',function(){
+  document.getElementById('rfb-pens').addEventListener('change',function(){
+    document.getElementById('rfb-pen-winner-row').style.display=this.checked?'block':'none'
+  })
 })
 
 function closeResultForm(){ document.getElementById('result-form-box').style.display='none' }
@@ -2645,7 +2638,7 @@ function closeResultForm(){ document.getElementById('result-form-box').style.dis
 async function submitResult(){
   var home=document.getElementById('rfb-home').value
   var away=document.getElementById('rfb-away').value
-  if(home===''||away===''){ document.getElementById('rfb-err').textContent='Ingresa ambos marcadores'; document.getElementById('rfb-err').style.display='block'; return }
+  if(home===''||away===''){document.getElementById('rfb-err').textContent='Ingresa ambos marcadores';document.getElementById('rfb-err').style.display='block';return}
   var hasPens=document.getElementById('rfb-pens').checked
   var penWinner=hasPens?document.getElementById('rfb-pen-winner').value:null
   var yc=document.getElementById('rfb-yc').value
@@ -2655,7 +2648,7 @@ async function submitResult(){
   var g2=document.getElementById('rfb-g2').value
   var mvp=document.getElementById('rfb-mvp').value.trim()
   var btn=document.getElementById('rfb-save-btn')
-  btn.disabled=true; btn.textContent='Guardando...'
+  btn.disabled=true;btn.textContent='Guardando...'
   try{
     var r=await fetch('/superadmin/results',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
       body:JSON.stringify({matchId:_currentMatchId,home:+home,away:+away,hadPenalties:hasPens,penaltyWinner:penWinner||null,
@@ -2664,22 +2657,22 @@ async function submitResult(){
     var d=await r.json()
     if(!r.ok) throw new Error(d.error||'Error')
     closeResultForm()
-    alert('\u2705 Resultado guardado! Predicciones actualizadas: '+d.predictions_updated+' en todas las pollas.')
+    alert('Resultado guardado! Predicciones actualizadas en todas las pollas: '+d.predictions_updated)
     loadMatches()
   }catch(e){
     document.getElementById('rfb-err').textContent='Error: '+e.message
     document.getElementById('rfb-err').style.display='block'
-    btn.disabled=false; btn.textContent='\u2705 Guardar Resultado'
+    btn.disabled=false;btn.textContent='Guardar Resultado'
   }
 }
 
-// ═══ TRIVIA GLOBAL ═════════════════════════════════════════════════════════
+// ── Trivia Global ──────────────────────────────────────────────────────────
 var _generatedTrivia=null
 
 async function generateGlobalTrivia(){
   var btn=document.getElementById('gtv-gen-btn')
   var err=document.getElementById('gtv-gen-err')
-  btn.disabled=true; btn.textContent='Generando...'
+  btn.disabled=true;btn.textContent='Generando...'
   err.style.display='none'
   document.getElementById('gtv-preview').style.display='none'
   try{
@@ -2693,16 +2686,16 @@ async function generateGlobalTrivia(){
     document.getElementById('gtv-prev-q').textContent=d.question
     var letters=['A','B','C','D']
     document.getElementById('gtv-prev-opts').innerHTML=d.options.map(function(opt,i){
-      return '<div style="background:'+(i===d.correct_answer?'var(--green-bg)':'var(--cream2)')+';border:1px solid '+(i===d.correct_answer?'var(--green-border)':'var(--border)')+';border-radius:5px;padding:4px 8px;font-size:11px"><strong>'+letters[i]+'.</strong> '+opt+'</div>'
+      return '<div style="background:'+(i===d.correct_answer?'var(--green-bg)':'var(--cream2)')+';border:1px solid '+(i===d.correct_answer?'var(--green-border)':'var(--border)')+';border-radius:5px;padding:4px 8px;font-size:11px"><strong>'+letters[i]+'.</strong> '+h(opt)+'</div>'
     }).join('')
-    document.getElementById('gtv-prev-explanation').textContent=d.explanation?'\u2705 '+d.explanation:''
+    document.getElementById('gtv-prev-explanation').textContent=d.explanation?'Explicacion: '+d.explanation:''
     document.getElementById('gtv-preview').style.display='block'
-  }catch(e){ err.textContent='Error: '+e.message; err.style.display='block' }
-  finally{ btn.disabled=false; btn.textContent='\u{1F916} Generar' }
+  }catch(e){err.textContent='Error: '+e.message;err.style.display='block'}
+  finally{btn.disabled=false;btn.textContent='Generar'}
 }
 
 async function saveGeneratedTrivia(){
-  if(!_generatedTrivia) return
+  if(!_generatedTrivia)return
   try{
     var r=await fetch('/superadmin/trivia',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
       body:JSON.stringify(_generatedTrivia)})
@@ -2712,34 +2705,33 @@ async function saveGeneratedTrivia(){
     _generatedTrivia=null
     document.getElementById('gtv-topic').value=''
     loadGlobalTrivia()
-    alert('\u2705 Trivia publicada en todas las pollas!')
-  }catch(e){ alert('Error: '+e.message) }
+    alert('Trivia publicada en todas las pollas!')
+  }catch(e){alert('Error: '+e.message)}
 }
 
 async function saveManualTrivia(){
   var q=document.getElementById('mtv-q').value.trim()
-  var o0=document.getElementById('mtv-o0').value.trim()
-  var o1=document.getElementById('mtv-o1').value.trim()
-  var o2=document.getElementById('mtv-o2').value.trim()
-  var o3=document.getElementById('mtv-o3').value.trim()
+  var opts=[
+    document.getElementById('mtv-o0').value.trim(),
+    document.getElementById('mtv-o1').value.trim(),
+    document.getElementById('mtv-o2').value.trim(),
+    document.getElementById('mtv-o3').value.trim()
+  ].filter(function(o){return o!==''})
   var correct=+document.getElementById('mtv-correct').value
   var diff=document.getElementById('mtv-diff').value
   var err=document.getElementById('mtv-err')
   err.style.display='none'
-  if(!q||!o0||!o1){ err.textContent='Pregunta y al menos 2 opciones son requeridas'; err.style.display='block'; return }
-  var options=[o0,o1]
-  if(o2) options.push(o2)
-  if(o3) options.push(o3)
-  if(correct>=options.length){ err.textContent='La respuesta correcta no existe en las opciones'; err.style.display='block'; return }
+  if(!q||opts.length<2){err.textContent='Pregunta y al menos 2 opciones son requeridas';err.style.display='block';return}
+  if(correct>=opts.length){err.textContent='La respuesta correcta no existe';err.style.display='block';return}
   try{
     var r=await fetch('/superadmin/trivia',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},
-      body:JSON.stringify({question:q,options:options,correct_answer:correct,difficulty:diff})})
+      body:JSON.stringify({question:q,options:opts,correct_answer:correct,difficulty:diff})})
     var d=await r.json()
     if(!r.ok) throw new Error(d.error)
-    ['mtv-q','mtv-o0','mtv-o1','mtv-o2','mtv-o3'].forEach(function(id){ document.getElementById(id).value='' })
+    ;['mtv-q','mtv-o0','mtv-o1','mtv-o2','mtv-o3'].forEach(function(id){document.getElementById(id).value=''})
     loadGlobalTrivia()
-    alert('\u2705 Trivia publicada!')
-  }catch(e){ err.textContent='Error: '+e.message; err.style.display='block' }
+    alert('Trivia publicada!')
+  }catch(e){err.textContent='Error: '+e.message;err.style.display='block'}
 }
 
 async function loadGlobalTrivia(){
@@ -2747,44 +2739,46 @@ async function loadGlobalTrivia(){
   try{
     var r=await fetch('/superadmin/trivia',{headers:{'x-super-key':KEY}})
     var rows=await r.json()
-    if(!rows.length){ el.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay preguntas globales aun.</div>'; return }
+    if(!rows.length){el.innerHTML='<div style="font-size:12px;color:var(--ink3)">No hay preguntas globales aun.</div>';return}
     var letters=['A','B','C','D']
-    el.innerHTML=rows.map(function(q){
+    var html=''
+    rows.forEach(function(q){
       var opts=typeof q.options==='string'?JSON.parse(q.options):q.options
       var diffLabel={easy:'Facil +2',medium:'Media +3',hard:'Dificil +4'}[q.difficulty]||q.difficulty
-      return '<div class="gtv-card">'+
+      html+='<div class="gtv-card">'+
         '<div style="display:flex;align-items:flex-start;gap:8px">'+
           '<div style="flex:1">'+
-            '<div class="gtv-q">'+q.question+'</div>'+
+            '<div class="gtv-q">'+h(q.question)+'</div>'+
             '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:.3rem">'+
-              opts.map(function(o,i){ return '<span style="font-size:10px;background:'+(i===+q.correct_answer?'var(--green-bg)':'var(--cream2)')+';border:1px solid '+(i===+q.correct_answer?'var(--green-border)':'var(--border)')+';border-radius:4px;padding:2px 7px">'+letters[i]+'. '+o+'</span>' }).join('')+
+              opts.map(function(o,i){
+                return '<span style="font-size:10px;background:'+(i===+q.correct_answer?'var(--green-bg)':'var(--cream2)')+';border:1px solid '+(i===+q.correct_answer?'var(--green-border)':'var(--border)')+';border-radius:4px;padding:2px 7px">'+letters[i]+'. '+h(o)+'</span>'
+              }).join('')+
             '</div>'+
-            '<div class="gtv-meta">'+diffLabel+' &middot; '+q.answer_count+' respuestas &middot; '+(q.is_active?'<span style=\"color:var(--green)\">Activa</span>':'<span style=\"color:var(--red)\">Inactiva</span>')+'</div>'+
+            '<div class="gtv-meta">'+diffLabel+' &middot; '+q.answer_count+' respuestas &middot; '+(q.is_active?'<span style="color:var(--green)">Activa</span>':'<span style="color:var(--red)">Inactiva</span>')+'</div>'+
           '</div>'+
           '<div style="display:flex;flex-direction:column;gap:4px">'+
-            '<button data-id="'+q.id+'" data-active="'+q.is_active+'" onclick="toggleGlobalTrivia(this)" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">'+
+            '<button class="gtv-toggle-btn" data-tid="'+h(q.id)+'" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">'+
               (q.is_active?'Pausar':'Activar')+'</button>'+
-            '<button data-id="'+q.id+'" onclick="deleteGlobalTrivia(this)" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">Borrar</button>'+
+            '<button class="gtv-del-btn" data-tid="'+h(q.id)+'" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">Borrar</button>'+
           '</div>'+
         '</div>'+
       '</div>'
-    }).join('')
-  }catch(e){ el.innerHTML='<div style="color:var(--red);font-size:12px">Error: '+e.message+'</div>' }
-}
-
-async function toggleGlobalTrivia(btn){
-  try{
-    var r=await fetch('/superadmin/trivia/'+btn.dataset.id+'/toggle',{method:'PUT',headers:{'x-super-key':KEY}})
-    if(r.ok) loadGlobalTrivia()
-  }catch(e){ alert('Error: '+e.message) }
-}
-
-async function deleteGlobalTrivia(btn){
-  if(!confirm('Eliminar esta pregunta de todas las pollas?')) return
-  try{
-    var r=await fetch('/superadmin/trivia/'+btn.dataset.id,{method:'DELETE',headers:{'x-super-key':KEY}})
-    if(r.ok) loadGlobalTrivia()
-  }catch(e){ alert('Error: '+e.message) }
+    })
+    el.innerHTML=html
+    el.querySelectorAll('.gtv-toggle-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        fetch('/superadmin/trivia/'+btn.dataset.tid+'/toggle',{method:'PUT',headers:{'x-super-key':KEY}})
+          .then(function(r){if(r.ok)loadGlobalTrivia()})
+      })
+    })
+    el.querySelectorAll('.gtv-del-btn').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        if(!confirm('Eliminar esta pregunta de todas las pollas?'))return
+        fetch('/superadmin/trivia/'+btn.dataset.tid,{method:'DELETE',headers:{'x-super-key':KEY}})
+          .then(function(r){if(r.ok)loadGlobalTrivia()})
+      })
+    })
+  }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px">Error: '+h(e.message)+'</div>'}
 }
 
 loadCourtesy()
