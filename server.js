@@ -186,6 +186,15 @@ const pool = new Pool({
 // Keep pool alive on Render (prevent idle disconnect)
 setInterval(()=>pool.query('SELECT 1').catch(()=>{}), 60000)
 
+// ─── IN-MEMORY CACHE (no Redis needed) ───────────────────────────────────────
+const _cache = {}
+function cacheGet(key){ const e=_cache[key]; if(!e) return null; if(Date.now()>e.exp){ delete _cache[key]; return null } return e.val }
+function cacheSet(key, val, ttlMs){ _cache[key]={val, exp:Date.now()+ttlMs} }
+function cacheDel(key){ delete _cache[key] }
+function cacheClear(pattern){ Object.keys(_cache).forEach(k=>{ if(k.includes(pattern)) delete _cache[k] }) }
+// Clean expired entries every 5 min
+setInterval(()=>{ const now=Date.now(); Object.keys(_cache).forEach(k=>{ if(_cache[k].exp<now) delete _cache[k] }) }, 5*60*1000)
+
 // ─── DB INIT ──────────────────────────────────────────────────────────────────
 async function initDb() {
   const c = await pool.connect()
@@ -493,10 +502,32 @@ function isMatchLocked(match,lockHours=2,phaseLocked=false){
 function getWinner(h,a){ return +h>+a?'home':+h<+a?'away':'draw' }
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
-// Marketing home
-app.get('/', (req,res) => res.sendFile(path.join(__dirname,'public','index.html')))
-app.get('/pele', (req,res) => res.sendFile(path.join(__dirname,'public','pele.html')))
-app.get('/bracket', (req,res) => res.sendFile(path.join(__dirname,'public','bracket-demo.html')))
+// Pre-load HTML pages into memory at startup for instant serving
+const _htmlCache = {}
+function serveHtml(file, maxAgeSeconds=300){
+  return (req,res)=>{
+    if(!_htmlCache[file]){
+      const fp = path.join(__dirname,'public',file)
+      try{ _htmlCache[file] = require('fs').readFileSync(fp) }catch(e){ return res.status(500).send('Error') }
+    }
+    res.setHeader('Content-Type','text/html; charset=utf-8')
+    res.setHeader('Cache-Control',`public, max-age=${maxAgeSeconds}, stale-while-revalidate=60`)
+    res.send(_htmlCache[file])
+  }
+}
+// Pre-load all HTML pages at startup
+;['index.html','pele.html','bracket-demo.html','terminos.html','privacidad.html'].forEach(f=>{
+  try{
+    _htmlCache[f] = require('fs').readFileSync(path.join(__dirname,'public',f))
+    console.log(`📄 Cached: ${f} (${(_htmlCache[f].length/1024).toFixed(0)}KB)`)
+  }catch(e){ console.warn(`⚠️ Could not pre-cache ${f}`) }
+})
+
+app.get('/', serveHtml('index.html', 300))          // 5 min browser cache
+app.get('/pele', serveHtml('pele.html', 300))        // 5 min browser cache
+app.get('/bracket', serveHtml('bracket-demo.html', 300)) // 5 min browser cache
+app.get('/terminos.html', serveHtml('terminos.html', 3600))
+app.get('/privacidad.html', serveHtml('privacidad.html', 3600))
 
 // Game SPA — serve app.html for all /t/:slug routes
 app.get('/t/:slug', (req,res) => res.sendFile(path.join(__dirname,'public','app.html')))
@@ -795,12 +826,19 @@ app.get('/api/tournaments/check/:slug', async(req,res)=>{
 
 app.get('/api/tournaments/:slug', async(req,res)=>{
   try{
+    const cacheKey='tournament:'+req.params.slug
+    const cached=cacheGet(cacheKey)
+    if(cached){
+      if(!cached.is_active) return res.status(403).json({error:'Esta polla aún no está activada. El administrador debe completar el pago.'})
+      return res.json(cached)
+    }
     const {rows:[t]}=await pool.query(
       'SELECT id,slug,name,logo_url,primary_color,is_active,is_demo,predictions_open FROM tournaments WHERE slug=$1',
       [req.params.slug]
     )
     if(!t) return res.status(404).json({error:'Polla no encontrada'})
     if(!t.is_active) return res.status(403).json({error:'Esta polla aún no está activada. El administrador debe completar el pago.'})
+    cacheSet(cacheKey, t, 5*60*1000) // 5 minutes
     res.json(t)
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
@@ -920,7 +958,10 @@ app.post('/api/avatars', auth, async(req,res)=>{
 // ─── MATCHES ──────────────────────────────────────────────────────────────────
 app.get('/api/matches', async(req,res)=>{
   try{
+    const cached=cacheGet('matches:all')
+    if(cached) return res.json(cached)
     const {rows}=await pool.query('SELECT * FROM matches ORDER BY match_num')
+    cacheSet('matches:all', rows, 6*60*60*1000) // 6 hours
     res.json(rows)
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
@@ -984,6 +1025,9 @@ app.post('/api/extra-predictions', auth, async(req,res)=>{
 app.get('/api/ranking', auth, async(req,res)=>{
   try{
     const tid=req.user.tournamentId
+    const cacheKey='ranking:'+tid
+    const cached=cacheGet(cacheKey)
+    if(cached) return res.json(cached)
     const {rows}=await pool.query(`
       SELECT av.id,av.nickname,av.photo_url,u.name as user_name,
         COALESCE(SUM(p.points_earned),0)+COALESCE(SUM(ep.points_earned),0)+
@@ -1001,7 +1045,9 @@ app.get('/api/ranking', auth, async(req,res)=>{
       WHERE av.tournament_id=$1 AND av.is_active=TRUE
       GROUP BY av.id,av.nickname,av.photo_url,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts,rb.points
       ORDER BY total_points DESC,matches_predicted ASC`,[tid])
-    res.json(rows.map((r,i)=>({...r,rank:i+1})))
+    const result=rows.map((r,i)=>({...r,rank:i+1}))
+    cacheSet(cacheKey, result, 30*1000) // 30 seconds
+    res.json(result)
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
 
@@ -1681,6 +1727,7 @@ app.post('/api/admin/results', auth, tournamentAdmin, async(req,res)=>{
       const pts=calcPoints(p,result,p.phase)
       await pool.query('UPDATE predictions SET points_earned=$1 WHERE id=$2',[pts,p.id])
     }
+    cacheClear('ranking:') // invalidate all ranking caches
     res.json({success:true,updated:preds.length})
   }catch(e){ console.error(e); res.status(500).json({error:'Error'}) }
 })
@@ -1977,6 +2024,7 @@ app.post('/superadmin/results', superAdmin, async(req,res)=>{
       const pts=calcExtraPoints(ep,result)
       await pool.query('UPDATE extra_predictions SET points_earned=$1 WHERE id=$2',[pts,ep.id])
     }
+    cacheClear('ranking:') // invalidate all ranking caches across all tournaments
     res.json({success:true,match_id:+matchId,predictions_updated:preds.length,extras_updated:extras.length})
   }catch(e){console.error('superadmin/results:',e);res.status(500).json({error:e.message})}
 })
