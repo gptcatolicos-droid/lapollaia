@@ -516,7 +516,7 @@ function serveHtml(file, maxAgeSeconds=300){
   }
 }
 // Pre-load all HTML pages at startup
-;['index.html','pele.html','bracket-demo.html','terminos.html','privacidad.html','empresas.html'].forEach(f=>{
+;['index.html','pele.html','bracket-demo.html','terminos.html','privacidad.html','empresas.html','universidades.html','clubes.html','edificios.html','conjuntos.html','guia-admin.html','guia-concursante.html'].forEach(f=>{
   try{
     _htmlCache[f] = require('fs').readFileSync(path.join(__dirname,'public',f))
     console.log(`📄 Cached: ${f} (${(_htmlCache[f].length/1024).toFixed(0)}KB)`)
@@ -533,8 +533,15 @@ app.get('/privacidad.html', serveHtml('privacidad.html', 3600))
 app.get('/t/:slug', (req,res) => res.sendFile(path.join(__dirname,'public','app.html')))
 app.get('/t/:slug/*', (req,res) => res.sendFile(path.join(__dirname,'public','app.html')))
 app.get('/empresas', serveHtml('empresas.html', 300))
+app.get('/universidades', serveHtml('universidades.html', 300))
+app.get('/clubes', serveHtml('clubes.html', 300))
+app.get('/edificios', serveHtml('edificios.html', 300))
+app.get('/conjuntos', serveHtml('conjuntos.html', 300))
+app.get('/guia-admin', serveHtml('guia-admin.html', 600))
+app.get('/guia-concursante', serveHtml('guia-concursante.html', 600))
 app.get('/blog', (req,res) => res.redirect(301,'/blog/'))
 app.get('/blog/', (req,res) => res.sendFile(path.join(__dirname,'public','blog','index.html')))
+app.get('/blog/historia-mundiales', (req,res) => res.sendFile(path.join(__dirname,'public','blog','historia-mundiales.html')))
 app.get('/blog/equipos/:slug', (req,res) => {
   const f = path.join(__dirname,'public','blog','equipos',req.params.slug)
   const fp = f.endsWith('.html') ? f : f+'.html'
@@ -1478,6 +1485,17 @@ app.post('/api/bracket/public-suggest', async(req,res)=>{
     if(!bracket.third)bracket.third={home:'',away:'',winner:'',home_score:0,away_score:0}
     if(!bracket.final)bracket.final={home:'',away:'',winner:champion,home_score:1,away_score:0}
     bracket.champion=champion;bracket.final.winner=champion
+    // Dedup safety: if AI ever returns same team on both sides of a match, clear away/winner
+    const dedup=(m)=>{
+      if(!m||typeof m!=='object')return m
+      const h=(m.home||'').trim(), a=(m.away||'').trim()
+      if(h && a && h.toLowerCase()===a.toLowerCase()){ m.away=''; m.winner=h; m.away_score=null }
+      if(m.winner && m.winner!==m.home && m.winner!==m.away) m.winner=h||a||''
+      return m
+    }
+    ;['round32','round16','quarters','semis'].forEach(k=>{ bracket[k]=bracket[k].map(dedup) })
+    bracket.third=dedup(bracket.third); bracket.final=dedup(bracket.final)
+    bracket.final.winner=champion
     res.json({bracket})
   }catch(e){console.error('public bracket:',e.message);res.status(500).json({error:'Error generando bracket: '+e.message})}
 })
@@ -1554,6 +1572,17 @@ Responde SOLO con JSON válido, sin markdown, sin texto extra:
     if(!bracket.final) bracket.final={home:'',away:'',winner:champion,home_score:null,away_score:null,penalties:false}
     bracket.champion = champion
     bracket.final.winner = champion
+    // Dedup safety: clear duplicate team on both sides of the same match
+    const dedup2=(m)=>{
+      if(!m||typeof m!=='object')return m
+      const h=(m.home||'').trim(), a=(m.away||'').trim()
+      if(h && a && h.toLowerCase()===a.toLowerCase()){ m.away=''; m.winner=h; m.away_score=null }
+      if(m.winner && m.winner!==m.home && m.winner!==m.away) m.winner=h||a||''
+      return m
+    }
+    ;['round32','round16','quarters','semis'].forEach(k=>{ bracket[k]=bracket[k].map(dedup2) })
+    bracket.third=dedup2(bracket.third); bracket.final=dedup2(bracket.final)
+    bracket.final.winner=champion
     res.json({bracket})
   }catch(e){
     console.error('bracket suggest:',e)

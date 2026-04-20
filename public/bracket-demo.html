@@ -137,6 +137,56 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
 .reset-btn:hover{border-color:rgba(246,201,14,.3);color:var(--gold)}
 .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);background:#16a34a;color:#fff;padding:.65rem 1.5rem;border-radius:100px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:999;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ─── Simulador de partidos ─────────────────────────────────────── */
+.sim-wrap{max-width:860px;margin:2.5rem auto 3rem;padding:0 1rem}
+.sim-card{background:linear-gradient(180deg,rgba(246,201,14,.05),rgba(255,255,255,.02));border:1px solid rgba(246,201,14,.2);border-radius:18px;padding:1.6rem 1.4rem;position:relative;overflow:hidden}
+.sim-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at top,rgba(246,201,14,.08),transparent 55%);pointer-events:none}
+.sim-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(246,201,14,.14);border:1px solid rgba(246,201,14,.3);color:var(--gold);padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:.55rem}
+.sim-title{font-size:clamp(1.2rem,3.6vw,1.55rem);font-weight:800;margin:0 0 .25rem;color:#fff;line-height:1.18}
+.sim-title span{color:var(--gold)}
+.sim-sub{color:rgba(255,255,255,.55);font-size:13.5px;margin:0 0 1.1rem;line-height:1.5}
+.sim-row{display:grid;grid-template-columns:1fr auto 1fr;gap:.65rem;align-items:center;margin-bottom:.9rem}
+.sim-col label{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.35rem}
+.sim-select{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:.7rem .8rem;color:#fff;font-size:14px;font-family:'DM Sans',sans-serif;appearance:none;cursor:pointer;transition:all .15s}
+.sim-select:hover{border-color:rgba(246,201,14,.35);background:rgba(246,201,14,.04)}
+.sim-select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(246,201,14,.15)}
+.sim-vs{font-size:18px;font-weight:900;color:rgba(246,201,14,.8);letter-spacing:.1em;align-self:end;padding-bottom:.75rem}
+.sim-btn{width:100%;background:var(--gold);color:var(--ink);border:none;border-radius:12px;padding:.95rem;font-size:14.5px;font-weight:800;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 22px rgba(246,201,14,.25)}
+.sim-btn:hover{transform:translateY(-1px);box-shadow:0 14px 34px rgba(246,201,14,.38)}
+.sim-btn:disabled{opacity:.6;cursor:wait;transform:none}
+.sim-out{display:none;margin-top:1.1rem;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1.1rem;animation:simFade .35s ease-out}
+.sim-out.show{display:block}
+@keyframes simFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.sim-score-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.6rem;margin-bottom:.8rem}
+.sim-team{text-align:center}
+.sim-team .flg{font-size:34px;line-height:1}
+.sim-team .nm{font-size:13px;font-weight:700;color:#fff;margin-top:.25rem}
+.sim-team.w .nm{color:var(--gold)}
+.sim-score{font-size:36px;font-weight:900;color:#fff;letter-spacing:.06em;text-align:center;min-width:90px;font-family:'DM Sans',sans-serif}
+.sim-score b{color:var(--gold)}
+.sim-result-label{text-align:center;font-size:11px;font-weight:700;color:rgba(255,255,255,.45);letter-spacing:.09em;text-transform:uppercase;margin-bottom:.85rem}
+.sim-pens{text-align:center;font-size:12px;color:rgba(246,201,14,.85);margin-top:-.55rem;margin-bottom:.65rem;font-weight:600}
+.sim-events{border-top:1px solid rgba(255,255,255,.06);padding-top:.8rem;display:grid;gap:.45rem}
+.sim-ev{display:flex;gap:.55rem;align-items:center;font-size:13px;color:rgba(255,255,255,.78)}
+.sim-ev .min{min-width:38px;font-weight:700;color:rgba(246,201,14,.7);font-size:11.5px;font-family:'DM Sans',sans-serif}
+.sim-ev .ico{width:16px;text-align:center}
+.sim-ev .txt{flex:1}
+.sim-ev .side{font-size:11px;color:rgba(255,255,255,.35)}
+.sim-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-top:.85rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.06)}
+.sim-stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:.55rem .6rem;text-align:center}
+.sim-stat .lbl{font-size:10px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem}
+.sim-stat .val{font-size:13px;font-weight:800;color:#fff}
+.sim-again{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.75);border-radius:10px;padding:.6rem 1rem;font-size:12.5px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;margin-top:.85rem;width:100%}
+.sim-again:hover{border-color:rgba(246,201,14,.35);color:var(--gold)}
+@media(max-width:540px){
+  .sim-row{grid-template-columns:1fr;gap:.5rem}
+  .sim-vs{text-align:center;padding:0}
+  .sim-score-row{gap:.35rem}
+  .sim-score{font-size:30px;min-width:70px}
+  .sim-team .flg{font-size:28px}
+  .sim-stats{grid-template-columns:repeat(3,1fr)}
+}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <!-- Google tag (gtag.js) -->
@@ -234,6 +284,64 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--ink)
     </div>
   </div>
 </div>
+<!-- ─── SIMULADOR DE PARTIDOS ─────────────────────────────────── -->
+<section class="sim-wrap" id="simulador" aria-label="Simulador de partidos">
+  <div class="sim-card">
+    <span class="sim-badge">⚽ Simulador IA</span>
+    <h2 class="sim-title">Simula cualquier partido del <span>Torneo 2026</span></h2>
+    <p class="sim-sub">Elige dos selecciones y Pelé IA simula el partido minuto a minuto: goles, tarjetas y estadísticas — incluso decide en penales si hay empate en eliminatoria.</p>
+    <div class="sim-row">
+      <div class="sim-col">
+        <label for="simHome">Local</label>
+        <select class="sim-select" id="simHome"></select>
+      </div>
+      <div class="sim-vs">VS</div>
+      <div class="sim-col">
+        <label for="simAway">Visitante</label>
+        <select class="sim-select" id="simAway"></select>
+      </div>
+    </div>
+    <div class="sim-row" style="grid-template-columns:1fr 1fr;gap:.6rem">
+      <div class="sim-col">
+        <label for="simStage">Instancia</label>
+        <select class="sim-select" id="simStage">
+          <option value="group">Fase de grupos</option>
+          <option value="knockout">Eliminatoria (con penales si hay empate)</option>
+        </select>
+      </div>
+      <div class="sim-col">
+        <label for="simVenue">Sede</label>
+        <select class="sim-select" id="simVenue">
+          <option value="neutral">Cancha neutral</option>
+          <option value="home">Ventaja local</option>
+          <option value="away">Ventaja visitante</option>
+        </select>
+      </div>
+    </div>
+    <button class="sim-btn" id="simBtn" onclick="simulateMatch()">
+      <img src="/pele.jpg" style="width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:top" alt=""/>
+      Simular partido con Pelé IA ✨
+    </button>
+    <div class="sim-out" id="simOut">
+      <div class="sim-result-label" id="simResLabel">Resultado final</div>
+      <div class="sim-score-row">
+        <div class="sim-team" id="simTeamH"><div class="flg">🏳️</div><div class="nm">—</div></div>
+        <div class="sim-score"><b id="simScH">0</b> <span style="color:rgba(255,255,255,.3)">·</span> <b id="simScA">0</b></div>
+        <div class="sim-team" id="simTeamA"><div class="flg">🏳️</div><div class="nm">—</div></div>
+      </div>
+      <div class="sim-pens" id="simPens" style="display:none"></div>
+      <div class="sim-events" id="simEvents"></div>
+      <div class="sim-stats">
+        <div class="sim-stat"><div class="lbl">Posesión</div><div class="val" id="stPos">—</div></div>
+        <div class="sim-stat"><div class="lbl">Remates</div><div class="val" id="stSht">—</div></div>
+        <div class="sim-stat"><div class="lbl">Córners</div><div class="val" id="stCor">—</div></div>
+      </div>
+      <button class="sim-again" onclick="simulateMatch()">↺ Simular otra vez</button>
+    </div>
+  </div>
+  <p style="text-align:center;color:rgba(255,255,255,.3);font-size:11.5px;margin-top:.9rem">Motor de simulación con ratings Elo, forma reciente y factor sede · solo diversión</p>
+</section>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -466,6 +574,153 @@ function resetAll(){
   document.getElementById('champSel').value=''
   document.getElementById('errMsg').style.display='none'
   window.scrollTo({top:0,behavior:'smooth'})
+}
+
+/* ─── SIMULADOR DE PARTIDOS ───────────────────────────────────── */
+const SIM_RATINGS={'Argentina':92,'France':91,'Brazil':90,'Spain':90,'England':89,'Portugal':88,'Germany':87,'Netherlands':86,'Belgium':85,'Italy':85,'Uruguay':84,'Croatia':83,'Colombia':82,'Morocco':82,'Mexico':81,'Senegal':80,'USA':80,'Japan':80,'Korea Republic':79,'Switzerland':79,'Denmark':79,'Ecuador':78,'Austria':78,'Australia':77,'Sweden':77,'Norway':77,'Poland':77,'Turkey':77,'Serbia':76,'Ivory Coast':76,'Ghana':76,'Algeria':76,'Egypt':75,'Tunisia':74,'Iran':74,'IR Iran':74,'Paraguay':74,'Saudi Arabia':74,'Scotland':74,'Wales':73,'Canada':73,'Qatar':72,'Iraq':72,'DR Congo':72,'Uzbekistan':72,'Jordan':71,'South Africa':71,'Panama':71,'Haiti':70,'Cape Verde':70,'Bosnia and Herzegovina':72,'Curaçao':70,'Czechia':75,'New Zealand':72}
+function simRating(n){ return SIM_RATINGS[n] || 73 }
+function simFlag(n){ return (typeof FLAGS!=='undefined' && FLAGS[n]) || '🏳️' }
+function simES(n){ return (typeof ES!=='undefined' && ES[n]) || n }
+
+function simPopulate(){
+  const names=Object.keys(SIM_RATINGS).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>simES(a).localeCompare(simES(b),'es'))
+  const h=document.getElementById('simHome'), a=document.getElementById('simAway')
+  if(!h||!a) return
+  const opts=names.map(n=>`<option value="${n}">${simFlag(n)} ${simES(n)}</option>`).join('')
+  h.innerHTML=opts; a.innerHTML=opts
+  h.value='Argentina'; a.value='Brazil'
+}
+simPopulate()
+
+function simPickScorer(team){
+  // Fake realistic scorer names per top team; fallback generic
+  const M={'Argentina':['L. Messi','L. Martínez','J. Álvarez','E. Fernández','T. Almada'],
+    'France':['K. Mbappé','O. Dembélé','A. Griezmann','R. Cherki','M. Thuram'],
+    'Brazil':['Vinicius Jr.','Rodrygo','Raphinha','Endrick','Estêvão'],
+    'Spain':['L. Yamal','N. Williams','A. Morata','P. Merino','Ferran Torres'],
+    'England':['H. Kane','J. Bellingham','B. Saka','C. Palmer','P. Foden'],
+    'Portugal':['C. Ronaldo','B. Silva','R. Leão','G. Ramos','J. Félix'],
+    'Germany':['F. Wirtz','J. Musiala','K. Havertz','N. Füllkrug','S. Gnabry'],
+    'Colombia':['L. Díaz','J. Cuadrado','J. Rodríguez','J. Córdoba','R. Borré'],
+    'Uruguay':['D. Núñez','F. Valverde','M. Araújo','R. Araújo','G. Pellistri'],
+    'Netherlands':['M. Depay','C. Gakpo','X. Simons','D. Malen','J. Veerman'],
+    'Mexico':['S. Giménez','H. Lozano','R. Jiménez','E. Álvarez','O. Pineda'],
+    'USA':['C. Pulisic','T. Weah','G. Reyna','F. Balogun','W. McKennie'],
+    'Morocco':['H. Ziyech','A. Hakimi','Y. En-Nesyri','S. Amrabat','B. Díaz'],
+    'Japan':['T. Kubo','K. Mitoma','W. Endo','A. Ueda','D. Kamada']}
+  const arr=M[team]; if(!arr) return 'N° 9 de '+simES(team)
+  return arr[Math.floor(Math.random()*arr.length)]
+}
+function simChance(p){ return Math.random()<p }
+function simPoisson(l){
+  const L=Math.exp(-l); let k=0,p=1
+  do{ k++; p*=Math.random() }while(p>L)
+  return k-1
+}
+function simulateMatch(){
+  const hEl=document.getElementById('simHome'), aEl=document.getElementById('simAway')
+  const stageEl=document.getElementById('simStage'), venueEl=document.getElementById('simVenue')
+  const btn=document.getElementById('simBtn'), out=document.getElementById('simOut')
+  if(!hEl||!aEl) return
+  const home=hEl.value, away=aEl.value
+  if(!home||!away) return
+  if(home===away){ out.classList.remove('show'); out.style.display='block'; out.innerHTML='<div style="text-align:center;color:#fca5a5;padding:.8rem">Elige dos selecciones distintas.</div>'; return }
+  btn.disabled=true; btn.innerHTML='<span>⚽</span> Simulando...'
+
+  setTimeout(()=>{
+    const rH=simRating(home), rA=simRating(away)
+    const venue=venueEl.value
+    const venueH = venue==='home'?3 : venue==='away'?-3 : 0
+    const diff = (rH+venueH) - rA
+    const baseH = 1.25, baseA = 1.1
+    const lamH = Math.max(0.25, baseH + diff*0.045)
+    const lamA = Math.max(0.25, baseA - diff*0.045)
+    let scoreH=simPoisson(lamH), scoreA=simPoisson(lamA)
+
+    // Build minute events
+    const events=[]
+    function pushGoals(team, count, side){
+      for(let i=0;i<count;i++){
+        const min = 5 + Math.floor(Math.random()*85)
+        events.push({min,type:'goal',side,team,txt:'⚽ Gol de '+simPickScorer(team),order:min})
+      }
+    }
+    pushGoals(home,scoreH,'H'); pushGoals(away,scoreA,'A')
+    // Yellow cards: 2-5 total
+    const yc = 2+Math.floor(Math.random()*4)
+    for(let i=0;i<yc;i++){
+      const side = Math.random()<0.5?'H':'A'
+      const team = side==='H'?home:away
+      events.push({min:10+Math.floor(Math.random()*80),type:'yc',side,team,txt:'🟨 Amarilla · '+simES(team)})
+    }
+    // Red card rare: 15%
+    if(simChance(0.15)){
+      const side=Math.random()<0.5?'H':'A'
+      const team=side==='H'?home:away
+      events.push({min:30+Math.floor(Math.random()*55),type:'rc',side,team,txt:'🟥 Roja directa · '+simES(team)})
+    }
+    events.sort((x,y)=>x.min-y.min)
+
+    // Stats
+    const totalPow = rH+rA
+    const posH = Math.max(35, Math.min(65, Math.round((rH/totalPow)*100 + (Math.random()*10-5))))
+    const shH = 6 + scoreH + Math.floor(Math.random()*6)
+    const shA = 5 + scoreA + Math.floor(Math.random()*6)
+    const coH = 2 + Math.floor(Math.random()*7)
+    const coA = 2 + Math.floor(Math.random()*7)
+
+    // Knockout penalty handling
+    let pensLine=''
+    let winnerSide=null
+    const knockout = stageEl.value==='knockout'
+    if(knockout && scoreH===scoreA){
+      // Simulate penalty shootout — 5 rounds minimum
+      let pH=0,pA=0, rounds=5
+      const pH_rate = 0.74 + (rH-75)*0.005
+      const pA_rate = 0.74 + (rA-75)*0.005
+      for(let i=0;i<rounds;i++){
+        if(Math.random()<pH_rate) pH++
+        if(Math.random()<pA_rate) pA++
+      }
+      // sudden death if tied
+      while(pH===pA){
+        const a=Math.random()<pH_rate?1:0
+        const b=Math.random()<pA_rate?1:0
+        pH+=a; pA+=b
+        if(a!==b) break
+      }
+      pensLine = 'Gana en penales ('+pH+' - '+pA+')'
+      winnerSide = pH>pA?'H':'A'
+    }
+
+    // Render
+    document.getElementById('simScH').textContent=scoreH
+    document.getElementById('simScA').textContent=scoreA
+    const tH=document.getElementById('simTeamH'), tA=document.getElementById('simTeamA')
+    tH.innerHTML='<div class="flg">'+simFlag(home)+'</div><div class="nm">'+simES(home)+'</div>'
+    tA.innerHTML='<div class="flg">'+simFlag(away)+'</div><div class="nm">'+simES(away)+'</div>'
+    tH.classList.toggle('w', (scoreH>scoreA) || winnerSide==='H')
+    tA.classList.toggle('w', (scoreA>scoreH) || winnerSide==='A')
+
+    const resLbl = knockout ? 'Resultado eliminatoria' : 'Resultado fase de grupos'
+    document.getElementById('simResLabel').textContent=resLbl
+    const pEl=document.getElementById('simPens')
+    if(pensLine){ pEl.textContent=pensLine; pEl.style.display='block' } else { pEl.style.display='none' }
+
+    const evEl=document.getElementById('simEvents')
+    evEl.innerHTML = events.length
+      ? events.map(e=>`<div class="sim-ev"><span class="min">${e.min}'</span><span class="ico"></span><span class="txt">${e.txt}</span><span class="side">${e.side==='H'?simES(home):simES(away)}</span></div>`).join('')
+      : '<div class="sim-ev" style="justify-content:center;color:rgba(255,255,255,.4)">Partido trabado · pocas ocasiones claras</div>'
+
+    document.getElementById('stPos').textContent = posH+'% · '+(100-posH)+'%'
+    document.getElementById('stSht').textContent = shH+' · '+shA
+    document.getElementById('stCor').textContent = coH+' · '+coA
+
+    out.style.display='block'
+    out.classList.remove('show'); void out.offsetWidth; out.classList.add('show')
+    btn.disabled=false
+    btn.innerHTML='<img src="/pele.jpg" style="width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:top" alt=""/> Simular partido con Pelé IA ✨'
+  }, 650)
 }
 </script>
 </body>
