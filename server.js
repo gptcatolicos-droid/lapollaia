@@ -516,7 +516,7 @@ function serveHtml(file, maxAgeSeconds=300){
   }
 }
 // Pre-load all HTML pages at startup
-;['index.html','pele.html','bracket-demo.html','terminos.html','privacidad.html'].forEach(f=>{
+;['index.html','pele.html','bracket-demo.html','terminos.html','privacidad.html','empresas.html'].forEach(f=>{
   try{
     _htmlCache[f] = require('fs').readFileSync(path.join(__dirname,'public',f))
     console.log(`📄 Cached: ${f} (${(_htmlCache[f].length/1024).toFixed(0)}KB)`)
@@ -532,6 +532,19 @@ app.get('/privacidad.html', serveHtml('privacidad.html', 3600))
 // Game SPA — serve app.html for all /t/:slug routes
 app.get('/t/:slug', (req,res) => res.sendFile(path.join(__dirname,'public','app.html')))
 app.get('/t/:slug/*', (req,res) => res.sendFile(path.join(__dirname,'public','app.html')))
+app.get('/empresas', serveHtml('empresas.html', 300))
+app.get('/blog', (req,res) => res.redirect(301,'/blog/'))
+app.get('/blog/', (req,res) => res.sendFile(path.join(__dirname,'public','blog','index.html')))
+app.get('/blog/equipos/:slug', (req,res) => {
+  const f = path.join(__dirname,'public','blog','equipos',req.params.slug)
+  const fp = f.endsWith('.html') ? f : f+'.html'
+  res.sendFile(fp, err => { if(err) res.status(404).send('Página no encontrada') })
+})
+app.get('/blog/predicciones/:slug', (req,res) => {
+  const f = path.join(__dirname,'public','blog','predicciones',req.params.slug)
+  const fp = f.endsWith('.html') ? f : f+'.html'
+  res.sendFile(fp, err => { if(err) res.status(404).send('Página no encontrada') })
+})
 
 // ─── MERCADOPAGO CHECKOUT ─────────────────────────────────────────────────────
 app.post('/api/tournaments/create', async(req,res)=>{
