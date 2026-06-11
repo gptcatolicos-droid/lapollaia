@@ -1,4 +1,13 @@
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
+// ─── TOURNAMENT CONTEXT ───────────────────────────────────────────────────────
+const TOURNAMENT_SLUG = (()=>{
+  const m = window.location.pathname.match(/^\/t\/([^/]+)/)
+  return m ? m[1] : null
+})()
+
+// Base API call — injects tournamentId into every request
+const _apiBase = window.__apiBase__ || ''
+
 const FLAGS={
   // GRUPOS CONFIRMADOS — FIFA World Cup 2026
   // GRUPO A
@@ -193,27 +202,35 @@ function Toggle({on,onChange}){
 
 // ─── NAV ──────────────────────────────────────────────────────────────────────
 function Nav(){
-  const {user,activeAvatar,view,setView,logout}=useApp()
+  const {user,activeAvatar,view,setView,logout,tournament}=useApp()
+  const tName=tournament?.name||'POLLA'
+  // Truncate tournament name on mobile-ish sizes
+  const shortName=tName.length>14?tName.substring(0,13)+'…':tName
   return(
     <nav className="nav">
-      <div style={{cursor:'pointer',display:'flex',alignItems:'center',gap:'8px'}} onClick={()=>setView(user?'dashboard':'landing')}>
-        <img src="/logo.png" alt="Polla 2026" style={{height:'42px',width:'42px',objectFit:'contain'}}/>
-        <div>
-          <div className="nav-logo" style={{lineHeight:1}}>POLLA <span>2026</span></div>
-          <div className="nav-sub">FIFA World Cup · USA · CAN · MEX</div>
+      <div style={{cursor:'pointer',display:'flex',alignItems:'center',gap:'7px',minWidth:0,flex:1,overflow:'hidden'}} onClick={()=>setView(user?'dashboard':'landing')}>
+        <img src={tournament?.logo_url||"/logo.png"} alt={tName} style={{height:'36px',width:'36px',objectFit:'contain',flexShrink:0}}/>
+        <div style={{minWidth:0,overflow:'hidden'}}>
+          <div className="nav-logo" style={{lineHeight:1,fontSize:tName.length>14?'.9rem':tName.length>10?'1rem':'inherit',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+            {shortName} <span style={{color:'var(--gold)'}}>2026</span>
+          </div>
+          <div className="nav-sub">{tournament?.is_demo?'⚡ Demo':'Pronósticos · Mundial 2026'}</div>
         </div>
       </div>
-      <div className="nav-actions">
-        <button className="btn btn-outline btn-sm" onClick={()=>setView('ranking')}>🏅 Ranking</button>
-        {user?(
+      <div className="nav-actions" style={{flexShrink:0,flexWrap:'nowrap'}}>
+        {user&&view!=='dashboard'&&(
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>← Inicio</button>
+        )}
+        {user&&view==='dashboard'&&(
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('ranking')}>🏅</button>
+        )}
+        {user&&(
           <>
-            {user.isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>setView('admin')}>⚙️ Admin</button>}
-            <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>
-              {activeAvatar?<AvatarCircle nickname={activeAvatar.nickname} photoUrl={activeAvatar.photo_url} size={22}/>:'🏠'}
-            </button>
+            {user.isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>setView('admin')}>⚙️</button>}
             <button className="btn btn-outline btn-sm" onClick={logout}>Salir</button>
           </>
-        ):(
+        )}
+        {!user&&(
           <button className="btn btn-ink btn-sm" onClick={()=>setView('auth')}>Entrar →</button>
         )}
       </div>
@@ -248,10 +265,32 @@ function Countdown(){
 
 // ─── LANDING PAGE ─────────────────────────────────────────────────────────────
 function LandingPage(){
-  const {setView}=useApp()
+  const {setView,tournament}=useApp()
+  // If no tournament context (user landed on /t/slug directly without valid slug), go home
+  React.useEffect(()=>{
+    if(TOURNAMENT_SLUG&&!tournament){
+      // still loading, wait
+    } else if(!TOURNAMENT_SLUG){
+      window.location.href='/'
+    }
+  },[tournament])
   return(
     <div className="page">
       <Nav/>
+      {tournament?.is_demo&&(
+        <div style={{background:'linear-gradient(135deg,#0f2310,#112011)',borderBottom:'2px solid rgba(34,197,94,.3)',
+          padding:'10px 1.25rem',display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap',zIndex:5,position:'relative'}}>
+          <span style={{fontSize:'1.3rem'}}>⚡</span>
+          <div style={{flex:1,minWidth:180}}>
+            <div style={{fontWeight:700,color:'#4ade80',fontSize:'13px',lineHeight:1.3}}>Modo Demo — Todo dura 24 horas</div>
+            <div style={{fontSize:'11px',color:'rgba(74,222,128,.6)',marginTop:'2px'}}>
+              Lo que ingreses aquí se borra automáticamente. Es para explorar sin compromiso.
+            </div>
+          </div>
+          <a href="/" style={{background:'#16a34a',color:'#fff',textDecoration:'none',fontWeight:700,fontSize:'11px',
+            padding:'6px 12px',borderRadius:'6px',whiteSpace:'nowrap',boxShadow:'0 0 12px rgba(22,163,74,.4)'}}>🏆 Crear mi Polla Real ($3.99)</a>
+        </div>
+      )}
       <div className="hero">
         <div className="hero-bg" style={{backgroundImage:`url('/bg.jpg')`}}/>
         <div className="hero-content">
@@ -270,34 +309,49 @@ function LandingPage(){
 
 // ─── AUTH PAGE ────────────────────────────────────────────────────────────────
 function AuthPage(){
-  const {setUser,setAvatars,setView}=useApp()
-  const [tab,setTab]=React.useState('login') // 'login' | 'register' | 'admin'
+  const {setUser,setAvatars,setView,tournament}=useApp()
+  const [tab,setTab]=React.useState('login')
   const [form,setForm]=React.useState({name:'',email:'',password:''})
   const [loading,setLoading]=React.useState(false)
   const [err,setErr]=React.useState('')
+  const [captchaQ,setCaptchaQ]=React.useState(()=>{const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1;return{a,b,ans:a+b}})
+  const [captchaVal,setCaptchaVal]=React.useState('')
+
+  React.useEffect(()=>{
+    if(tab==='register'){
+      const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1
+      setCaptchaQ({a,b,ans:a+b}); setCaptchaVal('')
+    }
+  },[tab])
 
   const upd=k=>e=>setForm(p=>({...p,[k]:e.target.value}))
 
   async function handleLogin(e){
     e.preventDefault(); setLoading(true); setErr('')
     try{
-      const data=await api('/api/auth/login','POST',{email:form.email,password:form.password})
+      const data=await api('/api/auth/login','POST',{email:form.email,password:form.password,tournamentId:window.__TOURNAMENT_ID__||''})
       localStorage.setItem('polla_token',data.token)
       setUser(data.user); setAvatars(data.avatars||[])
       if(data.user.isAdmin) setView('admin')
       else if(!data.user.termsAccepted) setView('terms')
-      else if(!data.avatars||!data.avatars.length) setView('avatars')
       else setView('dashboard')
     }catch(e){setErr(e.message)}
     setLoading(false)
   }
 
   async function handleRegister(e){
-    e.preventDefault(); setLoading(true); setErr('')
+    e.preventDefault(); setErr('')
+    if(parseInt(captchaVal)!==captchaQ.ans){
+      setErr(`La respuesta al captcha es incorrecta. ¿Cuánto es ${captchaQ.a} + ${captchaQ.b}?`)
+      const a=Math.floor(Math.random()*9)+1,b=Math.floor(Math.random()*9)+1
+      setCaptchaQ({a,b,ans:a+b}); setCaptchaVal('')
+      return
+    }
+    setLoading(true)
     try{
-      const data=await api('/api/auth/register','POST',{name:form.name,email:form.email,password:form.password})
+      const data=await api('/api/auth/register','POST',{name:form.name,email:form.email,password:form.password,tournamentId:window.__TOURNAMENT_ID__||''})
       localStorage.setItem('polla_token',data.token)
-      setUser(data.user); setAvatars([])
+      setUser(data.user); setAvatars(data.avatars||[])
       setView('terms')
     }catch(e){setErr(e.message)}
     setLoading(false)
@@ -317,13 +371,13 @@ function AuthPage(){
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'2rem 1rem'}}>
         <div className="card" style={{maxWidth:400,width:'100%'}}>
           <div style={{textAlign:'center',marginBottom:'1.5rem'}}>
-            <img src="/logo.png" alt="Polla 2026" style={{width:'90px',height:'90px',objectFit:'contain',marginBottom:'.5rem'}}/>
-            <p className="text-muted text-sm">Un correo · múltiples avatares · U$20 por avatar</p>
+            <img src={tournament?.logo_url||"/logo.png"} alt={tournament?.name||"Polla 2026"} style={{width:'90px',height:'90px',objectFit:'contain',marginBottom:'.5rem'}}/>
+            <p className="text-muted text-sm">{tournament?.is_demo?'⚡ Demo gratuita — explora sin límites':'Regístrate y participa en la polla'}</p>
           </div>
 
           {err&&<Alert type="error">{err}</Alert>}
 
-          {tab!=='admin'?(
+          {tab!=='admin'&&(
             <>
               <div style={{display:'flex',background:'var(--cream2)',borderRadius:'8px',padding:'3px',marginBottom:'1.25rem'}}>
                 <button style={tabStyle(tab==='login')} onClick={()=>{setTab('login');setErr('')}}>Ingresar</button>
@@ -356,28 +410,18 @@ function AuthPage(){
                     <label>Contraseña <span className="text-muted text-xs">(mínimo 6 caracteres)</span></label>
                     <input className="inp" type="password" placeholder="••••••••" value={form.password} onChange={upd('password')} required minLength={6}/>
                   </div>
+                  <div className="form-group">
+                    <label>Verificación — ¿Cuánto es {captchaQ.a} + {captchaQ.b}?</label>
+                    <input className="inp" type="number" placeholder="Respuesta" value={captchaVal} onChange={e=>setCaptchaVal(e.target.value)} required style={{maxWidth:120}}/>
+                  </div>
                   <button className="btn btn-gold btn-full" disabled={loading}>{loading?'Creando cuenta...':'Crear cuenta →'}</button>
                 </form>
               )}
 
-              <div style={{textAlign:'center',marginTop:'1.25rem'}}>
-                <button className="btn btn-outline btn-sm" style={{fontSize:'11px',opacity:.6}} onClick={()=>{setTab('admin');setErr('')}}>⚙️ Acceso Admin</button>
+              <div style={{textAlign:'center',marginTop:'1.25rem',fontSize:'11px',color:'var(--ink3)'}}>
+                ¿Eres admin? Ingresa con tu correo y contraseña normalmente.
               </div>
             </>
-          ):(
-            <form onSubmit={handleLogin}>
-              <div style={{textAlign:'center',marginBottom:'1rem',fontWeight:700,fontSize:'13px',letterSpacing:'.5px'}}>ADMINISTRADOR</div>
-              <div className="form-group">
-                <label>Correo</label>
-                <input className="inp" type="email" value={form.email} onChange={upd('email')} required/>
-              </div>
-              <div className="form-group">
-                <label>Contraseña</label>
-                <input className="inp" type="password" value={form.password} onChange={upd('password')} required/>
-              </div>
-              <button className="btn btn-ink btn-full" disabled={loading}>{loading?'Entrando...':'Entrar como Admin'}</button>
-              <button type="button" className="btn btn-outline btn-sm btn-full mt1" onClick={()=>{setTab('login');setErr('')}}>← Volver</button>
-            </form>
           )}
 
           <p className="text-center text-muted text-xs mt2">
@@ -403,7 +447,7 @@ function TermsPage(){
     try{
       await api('/api/auth/terms','POST',{phone:form.phone,whatsappConsent:form.whatsapp})
       setUser(u=>({...u,termsAccepted:true,phone:form.phone,whatsappConsent:form.whatsapp}))
-      setView('guide')
+      setView('chat')
     }catch(e){setErr(e.message)}
     setLoading(false)
   }
@@ -418,16 +462,16 @@ function TermsPage(){
         <div className="modal-body">
           {err&&<Alert type="error">{err}</Alert>}
           <div style={{fontSize:'12px',color:'var(--ink3)',lineHeight:'1.8'}}>
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>1. Registro y Avatares</strong>
-            Un usuario puede registrarse con su correo y contraseña, y crear múltiples avatares (nicknames de competencia). Cada avatar tiene un costo de <strong>U$20</strong>, pagaderos por PayPal o Nequi. La activación de cada avatar es manual por parte del administrador.
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>2. Plazo de Pago</strong>
-            Todos los avatares deben tener su pago confirmado antes del inicio del torneo. Avatares sin pago quedan bloqueados permanentemente.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>1. Naturaleza del Servicio</strong>
+            La Polla IA es una plataforma de entretenimiento y pronósticos deportivos. <strong>No es una plataforma de apuestas ni de juegos de azar.</strong> No se gestionan ni distribuyen premios económicos a través de esta plataforma.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>2. Registro y Participación</strong>
+            Al registrarte obtienes acceso a la plataforma. El administrador de la polla aprueba quién participa según las normas de su grupo. La participación es de carácter recreativo y social.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>3. Pronósticos y Edición</strong>
-            Cada avatar puede editar sus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
+            Puedes editar tus marcadores hasta 2 horas antes de cada partido. El administrador puede cerrar fases manualmente. El sistema guarda automáticamente. No se aceptan reclamos por pronósticos no guardados.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>4. Sistema de Puntos</strong>
-            Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u.
-            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Premios</strong>
-            Del total recaudado: 80% al primer lugar y 20% al segundo. Los premios se transfieren por PayPal o Nequi dentro de los 5 días hábiles siguientes al partido final.
+            Marcador exacto: 3-10 pts según fase. Ganador correcto: 2-5 pts. Extra Points (tarjetas, goles, MVP): +1 pt si aciertas al menos uno. Predicciones especiales: Campeón +10, Sorpresa +3, Balón/Guante/Bota de Oro +5 c/u. Pronóstico General: +100 pts si aciertas el path completo sin editar, +10 pts si editas y aciertas.
+            <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>5. Conducta</strong>
+            Queda prohibido utilizar la plataforma para apuestas, captación de dinero o cualquier actividad económica entre participantes. El uso es exclusivamente recreativo.
             <strong style={{color:'var(--ink)',display:'block',fontSize:'11px',textTransform:'uppercase',letterSpacing:'.5px',margin:'8px 0 3px'}}>6. Privacidad</strong>
             Los datos personales solo se usan para gestionar la Polla. El celular solo se usa para notificaciones WhatsApp si el usuario lo aprueba.
           </div>
@@ -446,7 +490,7 @@ function TermsPage(){
             <div className={`chk ${form.accepted?'chk-on':''}`} onClick={()=>setForm(p=>({...p,accepted:!p.accepted}))}>
               {form.accepted&&'✓'}
             </div>
-            <span><strong>He leído y acepto los Términos y Condiciones</strong> — incluye política de premios y pagos</span>
+            <span><strong>He leído y acepto los Términos y Condiciones</strong> de La Polla IA</span>
           </div>
         </div>
         <div className="modal-foot">
@@ -462,16 +506,16 @@ function TermsPage(){
 
 // ─── GUIDE MODAL ──────────────────────────────────────────────────────────────
 function GuidePage(){
-  const {setView,avatars}=useApp()
+  const {setView}=useApp()
   const steps=[
-    {n:1,icon:'🏆',title:'Crea tu avatar y paga U$20',
-      desc:'Regístrate y crea un nickname (avatar) por U$20. Puedes crear varios — cada uno compite por separado. El admin lo activa al confirmar el pago por PayPal o Nequi.',
-      badges:['U$20 por avatar','Activación manual']},
-    {n:2,icon:'💬',title:'Habla con Pelé IA y llena tus pronósticos',
-      desc:'Pelé IA te guía partido por partido con estadísticas. Puedes editar tus pronósticos hasta 2 horas antes de cada partido. Todo se guarda automáticamente.',
-      badges:['104 partidos totales','Guardado automático']},
+    {n:1,icon:'💬',title:'Llena tus pronósticos — tú o con IA',
+      desc:'Pelé IA te pregunta si quieres que llene toda tu polla automáticamente, un grupo específico, o hacerlo tú partido por partido con su ayuda. Puedes editar hasta 2 horas antes de cada partido.',
+      badges:['🤖 Auto-fill IA','✍️ Manual con ayuda','Guardado automático']},
+    {n:2,icon:'🏆',title:'Mi Pronóstico General — hasta 100 pts',
+      desc:'Define el camino al título: quién avanza en cada fase hasta el campeón. Pelé IA puede generarlo por ti. Si aciertas sin editar: +100 pts. Si editas y aciertas: +10 pts. ¡Descárgalo como imagen!',
+      badges:['🏆 100 pts sin editar','✏️ 10 pts si editas','📸 Exportar PNG']},
     {n:3,icon:'⭐',title:'Extra Points — puntos adicionales',
-      desc:'Después de cada marcador, apuesta campos extra: tarjetas, goles por tiempo, MVP. Si aciertas al menos uno, ganas +1 punto extra.',
+      desc:'Después de cada marcador, predice campos extra: tarjetas, goles por tiempo, MVP. Si aciertas al menos uno, ganas +1 punto extra.',
       badges:['+1 pt si aciertas ≥1 campo']},
     {n:4,gold:true,icon:'🎯',title:'Sistema de puntos',
       table:[
@@ -483,16 +527,16 @@ function GuidePage(){
     {n:5,gold:true,icon:'🌟',title:'Predicciones especiales',
       desc:'Al inicio: Campeón del Mundial (+10 pts) y equipo sorpresa (+3 pts). Antes de la Final: Balón de Oro, Guante de Oro y Bota de Oro (+5 pts c/u).',
       badges:['🏆 Campeón +10','😲 Sorpresa +3','⭐+🧤+👟 +5 c/u']},
-    {n:6,icon:'💰',title:'Premios al ganador',
-      desc:'Del total recaudado: 80% al primer lugar y 20% al segundo. Los premios se envían por PayPal o Nequi en los 5 días tras la Gran Final.',
-      badges:['🥇 80% del pozo','🥈 20% del pozo']},
+    {n:6,icon:'🏅',title:'Ranking en tiempo real',
+      desc:'El ranking se actualiza automáticamente después de cada partido. ¡Compite por el primer lugar con tu grupo de amigos o familia!',
+      badges:['🥇 Primer lugar','🥈 Segundo lugar','🥉 Tercer lugar']},
   ]
   return(
     <div className="modal-overlay">
       <div className="modal-box">
         <div className="modal-head">
           <div className="modal-title">🏆 CÓMO FUNCIONA LA POLLA 2026</div>
-          <button className="btn btn-outline btn-sm" onClick={()=>setView(avatars&&avatars.length?'special':'avatars')}>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('special')}>
             Saltar →
           </button>
         </div>
@@ -524,148 +568,9 @@ function GuidePage(){
         </div>
         <div className="modal-foot">
           <span className="text-muted text-xs">¡Ya estás listo para jugar! 🏆</span>
-          <button className="btn btn-ink" onClick={()=>setView(avatars&&avatars.length?'special':'avatars')}>
+          <button className="btn btn-ink" onClick={()=>setView('special')}>
             ¡Entendido! Hablar con Pelé IA →
           </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── AVATAR SYSTEM ────────────────────────────────────────────────────────────
-function AvatarsPage(){
-  const {user,avatars,setAvatars,activeAvatar,setActiveAvatar,setView}=useApp()
-  const [showCreate,setShowCreate]=React.useState(false)
-  const [payInfo,setPayInfo]=React.useState(null)
-
-  function onCreated(av,info){
-    setAvatars(p=>[...p,av])
-    setActiveAvatar(av)
-    setPayInfo(info)
-  }
-
-  if(payInfo) return(
-    <div className="page">
-      <Nav/>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'2rem 1rem'}}>
-        <div className="card" style={{maxWidth:400,width:'100%',textAlign:'center'}}>
-          <div style={{fontSize:'2.5rem',marginBottom:'.5rem'}}>🎉</div>
-          <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.5rem'}}>¡Avatar creado!</h2>
-          <p className="text-muted text-sm mb2">Nickname: <strong className="text-gold">{payInfo.avatar.nickname}</strong></p>
-          <div className="card-gold" style={{textAlign:'left',marginBottom:'1rem'}}>
-            <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',marginBottom:'.5rem'}}>💳 Inscripción · U${payInfo.settings?.inscription_fee||20}</div>
-            <p className="text-sm text-muted">El administrador te contactará con las instrucciones de pago para activar tu avatar. Pronto estarás en la competencia 🏆</p>
-          </div>
-          <button className="btn btn-gold btn-full mb1" onClick={()=>setView('chat')}>⚽ Ingresar marcadores</button>
-          {avatars&&avatars.length<3?(
-            <button className="btn btn-outline btn-full mb1" onClick={()=>{setPayInfo(null);setShowCreate(true)}}>
-              ➕ Crear otro avatar ({avatars.length}/3)
-            </button>
-          ):(
-            <p className="text-muted text-xs mb1">Has alcanzado el máximo de 3 avatares.</p>
-          )}
-          <button className="btn btn-outline btn-sm btn-full" onClick={()=>setView('dashboard')}>Ir al inicio</button>
-        </div>
-      </div>
-    </div>
-  )
-
-  return(
-    <div className="page">
-      <Nav/>
-      <div className="container pad">
-        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.6rem',marginBottom:'.25rem'}}>MIS AVATARES</h2>
-        <p className="text-muted text-sm mb2">Cada avatar compite por separado · U$20 por avatar</p>
-
-        <div className="av-grid mb2">
-          {(avatars||[]).map(av=>(
-            <div key={av.id} className={`av-card ${activeAvatar?.id===av.id?'av-card-active':''}`}
-              onClick={()=>{setActiveAvatar(av);setView('dashboard')}}>
-              <div className="av-circle" style={{background:generateAvatarColor(av.nickname)}}>
-                {av.photo_url?<img src={av.photo_url} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover'}} alt=""/>
-                  :<span>{av.nickname.substring(0,2).toUpperCase()}</span>}
-                <div className={`av-status-dot ${av.is_paid?'':'chip-o'}`}
-                  style={{background:av.is_paid?'var(--green)':'var(--orange)'}}>
-                  {av.is_paid?'✓':'⏳'}
-                </div>
-              </div>
-              <div className="av-nick">{av.nickname}</div>
-              <div className="av-pts">{av.is_paid?'Activo 🟢':'Pendiente pago ⏳'}</div>
-            </div>
-          ))}
-          {(!avatars||avatars.length<3)&&(
-            <div className="av-card av-card-add" onClick={()=>setShowCreate(true)}>
-              <div className="av-add-icon">+</div>
-              <div className="av-nick" style={{color:'var(--gold)'}}>Nuevo avatar</div>
-              <div className="av-pts">{avatars?.length||0}/3 máx · U$20</div>
-            </div>
-          )}
-        </div>
-
-        <div className="alert alert-info text-sm">
-          💡 Cada avatar participa por separado en el ranking. Al crear uno nuevo, el admin recibe una notificación para verificar tu pago.
-        </div>
-
-        {avatars&&avatars.length>0&&(
-          <button className="btn btn-ink btn-full mt2" onClick={()=>setView('dashboard')}>
-            Continuar con {activeAvatar?.nickname||'mi avatar'} →
-          </button>
-        )}
-      </div>
-      {showCreate&&<CreateAvatarModal onClose={()=>setShowCreate(false)} onCreated={onCreated}/>}
-    </div>
-  )
-}
-
-function CreateAvatarModal({onClose,onCreated}){
-  const {settings}=useApp()
-  const [form,setForm]=React.useState({nickname:'',photoUrl:''})
-  const [loading,setLoading]=React.useState(false)
-  const [err,setErr]=React.useState('')
-  const upd=k=>e=>setForm(p=>({...p,[k]:e.target.value}))
-
-  async function submit(e){
-    e.preventDefault(); setErr(''); setLoading(true)
-    try{
-      const data=await api('/api/avatars','POST',{nickname:form.nickname,photoUrl:form.photoUrl||null})
-      onCreated(data.avatar,{avatar:data.avatar,settings:data.paymentInfo})
-      onClose()
-    }catch(e){setErr(e.message)}
-    setLoading(false)
-  }
-
-  return(
-    <div className="modal-overlay">
-      <div className="modal-box">
-        <div className="modal-head">
-          <div className="modal-title">Nuevo Avatar</div>
-          <button className="btn btn-outline btn-sm" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          {err&&<Alert type="error">{err}</Alert>}
-          <form onSubmit={submit}>
-            <div className="form-group">
-              <label>Nickname (aparece en el ranking)</label>
-              <input className="inp" value={form.nickname} onChange={upd('nickname')}
-                placeholder="Ej: LosPerez, ElLeón, DanFire..." required minLength={3} maxLength={25}/>
-            </div>
-            <div className="form-group">
-              <label>URL de foto (opcional)</label>
-              <input className="inp" value={form.photoUrl} onChange={upd('photoUrl')}
-                placeholder="https://... · JPG/PNG · mín 200×200px · máx 2MB"/>
-            </div>
-            <div className="alert alert-info text-sm">
-              📸 Sin foto → La IA genera un avatar con tus iniciales y colores únicos.<br/>
-              Si subes foto: JPG/PNG · Mínimo 200×200px · Máx 2MB · Se recorta en círculo.
-            </div>
-            <div className="alert alert-warn text-sm">
-              💰 Cada avatar cuesta <strong>U${settings?.inscription_fee||20}</strong>. El admin lo activará al confirmar el pago.
-            </div>
-            <button className="btn btn-gold btn-full mt1" disabled={loading}>
-              {loading?'Creando...':'🏆 Crear avatar'}
-            </button>
-          </form>
         </div>
       </div>
     </div>
@@ -810,105 +715,361 @@ function SpecialPredictionsPage(){
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function TriviaSection(){
+  const {activeAvatar,user}=useApp()
+  const [questions,setQuestions]=React.useState([])
+  const [bonus,setBonus]=React.useState(null)
+  const [answers,setAnswers]=React.useState({}) // triviaId -> {isCorrect,points_earned,correct_answer,selected}
+  const [loading,setLoading]=React.useState(true)
+
+  const DIFF_LABELS={easy:'🟢 Fácil',medium:'🟡 Refácil',hard:'🔴 Muy fácil'}
+  const DIFF_COLORS={easy:'#16a34a',medium:'#d97706',hard:'#dc2626'}
+  const DIFF_PTS={easy:2,medium:3,hard:4}
+
+  React.useEffect(()=>{
+    if(!activeAvatar?.id) return
+    Promise.all([
+      api('/api/trivia/'+activeAvatar.id).catch(()=>[]),
+      api('/api/bonus/'+activeAvatar.id).catch(()=>null)
+    ]).then(([qs,b])=>{
+      setQuestions(Array.isArray(qs)?qs:[])
+      setBonus(b)
+      setLoading(false)
+    })
+  },[activeAvatar])
+
+  async function submitAnswer(triviaId,answerIdx){
+    try{
+      const d=await api('/api/trivia/'+triviaId+'/answer','POST',{avatarId:activeAvatar.id,answerIdx})
+      setAnswers(p=>({...p,[triviaId]:{...d,selected:answerIdx}}))
+    }catch(e){ alert(e.message) }
+  }
+
+  if(loading||(!bonus&&questions.length===0)) return null
+
+  return(
+    <div style={{marginTop:'1.25rem'}}>
+      {/* Registration bonus chip */}
+      {bonus&&(
+        <div style={{background:'linear-gradient(135deg,rgba(246,201,14,.12),rgba(246,201,14,.04))',
+          border:'1.5px solid rgba(246,201,14,.3)',borderRadius:'var(--r)',padding:'10px 14px',
+          display:'flex',alignItems:'center',gap:'10px',marginBottom:'0.75rem'}}>
+          <div style={{fontSize:'1.5rem'}}>🎁</div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:13,color:'var(--ink)'}}>¡Bienvenido! Bonus de registro</div>
+            <div style={{fontSize:11,color:'var(--ink3)',marginTop:2}}>Ya tienes <strong style={{color:'var(--gold)'}}>{bonus.points} puntos</strong> por unirte a la polla. ¡A ganar más!</div>
+          </div>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1.4rem',color:'var(--gold)'}}>+{bonus.points}</div>
+        </div>
+      )}
+
+      {/* Trivia questions */}
+      {questions.length>0&&(
+        <>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',letterSpacing:1,color:'var(--ink)',marginBottom:'0.5rem'}}>
+            🧠 EXTRA POINTS — {questions.length} pregunta{questions.length!==1?'s':''} disponible{questions.length!==1?'s':''}
+          </div>
+          {questions.map(q=>{
+            const ans=answers[q.id]
+            const opts=typeof q.options==='string'?JSON.parse(q.options):q.options
+            return(
+              <div key={q.id} className="card" style={{marginBottom:'0.75rem',border:'1.5px solid '+(ans?'rgba(255,255,255,.08)':'rgba(246,201,14,.25)'),transition:'all .3s'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:'0.6rem'}}>
+                  <span style={{fontSize:10,fontWeight:700,color:DIFF_COLORS[q.difficulty],background:DIFF_COLORS[q.difficulty]+'15',border:'1px solid '+DIFF_COLORS[q.difficulty]+'30',borderRadius:20,padding:'2px 8px'}}>
+                    {DIFF_LABELS[q.difficulty]} · +{q.points} pts
+                  </span>
+                  {ans&&(
+                    <span style={{fontSize:10,fontWeight:700,color:ans.isCorrect?'#16a34a':'#dc2626',background:ans.isCorrect?'rgba(22,163,74,.1)':'rgba(220,38,38,.1)',border:'1px solid '+(ans.isCorrect?'rgba(22,163,74,.3)':'rgba(220,38,38,.3)'),borderRadius:20,padding:'2px 8px'}}>
+                      {ans.isCorrect?'✅ +'+ans.points_earned+' pts':'❌ Respuesta incorrecta'}
+                    </span>
+                  )}
+                </div>
+                <div style={{fontWeight:700,fontSize:13,color:'var(--ink)',marginBottom:'0.75rem',lineHeight:1.5}}>{q.question}</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                  {opts.map((opt,i)=>{
+                    const isSelected=ans?.selected===i
+                    const isCorrect=ans&&i===ans.correct_answer
+                    const isWrong=ans&&isSelected&&!isCorrect
+                    let bg='var(--cream2)', border='var(--border)', color='var(--ink)', fw=400
+                    if(isCorrect&&ans){bg='rgba(22,163,74,.1)';border='rgba(22,163,74,.4)';color='#16a34a';fw=700}
+                    else if(isWrong){bg='rgba(220,38,38,.08)';border='rgba(220,38,38,.3)';color='#dc2626'}
+                    else if(!ans){bg='var(--cream2)';border='var(--border)'}
+                    return(
+                      <button key={i} onClick={()=>!ans&&submitAnswer(q.id,i)}
+                        disabled={!!ans}
+                        style={{background:bg,border:'1px solid '+border,borderRadius:8,padding:'8px 10px',
+                          textAlign:'left',cursor:ans?'default':'pointer',transition:'all .15s',
+                          fontSize:12,color,fontWeight:fw,lineHeight:1.4,fontFamily:'inherit',
+                          outline:'none'}}>
+                        <span style={{fontWeight:700,marginRight:4}}>{['A','B','C','D'][i]}.</span>{opt}
+                        {isCorrect&&ans?' ✅':''}{isWrong?' ❌':''}
+                      </button>
+                    )
+                  })}
+                </div>
+                {!ans&&(
+                  <div style={{fontSize:10,color:'var(--ink3)',marginTop:6,textAlign:'center'}}>Solo tienes una oportunidad de responder — ¡piensálo bien!</div>
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
+
 function DashboardPage(){
-  const {user,avatars,activeAvatar,setActiveAvatar,setView}=useApp()
+  const {user,setView,tournament}=useApp()
   const [stats,setStats]=React.useState(null)
 
   React.useEffect(()=>{
-    if(!activeAvatar) return
-    api(`/api/results/${activeAvatar.id}`).then(rows=>{
-      const total=rows.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0)
-      setStats({total,played:rows.length})
-    }).catch(()=>{})
-  },[activeAvatar])
+    if(!user) return
+    api(`/api/results/user/${user.id}`).then(rows=>{
+      const arr=Array.isArray(rows)?rows:[]
+      const total=arr.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0)
+      setStats({total,played:arr.length})
+    }).catch(()=>{ setStats({total:0,played:0}) })
+  },[user])
 
   return(
     <div className="page">
       <Nav/>
       <div className="container pad">
-        <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
-          {activeAvatar&&<AvatarCircle nickname={activeAvatar.nickname} photoUrl={activeAvatar.photo_url} size={46}/>}
-          <div>
-            <div style={{fontFamily:'Bebas Neue',fontSize:'1.4rem',color:'var(--ink)'}}>
-              Hola, {user?.name?.split(' ')[0]}! 👋
+        <div style={{marginBottom:'1rem'}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1.6rem',color:'var(--ink)'}}>
+            Hola, {user?.name?.split(' ')[0]}! 👋
+          </div>
+          {tournament?.is_demo&&(
+            <div style={{marginTop:'8px',background:'linear-gradient(135deg,#0f2310,#112011)',border:'1.5px solid rgba(34,197,94,.3)',
+              borderRadius:'10px',padding:'10px 14px',display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+              <span style={{fontSize:'1.3rem'}}>⚡</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,color:'#4ade80',fontSize:'12px'}}>Modo Demo — los datos duran 24 horas</div>
+                <div style={{fontSize:'10px',color:'rgba(74,222,128,.55)',marginTop:'2px'}}>Todo lo que hagas aquí se borra automáticamente. ¡Anímate y crea tu polla real!</div>
+              </div>
+              <a href="/" style={{background:'#16a34a',color:'#fff',textDecoration:'none',fontWeight:700,fontSize:'10px',
+                padding:'5px 10px',borderRadius:'6px',whiteSpace:'nowrap'}}>Crear Polla Real →</a>
             </div>
-            {activeAvatar&&(
-              <div style={{display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
-                <span className={`chip ${activeAvatar.is_paid?'chip-g':'chip-o'}`}>
-                  {activeAvatar.is_paid?'✓ Activo':'⏳ Pago pendiente'}
-                </span>
-                <span className="text-muted text-xs">{activeAvatar.nickname}</span>
-              </div>
-            )}
-          </div>
+          )}
         </div>
-
-        {/* Avatar selector */}
-        {avatars&&avatars.length>1&&(
-          <div style={{display:'flex',gap:'5px',flexWrap:'wrap',marginBottom:'.85rem'}}>
-            {avatars.map(av=>(
-              <div key={av.id} style={{
-                display:'flex',alignItems:'center',gap:'5px',padding:'4px 10px',
-                borderRadius:'50px',cursor:'pointer',border:'1.5px solid var(--border)',
-                background:activeAvatar?.id===av.id?'var(--ink)':'transparent',
-                color:activeAvatar?.id===av.id?'var(--cream)':'var(--ink2)',
-                fontSize:'11px',fontWeight:600
-              }} onClick={()=>setActiveAvatar(av)}>
-                <AvatarCircle nickname={av.nickname} photoUrl={av.photo_url} size={18}/>
-                {av.nickname}
-              </div>
-            ))}
-            <div style={{padding:'4px 10px',borderRadius:'50px',cursor:'pointer',border:'1.5px dashed var(--border)',
-              color:'var(--gold)',fontSize:'11px',fontWeight:600}} onClick={()=>setView('avatars')}>+ Nuevo</div>
-          </div>
-        )}
-
-        {activeAvatar&&!activeAvatar.is_paid&&false&&(
-          <div className="alert alert-warn mb2">
-            ⚠️ <strong>{activeAvatar.nickname}</strong> está pendiente de pago. El admin lo activará al confirmar.
-          </div>
-        )}
 
         {stats&&(
           <div className="dash-stats">
-            <div className="stat-card"><div className={`stat-n ${stats.total>0?'stat-n-gold':''}`}>{stats.total}</div><div className="stat-l">Puntos</div></div>
+            <div className="stat-card"><div className={'stat-n'+(stats.total>0?' stat-n-gold':'')}>{stats.total}</div><div className="stat-l">Puntos</div></div>
             <div className="stat-card"><div className="stat-n">{stats.played}</div><div className="stat-l">Jugados</div></div>
             <div className="stat-card"><div className="stat-n">—</div><div className="stat-l">Posición</div></div>
           </div>
         )}
 
         <div className="action-grid">
-          <div className="action-card action-card-dark" onClick={()=>setView('chat')}>
-            <div className="ac-icon">💬</div>
-            <div className="ac-label ac-label-w">Pronósticos</div>
-            <div className="ac-desc ac-desc-w">Chat con Pelé IA · Stats</div>
+
+          {/* Pronósticos — Verde vibrante */}
+          <div className="action-card" onClick={()=>setView('chat')}
+            style={{background:'linear-gradient(135deg,#0f4c2a,#16a34a)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(22,163,74,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" strokeWidth="1.5"/>
+                <polygon points="10,8 16,12 10,16" fill="#fff" stroke="none"/>
+              </svg>
+            </div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Mis Pronósticos</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Ingresa tus marcadores con Pelé IA partido a partido</div>
+            <div style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(255,255,255,.2)',borderRadius:20,padding:'3px 10px',fontSize:9,fontWeight:700,color:'#fff',marginTop:6,textTransform:'uppercase',letterSpacing:'.5px'}}>⚽ Pelé IA incluido</div>
           </div>
-          <div className="action-card" onClick={()=>setView('board')}>
-            <div className="ac-icon">📋</div>
-            <div className="ac-label">Tablero</div>
-            <div className="ac-desc">Todos los partidos</div>
+
+          {/* Tablero — Azul */}
+          <div className="action-card" onClick={()=>setView('board')}
+            style={{background:'linear-gradient(135deg,#1e3a5f,#2563eb)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(37,99,235,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/>
+                <rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>
+              </svg>
+            </div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Tablero de Partidos</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Revisa y edita tus marcadores en todos los grupos y fases</div>
           </div>
-          <div className="action-card" onClick={()=>setView('results')}>
-            <div className="ac-icon">📊</div>
-            <div className="ac-label">Resultados</div>
-            <div className="ac-desc">Mis puntos y stats</div>
+
+          {/* Resultados — Naranja */}
+          <div className="action-card" onClick={()=>setView('results')}
+            style={{background:'linear-gradient(135deg,#7c2d12,#ea580c)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(234,88,12,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 20V10M12 20V4M6 20v-6"/>
+                <circle cx="6" cy="11" r="2" fill="#fff"/><circle cx="12" cy="1.5" r="2" fill="#fff"/><circle cx="18" cy="7" r="2" fill="#fff"/>
+              </svg>
+            </div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Mis Resultados</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Puntos acumulados, aciertos y estadísticas por partido</div>
           </div>
-          <div className="action-card" onClick={()=>setView('ranking')}>
-            <div className="ac-icon">🏅</div>
-            <div className="ac-label">Ranking</div>
-            <div className="ac-desc">Tabla de posiciones</div>
+
+          {/* Ranking — Fucsia/Rosa */}
+          <div className="action-card" onClick={()=>setView('ranking')}
+            style={{background:'linear-gradient(135deg,#701a75,#c026d3)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(192,38,211,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 21h8M12 21V9"/>
+                <path d="M12 9a5 5 0 0 0 5-5H7a5 5 0 0 0 5 5z"/>
+                <path d="M5 6H3l1 3M19 6h2l-1 3"/>
+              </svg>
+            </div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Ranking General</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Tabla de posiciones en tiempo real de todos los jugadores</div>
           </div>
-          <div className="action-card" onClick={()=>setView('special')}>
-            <div className="ac-icon">🌟</div>
-            <div className="ac-label">Predicciones Especiales</div>
-            <div className="ac-desc">Campeón · Premios individuales</div>
+
+          {/* Especiales — Amarillo dorado */}
+          <div className="action-card" onClick={()=>setView('special')}
+            style={{background:'linear-gradient(135deg,#713f12,#ca8a04)',border:'none',borderRadius:'18px',boxShadow:'0 6px 20px rgba(202,138,4,.35)'}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'.75rem',flexShrink:0}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff" stroke="none">
+                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+              </svg>
+            </div>
+            <div style={{fontSize:15,fontWeight:800,color:'#fff',lineHeight:1.2}}>Predicciones Especiales</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.75)',marginTop:4,lineHeight:1.5}}>Pronostica el campeón, Balón de Oro, Bota de Oro y sorpresa</div>
           </div>
-          <div className="action-card" onClick={()=>setView('avatars')}>
-            <div className="ac-icon">➕</div>
-            <div className="ac-label">Mis Avatares</div>
-            <div className="ac-desc">Crear · Cambiar</div>
-          </div>
+
+          {/* Bracket — Full width oscuro premium */}
+          <div className="action-card" onClick={()=>setView('bracket')}
+            style={{gridColumn:'span 2',background:'linear-gradient(135deg,#1A1814,#2d2416)',border:'2px solid var(--gold)',borderRadius:'18px',boxShadow:'0 8px 28px rgba(200,168,75,.2)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:14}}>
+              <div style={{width:56,height:56,borderRadius:14,background:'rgba(200,168,75,.15)',border:'1.5px solid rgba(200,168,75,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#C8A84B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 9H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
+                  <path d="M20 9h-2a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2z"/>
+                  <path d="M12 21h-2a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2z"/>
+                  <path d="M6 9v3h6v3M18 9v3h-6"/>
+                </svg>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:16,fontWeight:800,color:'var(--gold)',lineHeight:1.2}}>Mi Pronóstico General del Torneo</div>
+                <div style={{fontSize:11,color:'rgba(247,244,238,.55)',marginTop:4,lineHeight:1.5}}>Define quién llega a cada ronda y quién es el campeón. ¡Hasta 100 pts extra si aciertas el camino completo!</div>
+                <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap'}}>
+                  <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(200,168,75,.2)',border:'1px solid rgba(200,168,75,.4)',borderRadius:20,padding:'2px 10px',fontSize:9,fontWeight:700,color:'var(--gold)',textTransform:'uppercase',letterSpacing:'.4px'}}>+100 pts camino completo</span>
+                  <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(200,168,75,.2)',border:'1px solid rgba(200,168,75,.4)',borderRadius:20,padding:'2px 10px',fontSize:9,fontWeight:700,color:'var(--gold)',textTransform:'uppercase',letterSpacing:'.4px'}}>📲 Compartible</span>
+                </div>
+              </div>
+            </div>
         </div>
+
+        {/* Registration bonus + Trivia cards */}
+        <TriviaSection/>
+
+        {/* Pelé IA free chat CTA */}
+        <div style={{marginTop:'1.25rem',background:'linear-gradient(135deg,#1A1814,#2d2416)',
+          border:'2px solid rgba(200,168,75,.4)',borderRadius:'18px',padding:'1rem 1.25rem',
+          display:'flex',alignItems:'center',gap:'1rem',cursor:'pointer',
+          boxShadow:'0 6px 20px rgba(26,24,20,.15)',transition:'all .2s'}}
+          onClick={()=>setView('pele_chat')}>
+          <img src="/pele.jpg" alt="Pelé IA"
+            style={{width:52,height:52,borderRadius:'50%',objectFit:'cover',objectPosition:'top',
+              border:'2px solid var(--gold)',flexShrink:0,boxShadow:'0 0 14px rgba(200,168,75,.4)'}}/>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',letterSpacing:1}}>Chat libre con Pelé IA</div>
+            <div style={{fontSize:'11px',color:'rgba(247,244,238,.55)',lineHeight:1.5,marginTop:2}}>
+              Pregúntale cualquier cosa de fútbol — estadísticas, historial, jugadores, tácticas…
+            </div>
+          </div>
+          <div style={{fontSize:'1.5rem'}}>💬</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  )
+}
+
+// ─── PELÉ IA FREE CHAT (Cualquier pregunta de fútbol) ────────────────────────
+function PeleFreeChatPage(){
+  const {user,setView}=useApp()
+  const [messages,setMessages]=React.useState([
+    {role:'pele',content:'¡Hola! Soy **Pelé IA** 🏆 — el mayor experto en fútbol de esta plataforma.\n\nPuedes preguntarme lo que quieras sobre fútbol: estadísticas, jugadores, equipos, tácticas, historia, partidos, jugadas… ¡Todo! Si no tiene que ver con el fútbol, mejor busca en Google 😄',id:'intro'}
+  ])
+  const [input,setInput]=React.useState('')
+  const [loading,setLoading]=React.useState(false)
+  const bottomRef=React.useRef(null)
+
+  React.useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}) },[messages])
+
+  async function send(){
+    const txt=input.trim(); if(!txt||loading) return
+    const userMsg={role:'user',content:txt,id:Date.now()+'u'}
+    setMessages(p=>[...p,userMsg]); setInput(''); setLoading(true)
+    try{
+      const data=await api('/api/pele/free','POST',{
+        message:txt, avatarName:user?.name?.split(' ')[0]||'campeón',
+        history:messages.slice(-6).map(m=>({role:m.role==='pele'?'assistant':'user',content:m.content}))
+      })
+      setMessages(p=>[...p,{role:'pele',content:data.response,id:Date.now()+'p'}])
+    }catch(e){
+      setMessages(p=>[...p,{role:'pele',content:'¡Ups! Tuve un problema técnico. ¿Lo intentamos de nuevo? ⚽',id:Date.now()+'e'}])
+    }
+    setLoading(false)
+  }
+
+  return(
+    <div className="page" style={{display:'flex',flexDirection:'column'}}>
+      <Nav/>
+      {/* Topbar Pelé */}
+      <div className="chat-topbar">
+        <div className="pele-av" style={{padding:0,overflow:'hidden'}}>
+          <img src="/pele.jpg" alt="Pelé IA" style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}}/>
+          <div className="pele-dot"/>
+        </div>
+        <div>
+          <div className="pele-name">Pelé IA · Modo Libre</div>
+          <div className="pele-sub">● Experto en fútbol · Pregunta lo que quieras</div>
+        </div>
+        <button className="btn btn-outline btn-sm" style={{marginLeft:'auto'}} onClick={()=>setView('dashboard')}>← Volver</button>
+      </div>
+
+      {/* Suggested questions */}
+      <div style={{padding:'.6rem 1rem',display:'flex',gap:'6px',overflowX:'auto',borderBottom:'1px solid var(--border)'}}>
+        {['¿Quién tiene más goles en la historia?','¿Cuál es el mejor equipo de Europa?','Explícame el offside','¿Qué es el tiki-taka?','¿Cuántos balones de oro tiene Messi?'].map(q=>(
+          <button key={q} className="btn btn-outline btn-sm"
+            style={{whiteSpace:'nowrap',fontSize:'10px',padding:'4px 10px'}}
+            onClick={()=>{setInput(q);setTimeout(()=>document.getElementById('pele-inp')?.focus(),50)}}>
+            {q}
+          </button>
+        ))}
+      </div>
+
+      {/* Messages */}
+      <div className="chat-body" style={{flex:1,overflowY:'auto',maxHeight:'calc(100vh - 220px)'}}>
+        {messages.map(msg=>(
+          msg.role==='user'
+          ? <div key={msg.id} className="row-user">
+              <div className="bbl bbl-user">{msg.content}</div>
+            </div>
+          : <div key={msg.id} className="row-ai">
+              <div className="pm" style={{padding:0,overflow:'hidden'}}>
+                <img src="/pele.jpg" alt="Pelé" style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}}/>
+              </div>
+              <div className="bbl bbl-ai" dangerouslySetInnerHTML={{__html:(msg.content||'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>')}}/>
+            </div>
+        ))}
+        {loading&&(
+          <div className="row-ai">
+            <div className="pm" style={{padding:0,overflow:'hidden'}}>
+              <img src="/pele.jpg" alt="Pelé" style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}}/>
+            </div>
+            <div className="bbl bbl-ai" style={{display:'flex',gap:'4px',alignItems:'center'}}>
+              {[0,150,300].map(d=>(<div key={d} style={{width:'6px',height:'6px',borderRadius:'50%',background:'var(--ink3)',animation:'bounce .9s infinite',animationDelay:d+'ms'}}/>))}
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef}/>
+      </div>
+
+      {/* Input */}
+      <div className="chat-nav">
+        <input id="pele-inp" className="chat-inp" value={input}
+          onChange={e=>setInput(e.target.value)}
+          onKeyPress={e=>e.key==='Enter'&&send()}
+          placeholder="Pregunta cualquier cosa de fútbol..."/>
+        <button className="send-btn" onClick={send}>➤</button>
       </div>
     </div>
   )
@@ -922,16 +1083,18 @@ const JOKES=[
 ]
 
 function ChatPage(){
-  const {activeAvatar,matches,settings,setView}=useApp()
+  const {user,activeAvatar,matches,settings,setView,tournament}=useApp()
   const [predictions,setPredictions]=React.useState({})
   const [extras,setExtras]=React.useState({})
-  const [chatPhase,setChatPhase]=React.useState('intro') // intro,group_select,stats,score_input,confirm,extra,group_done
+  const [chatPhase,setChatPhase]=React.useState('intro') // intro,mode_select,autofill_confirm,group_select,stats,score_input,confirm,extra,group_done
   const [messages,setMessages]=React.useState([])
   const [currentGroupKey,setCurrentGroupKey]=React.useState(null)
   const [currentMatchIdx,setCurrentMatchIdx]=React.useState(0)
   const [inputVal,setInputVal]=React.useState('')
   const [scoreForm,setScoreForm]=React.useState({home:'',away:'',pen:''})
   const [extraForm,setExtraForm]=React.useState({yellow:'',red:'',pen_count:'',g1h:'',g2h:'',mvp:''})
+  const [autofilling,setAutofilling]=React.useState(false)
+  const [autofillStep,setAutofillStep]=React.useState(0)
   const [loadingMsg,setLoadingMsg]=React.useState(false)
   const [saving,setSaving]=React.useState(false)
   const bottomRef=React.useRef(null)
@@ -943,31 +1106,151 @@ function ChatPage(){
   const currentMatch=groupMatches[currentMatchIdx]
 
   const allGroups=['A','B','C','D','E','F','G','H','I','J','K','L']
-  const doneCounts=React.useMemo(()=>{
-    const c={}
+
+  // doneCounts: predictions already entered per group
+  // availableCounts: unlocked matches per group (for the "done" ✓ check)
+  const {doneCounts, availableCounts} = React.useMemo(()=>{
+    const now = Date.now()
+    const dc={}, ac={}
     allGroups.forEach(g=>{
       const ms=(matches||[]).filter(m=>m.phase==='group'&&m.group_name===g)
-      c[g]=ms.filter(m=>predictions[m.id]!=null).length
+      dc[g]=ms.filter(m=>predictions[m.id]!=null).length
+      ac[g]=ms.filter(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        return !m.phase_locked && now < lockTime
+      }).length
     })
-    return c
+    return {doneCounts:dc, availableCounts:ac}
   },[matches,predictions])
+
+  // Group is "done" when all available (unlocked) matches have predictions
+  const isGroupDone = (g) => availableCounts[g] === 0 || doneCounts[g] >= availableCounts[g]
+
   const totalDone=Object.values(doneCounts).reduce((s,v)=>s+v,0)
   const totalMatches=(matches||[]).length
 
   React.useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}) },[messages])
 
+  // Helper: find groups with pending (unlocked, no prediction) matches
+  function getPendingGroups(preds, matchList){
+    const now = Date.now()
+    const result = []
+    allGroups.forEach(g=>{
+      const gms = (matchList||[]).filter(m=>m.phase==='group'&&m.group_name===g)
+      const hasPending = gms.some(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        const locked = m.phase_locked || now >= lockTime
+        return !locked && !preds[m.id]
+      })
+      if(hasPending) result.push(g)
+    })
+    return result
+  }
+
+  // Helper: find the group currently in progress (has some done but not all unlocked ones done)
+  function getGroupInProgress(preds, matchList){
+    const now = Date.now()
+    for(const g of allGroups){
+      const gms = (matchList||[]).filter(m=>m.phase==='group'&&m.group_name===g)
+      const hasDone = gms.some(m=>preds[m.id]!=null)
+      const hasPending = gms.some(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        const locked = m.phase_locked || now >= lockTime
+        return !locked && !preds[m.id]
+      })
+      if(hasDone && hasPending) return g
+    }
+    return null
+  }
+
   React.useEffect(()=>{
-    if(!activeAvatar) return
+    if(!activeAvatar?.id) return
     api(`/api/predictions/${activeAvatar.id}`).then(data=>{
-      setPredictions(data.predictions||{})
-      setExtras(data.extras||{})
-    }).catch(()=>{})
-    // Start with intro messages
-    addPeleMsgs([
-      `¡Hola ${activeAvatar.nickname}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el Mundial 2026.`,
-      `Antes de empezar... ${JOKES[Math.floor(Math.random()*JOKES.length)]}`,
-      `¿De qué equipo eres hincha y cuál es tu selección favorita? ⚽`
-    ], 'intro')
+      const preds = data.predictions||{}
+      const exts  = data.extras||{}
+      setPredictions(preds)
+      setExtras(exts)
+
+      const nombre = activeAvatar?.nickname||user?.name?.split(' ')[0]||'campeón'
+      const now = Date.now()
+
+      // Count available (unlocked) matches
+      const availableMatches = (matches||[]).filter(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        return !m.phase_locked && now < lockTime
+      })
+
+      // How many available group matches already have predictions
+      const availableGroupMatches = availableMatches.filter(m=>m.phase==='group')
+      const donePreds = availableGroupMatches.filter(m=>preds[m.id]!=null).length
+      const totalAvailable = availableGroupMatches.length
+
+      // Find group in progress
+      const inProgress = getGroupInProgress(preds, matches)
+      // Find first group with pending matches (not started yet)
+      const pendingGroups = getPendingGroups(preds, matches)
+      const nextPending = pendingGroups.find(g=>g!==inProgress)
+
+      if(totalAvailable === 0){
+        // All available matches are locked — tournament started, no more group predictions
+        addPeleMsgs([
+          `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆`,
+          `Todos los partidos disponibles ya están bloqueados por fecha. Puedes ver el tablero general o el ranking. ¡A disfrutar el torneo! 🏆`
+        ], 'group_select')
+        addMsg('pele','__GROUP_SELECT__','group_select')
+      } else if(inProgress){
+        // Resume group in progress
+        addPeleMsgs([
+          `¡Hola de nuevo, ${nombre}! 👋 Soy **Pelé IA** 🏆`,
+          `Veo que tienes pronósticos pendientes del **Grupo ${inProgress}**. ¿Continuamos desde donde lo dejaste? 🎯`
+        ], 'group_select')
+        addMsg('pele','__GROUP_SELECT__','group_select')
+        // Auto-resume after brief delay
+        setTimeout(()=>{
+          setCurrentGroupKey(inProgress)
+          setChatPhase('stats')
+          const gms = (matches||[]).filter(m=>m.phase==='group'&&m.group_name===inProgress)
+          const firstPending = gms.find(m=>{
+            const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+            return !m.phase_locked && now < lockTime && !preds[m.id]
+          })
+          if(firstPending){
+            const idx = gms.indexOf(firstPending)
+            setCurrentMatchIdx(idx)
+            addMsg('pele',`⚽ Seguimos con el **Grupo ${inProgress}** — partido ${idx+1}/${gms.length}`)
+            addMsg('pele','__STATS__','stats')
+            addMsg('pele',`¿Cuánto crees que queda este partido? 🤔\n(Dime el marcador o escribe "no sé")`)
+            setChatPhase('score_input')
+          }
+        }, 1200)
+      } else if(donePreds > 0){
+        // Has some predictions but no group in progress — pick next
+        addPeleMsgs([
+          `¡Hola de nuevo, ${nombre}! 👋 Soy **Pelé IA** 🏆`,
+          ('Llevas **'+donePreds+'** pronósticos ingresados. '+(nextPending?('¿Seguimos con el Grupo '+nextPending+'?'):'¿Cuál grupo quieres hacer ahora?')+' 🎯')
+        ], 'group_select')
+        addMsg('pele','__GROUP_SELECT__','group_select')
+      } else {
+        // First time — intro + mode selector
+        addPeleMsgs([
+          `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
+          `Antes de empezar... ${JOKES[Math.floor(Math.random()*JOKES.length)]}`,
+          `¿Cómo quieres llenar tus pronósticos?`
+        ], 'mode_select')
+        addMsg('pele','__MODE_SELECT__','mode_select')
+      }
+    }).catch(()=>{
+      const nombre = activeAvatar?.nickname||user?.name?.split(' ')[0]||'campeón'
+      addPeleMsgs([
+        `¡Hola ${nombre}! 👋 Soy **Pelé IA** 🏆 — tu asistente para el torneo de fútbol 2026.`,
+        `¿Cómo quieres llenar tus pronósticos?`
+      ], 'mode_select')
+      addMsg('pele','__MODE_SELECT__','mode_select')
+    })
   },[activeAvatar])
 
   function addMsg(role,content,type='text'){
@@ -989,17 +1272,85 @@ function ChatPage(){
     setLoadingMsg(false)
   }
 
+  async function runAutofill(groupFilter=null){
+    if(!activeAvatar) return
+    setAutofilling(true)
+    setAutofillStep(0)
+    const now2 = Date.now()
+    const pendingCount = (matches||[]).filter(m=>{
+      if(!m.match_date) return false
+      const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
+      if(m.phase_locked||now2>=lt) return false
+      if(predictions[m.id]!=null) return false
+      if(groupFilter&&groupFilter.length===1) return m.phase==='group'&&m.group_name===groupFilter
+      return true
+    }).length
+    const label = groupFilter ? `Grupo ${groupFilter}` : `${pendingCount} partidos disponibles`
+    addMsg('pele',`🤖 Analizando y llenando ${label} con mi inteligencia... ⏳ Esto tarda unos segundos.`)
+    // Animate through steps while API runs
+    // Scale delays to match expected duration (48 group matches ~30s, knockout ~8s per batch)
+    const estTime = pendingCount > 20 ? 28000 : pendingCount > 8 ? 16000 : 8000
+    const delays=[0, estTime*.1, estTime*.22, estTime*.36, estTime*.52, estTime*.68, estTime*.84].map(Math.round)
+    const timers=delays.map((d,i)=>setTimeout(()=>setAutofillStep(i),d))
+    try{
+      const data = await api('/api/autofill','POST',{avatarId:activeAvatar.id, groupFilter})
+      timers.forEach(t=>clearTimeout(t))
+      setAutofillStep(7)
+      await new Promise(r=>setTimeout(r,900))
+      if(data.filled===0){
+        addMsg('pele','No encontré partidos disponibles para llenar. Puede que ya estén bloqueados o ya tengan pronóstico. ✅')
+      } else {
+        if(data.predictions){
+          const newPreds={...predictions}
+          data.predictions.forEach(p=>{ newPreds[p.matchId]={score_home:p.home,score_away:p.away} })
+          setPredictions(newPreds)
+        }
+        addMsg('pele',`✅ ¡Listo! Llené **${data.filled} partido${data.filled>1?'s':''}** con mi análisis IA. Puedes editar cualquier marcador hasta 2 horas antes de cada partido.`)
+        if(data.total > data.filled)
+          addMsg('pele',`ℹ️ ${data.total-data.filled} partido${data.total-data.filled>1?'s':''} ya estaban bloqueados o con pronóstico previo.`)
+        addMsg('pele','¿Quieres revisar algún marcador, o ir al tablero para verlos todos? 🏆')
+      }
+      setChatPhase('group_select')
+      addMsg('pele','__GROUP_SELECT__','group_select')
+    }catch(e){ timers.forEach(t=>clearTimeout(t)); addMsg('pele','❌ Error en el auto-fill: '+e.message) }
+    setAutofilling(false)
+    setAutofillStep(0)
+  }
+
   async function handleUserSend(text){
     if(!text.trim()) return
     addMsg('user',text)
     setInputVal('')
 
-    if(chatPhase==='intro'){
-      await askPele(text,{phase:'greeting'},chatPhase)
-      setTimeout(()=>{
-        addMsg('pele','🎯 ¡Ya rompimos el hielo! Estoy listo para ayudarte con todos tus pronósticos. ¿Por qué grupo quieres empezar?','text')
+    if(chatPhase==='mode_select'){
+      const t=text.toLowerCase()
+      if(t.includes('todo')||t.includes('toda')||t.includes('auto')||t.includes('llena')||t.includes('completo')){
+        addMsg('pele','¡Perfecto! Voy a analizar todos los partidos disponibles y llenar tu polla completa con mi IA. 🤖⚽')
+        await runAutofill(null)
+      } else if(t.includes('grupo')||t.includes('group')){
+        addMsg('pele','¿De qué grupo quieres que llene los pronósticos? Dime la letra (A-L) 👇')
+        setChatPhase('autofill_group')
+      } else if(t.includes('manual')||t.includes('yo')||t.includes('personalmente')||t.includes('ayuda')||t.includes('partido')){
+        addMsg('pele','¡Genial! Te guío partido por partido con estadísticas reales. ¿Por qué grupo empezamos? 🎯')
         addMsg('pele','__GROUP_SELECT__','group_select')
         setChatPhase('group_select')
+      } else {
+        await askPele(text,{phase:'greeting'},chatPhase)
+        setTimeout(()=>{
+          addMsg('pele','¿Cómo quieres llenar tus pronósticos?')
+          addMsg('pele','__MODE_SELECT__','mode_select')
+        },600)
+      }
+    } else if(chatPhase==='autofill_group'){
+      const g=allGroups.find(k=>text.toUpperCase().includes(k)||text.toLowerCase().includes(`grupo ${k.toLowerCase()}`))
+      if(g){ addMsg('pele',`¡Grupo ${g}! Voy a analizarlo. 🤖`); await runAutofill(g) }
+      else addMsg('pele','Dime la letra del grupo (A-L) que quieres que llene.')
+    } else if(chatPhase==='intro'){
+      await askPele(text,{phase:'greeting'},chatPhase)
+      setTimeout(()=>{
+        addMsg('pele','🎯 ¿Cómo quieres llenar tus pronósticos?')
+        addMsg('pele','__MODE_SELECT__','mode_select')
+        setChatPhase('mode_select')
       },800)
     } else if(chatPhase==='group_select'){
       const g=allGroups.find(k=>text.toUpperCase().includes(k)||text.toLowerCase().includes(`grupo ${k.toLowerCase()}`))
@@ -1009,7 +1360,6 @@ function ChatPage(){
       const m=text.match(/(\d+)\s*[-–a]\s*(\d+)/i)
       if(m){
         setScoreForm({home:m[1],away:m[2],pen:''})
-        // Save directly — no intermediate confirm step via chat
         setTimeout(async()=>{
           if(!currentMatch||!activeAvatar) return
           setSaving(true)
@@ -1034,22 +1384,71 @@ function ChatPage(){
 
   function selectGroup(g){
     setCurrentGroupKey(g)
-    setCurrentMatchIdx(0)
-    const teams=matches?.filter(m=>m.phase==='group'&&m.group_name===g).map(m=>[m.team1,m.team2]).flat().filter(Boolean)
+    const now = Date.now()
+    const ms=matches?.filter(m=>m.phase==='group'&&m.group_name===g)||[]
+    const teams=ms.map(m=>[m.team1,m.team2]).flat().filter(Boolean)
     const uniqueTeams=[...new Set(teams)]
-    addMsg('pele',`¡Grupo ${g}! 🎯 ${uniqueTeams.map(t=>f(t)).join(' ')} — empecemos con el primer partido.`)
+
+    // Find first match that is not locked and has no prediction yet
+    let startIdx = ms.findIndex(m=>{
+      if(!m.match_date) return false
+      const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+      const locked = m.phase_locked || now >= lockTime
+      return !locked && !predictions[m.id]
+    })
+    // If all have predictions or all locked, start at first unlocked (for editing)
+    if(startIdx === -1){
+      startIdx = ms.findIndex(m=>{
+        if(!m.match_date) return false
+        const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+        return !m.phase_locked && now < lockTime
+      })
+    }
+    // If everything is locked, start at 0 (will show as locked)
+    if(startIdx === -1) startIdx = 0
+
+    setCurrentMatchIdx(startIdx)
+
+    const lockedCount = ms.filter(m=>{
+      if(!m.match_date) return false
+      const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+      return m.phase_locked || now >= lockTime
+    }).length
+    const pendingCount = ms.length - lockedCount
+
+    let msg = `¡Grupo ${g}! 🎯 ${uniqueTeams.map(t=>f(t)).join(' ')}`
+    if(lockedCount > 0 && pendingCount > 0)
+      msg += ` — ${lockedCount} partido${lockedCount>1?'s':''} ya bloqueado${lockedCount>1?'s':''}, empezamos desde el partido ${startIdx+1}.`
+    else if(lockedCount === ms.length)
+      msg += ` — todos los partidos de este grupo ya están bloqueados. 🔒`
+    else
+      msg += ` — empecemos con el primer partido.`
+
+    addMsg('pele', msg)
     setChatPhase('stats')
     setTimeout(()=>{
-      const ms=matches?.filter(m=>m.phase==='group'&&m.group_name===g)||[]
-      if(ms[0]) showMatchStats(ms[0], 0)
+      if(ms[startIdx]) showMatchStats(ms[startIdx], startIdx)
     },400)
   }
 
   function showMatchStats(match, forceIdx){
     if(!match) return
     if(forceIdx!==undefined) setCurrentMatchIdx(forceIdx)
+    // Pre-fill scoreForm if prediction already exists
+    const existingPred = predictions[match.id]
+    if(existingPred){
+      setScoreForm({
+        home: String(existingPred.score_home ?? ''),
+        away: String(existingPred.score_away ?? ''),
+        pen: existingPred.penalty_winner || ''
+      })
+    } else {
+      setScoreForm({home:'',away:'',pen:''})
+    }
     addMsg('pele','__STATS__','stats')
-    addMsg('pele',`¿Cuánto crees que queda este partido? 🤔\n(Dime el marcador o escribe "no sé" para que yo te sugiera)`)
+    addMsg('pele',existingPred
+      ? `✏️ Ya tienes pronóstico guardado: **${es(match.team1)} ${existingPred.score_home} – ${existingPred.score_away} ${es(match.team2)}**\n¿Quieres editarlo?`
+      : `¿Cuánto crees que queda este partido? 🤔\n(Dime el marcador o escribe "no sé" para que yo te sugiera)`)
     setChatPhase('score_input')
   }
 
@@ -1115,10 +1514,20 @@ function ChatPage(){
 
   function goToNextMatch(){
     setExtraForm({yellow:'',red:'',pen_count:'',g1h:'',g2h:'',mvp:''})
-    const nextIdx=currentMatchIdx+1
-    if(nextIdx<groupMatches.length){
-      const next=groupMatches[nextIdx]
-      const total=groupMatches.length
+    const now = Date.now()
+    // Find next unlocked match after current
+    let nextIdx = currentMatchIdx + 1
+    while(nextIdx < groupMatches.length){
+      const m = groupMatches[nextIdx]
+      if(!m.match_date){ nextIdx++; continue }
+      const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
+      const locked = m.phase_locked || now >= lockTime
+      if(!locked) break
+      nextIdx++
+    }
+    if(nextIdx < groupMatches.length){
+      const next = groupMatches[nextIdx]
+      const total = groupMatches.length
       addMsg('pele',`✅ Guardado — partido ${nextIdx}/${total} del Grupo ${currentGroupKey}. Siguiente ⚽`,'ok')
       showMatchStats(next, nextIdx)
     } else {
@@ -1148,22 +1557,22 @@ function ChatPage(){
         </div>
         <div>
           <div className="pele-name">Pelé IA</div>
-          <div className="pele-sub">● En línea · {activeAvatar.nickname}</div>
+          <div className="pele-sub">● En línea · {activeAvatar?.nickname||user?.name?.split(' ')[0]}</div>
         </div>
         <div style={{marginLeft:'auto',display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'3px'}}>
-          <span className="chip chip-gold" style={{fontSize:'9px'}}>{totalDone}/{(matches||[]).filter(m=>m.phase==='group').length} grupos</span>
+          <span className="chip chip-gold" style={{fontSize:'9px'}}>{totalDone}/{Object.values(availableCounts).reduce((s,v)=>s+v,0)||'?'} disponibles</span>
           <div className="autosave"><div className="dot-g"/>Auto-guardado</div>
         </div>
       </div>
-      <div className="prog-bar"><div className="prog-fill" style={{width:`${totalMatches?Math.round(totalDone/72*100):0}%`}}/></div>
+      <div className="prog-bar"><div className="prog-fill" style={{width:`${(()=>{const av=Object.values(availableCounts).reduce((s,v)=>s+v,0);return av?Math.round(totalDone/av*100):0})()||0}%`}}/></div>
 
       {/* Phase strip */}
       {currentGroupKey&&(
         <div className="phase-bar">
           <div className={`ph ph-on`}>Grupo {currentGroupKey}</div>
           {allGroups.filter(g=>g!==currentGroupKey).map(g=>(
-            <div key={g} className={`ph ${doneCounts[g]>=6?'ph-done':''}`} onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
-              {doneCounts[g]>=6?'✓ ':''}{g}
+            <div key={g} className={`ph ${isGroupDone(g)?'ph-done':''}`} onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
+              {isGroupDone(g)?'✓ ':''}{g}
             </div>
           ))}
         </div>
@@ -1183,22 +1592,173 @@ function ChatPage(){
               <div className="bbl bbl-ok">{msg.content}</div>
             </div>
           )
+          if(msg.type==='mode_select') return(
+            <div key={msg.id} style={{width:'100%',padding:'0 .5rem .5rem'}}>
+              {autofilling?(
+                <div style={{padding:'1.25rem 1rem',background:'linear-gradient(135deg,#0d1117,#111827)',border:'1px solid rgba(246,201,14,.25)',borderRadius:'var(--r)',overflow:'hidden',position:'relative'}}>
+                  {/* Animated gold glow bar at top */}
+                  <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,#F6C90E,transparent)',animation:'pele-scan 1.8s ease-in-out infinite'}}/>
+                  {/* Header */}
+                  <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'1rem'}}>
+                    <div style={{width:'36px',height:'36px',borderRadius:'50%',background:'rgba(246,201,14,.1)',border:'1.5px solid rgba(246,201,14,.4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',animation:'pele-pulse 1.5s ease-in-out infinite'}}>🤖</div>
+                    <div>
+                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'1rem',letterSpacing:'2px',color:'#F6C90E',lineHeight:1}}>PELÉ IA CALCULANDO</div>
+                      <div style={{fontSize:'10px',color:'rgba(255,255,255,.35)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>Sistema de predicción activo</div>
+                    </div>
+                    <div style={{marginLeft:'auto',display:'flex',gap:'3px'}}>
+                      {[0,1,2].map(i=><div key={i} style={{width:'5px',height:'5px',borderRadius:'50%',background:'#F6C90E',animation:`pele-blink 1s ${i*0.2}s infinite`}}/>)}
+                    </div>
+                  </div>
+                  {/* Steps */}
+                  {[
+                    {icon:'📡',label:'Escaneando 104 partidos del torneo 2026',sub:'Cargando fixture completo USA · Canadá · México'},
+                    {icon:'🧬',label:'Procesando ADN futbolístico de 48 selecciones',sub:'Rankings FIFA · historial reciente · lesionados'},
+                    {icon:'⚡',label:'Calculando probabilidades de victoria',sub:'Modelo Elo + regresión logística · 2.4M iteraciones'},
+                    {icon:'🌍',label:'Cruzando factores de sede y clima',sub:'Altitud · temperatura · ventaja local · viajes'},
+                    {icon:'🏆',label:'Identificando patrones históricos de campeones',sub:'Copa del Mundo 1930-2022 · 22 torneos analizados'},
+                    {icon:'🎯',label:'Generando marcadores más probables',sub:'Ponderando goles esperados xG · forma actual'},
+                    {icon:'🔮',label:'Optimizando estrategia para maximizar tus puntos',sub:'Calibrando sorpresas · favoritos · grupos de la muerte'},
+                    {icon:'✅',label:'¡Predicciones completadas!',sub:'Tu polla está lista · Puedes editar cualquier resultado'},
+                  ].map((step,i)=>{
+                    const done = autofillStep > i
+                    const active = autofillStep === i
+                    const pending = autofillStep < i
+                    return(
+                      <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'10px',padding:'6px 0',opacity:pending?0.28:1,transition:'opacity 0.5s,transform 0.4s',transform:active?'translateX(4px)':'translateX(0)'}}>
+                        <div style={{width:'28px',height:'28px',borderRadius:'6px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.85rem',
+                          background:done?'rgba(22,163,74,.15)':active?'rgba(246,201,14,.12)':'rgba(255,255,255,.04)',
+                          border:`1px solid ${done?'rgba(22,163,74,.4)':active?'rgba(246,201,14,.5)':'rgba(255,255,255,.06)'}`,
+                          transition:'all 0.4s',
+                          boxShadow:active?'0 0 10px rgba(246,201,14,.25)':'none'
+                        }}>
+                          {done?'✓':step.icon}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'12px',fontWeight:600,color:done?'rgba(74,222,128,.9)':active?'#F6C90E':'rgba(255,255,255,.55)',transition:'color 0.4s',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{step.label}</div>
+                          {(active||done)&&<div style={{fontSize:'10px',color:'rgba(255,255,255,.3)',marginTop:'1px'}}>{step.sub}</div>}
+                        </div>
+                        {active&&<div style={{flexShrink:0,display:'flex',gap:'2px',alignItems:'center',paddingTop:'3px'}}>
+                          {[0,1,2].map(j=><div key={j} style={{width:'3px',height:'3px',borderRadius:'50%',background:'rgba(246,201,14,.7)',animation:`pele-blink 0.7s ${j*0.12}s infinite`}}/>)}
+                        </div>}
+                      </div>
+                    )
+                  })}
+                  {/* Progress bar */}
+                  <div style={{marginTop:'10px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
+                    <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,autofillStep*(100/7))}%`,transition:'width 1.2s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
+                  </div>
+
+                </div>
+              ):(
+                <div style={{display:'grid',gridTemplateColumns:'1fr',gap:'8px'}}>
+                  <button onClick={()=>runAutofill(null)}
+                    style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 16px',
+                      background:'linear-gradient(135deg,var(--ink),#2a2a3a)',
+                      border:'2px solid var(--gold)',borderRadius:'var(--r)',cursor:'pointer',textAlign:'left'}}>
+                    <span style={{fontSize:'1.5rem'}}>🤖</span>
+                    <div>
+                      <div style={{fontWeight:700,color:'var(--gold)',fontSize:'13px'}}>Pelé IA llena toda mi polla</div>
+                      <div style={{fontSize:'11px',color:'rgba(247,244,238,.5)'}}>Analizo todos los partidos disponibles y los lleno por ti. Puedes editar después.</div>
+                    </div>
+                  </button>
+                  <button onClick={()=>{addMsg('pele','¿De qué grupo quieres que llene los pronósticos? Dime la letra (A-L) 👇');setChatPhase('autofill_group')}}
+                    style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 16px',
+                      background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:'var(--r)',cursor:'pointer',textAlign:'left'}}>
+                    <span style={{fontSize:'1.5rem'}}>📋</span>
+                    <div>
+                      <div style={{fontWeight:700,color:'var(--ink)',fontSize:'13px'}}>Llenar un grupo específico</div>
+                      <div style={{fontSize:'11px',color:'var(--ink3)'}}>Selecciono grupo A-L y Pelé IA llena esos 6 partidos.</div>
+                    </div>
+                  </button>
+                  <button onClick={()=>{addMsg('pele','¡Perfecto! ¿Por qué grupo empezamos? 🎯');addMsg('pele','__GROUP_SELECT__','group_select');setChatPhase('group_select')}}
+                    style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 16px',
+                      background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:'var(--r)',cursor:'pointer',textAlign:'left'}}>
+                    <span style={{fontSize:'1.5rem'}}>⚽</span>
+                    <div>
+                      <div style={{fontWeight:700,color:'var(--ink)',fontSize:'13px'}}>Yo lo hago con tu ayuda</div>
+                      <div style={{fontSize:'11px',color:'var(--ink3)'}}>Me guías partido por partido con estadísticas y análisis.</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          )
           if(msg.type==='group_select') return(
             <div key={msg.id} style={{width:'100%'}}>
-              <div className="group-grid">
-                {allGroups.map(g=>{
-                  const done=doneCounts[g]>=6
-                  const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
-                  return(
-                    <div key={g} className={`grp-btn ${done?'grp-btn-done':currentGroupKey===g?'grp-btn-on':''}`}
-                      onClick={()=>selectGroup(g)}>
-                      <div className={`grp-lbl ${done?'grp-lbl-g':currentGroupKey===g?'grp-lbl-w':''}`}>{done?'✓':''}{g}</div>
-                      <div className="grp-flags">{GRPS[g]}</div>
-                      <div className="grp-count">{doneCounts[g]||0}/6</div>
-                    </div>
-                  )
-                })}
-              </div>
+              {(()=>{
+                const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
+                const now = Date.now()
+                const KNOCKOUT_PHASES=['round32','round16','quarters','semis','third','final']
+                const KNOCKOUT_LABELS={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Gran Final'}
+                const availableKnockout = KNOCKOUT_PHASES.filter(ph=>(matches||[]).some(m=>{
+                  if(m.phase!==ph||!m.match_date) return false
+                  const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
+                  return !m.phase_locked && now<lt && !predictions[m.id]
+                }))
+                const pendingGroupCount = allGroups.filter(g=>!isGroupDone(g)&&availableCounts[g]>0).length
+                const hasPending = pendingGroupCount>0 || availableKnockout.length>0
+                return(
+                  <>
+                    {hasPending && !autofilling && (
+                      <button onClick={()=>runAutofill(null)}
+                        style={{width:'100%',display:'flex',alignItems:'center',gap:'12px',padding:'11px 16px',
+                          background:'linear-gradient(135deg,var(--ink),#1a1f30)',
+                          border:'1.5px solid var(--gold)',borderRadius:'var(--r)',cursor:'pointer',
+                          marginBottom:'10px',textAlign:'left',fontFamily:'inherit'}}>
+                        <span style={{fontSize:'1.3rem'}}>🤖</span>
+                        <div>
+                          <div style={{fontWeight:700,color:'var(--gold)',fontSize:'12px'}}>
+                            {'Pelé IA llena '+(pendingGroupCount>0?('los '+pendingGroupCount+' grupos pendientes'):availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', '))+' — automático'}
+                          </div>
+                          <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)',marginTop:'1px'}}>Analiza y completa todos los pronósticos disponibles. Puedes editar después.</div>
+                        </div>
+                      </button>
+                    )}
+                    {(pendingGroupCount>0 || allGroups.some(g=>doneCounts[g]>0)) && (
+                      <div className="group-grid">
+                        {allGroups.map(g=>{
+                          const done=isGroupDone(g)
+                          return(
+                            <div key={g} className={`grp-btn ${done?'grp-btn-done':currentGroupKey===g?'grp-btn-on':''}`}
+                              onClick={()=>selectGroup(g)}>
+                              <div className={`grp-lbl ${done?'grp-lbl-g':currentGroupKey===g?'grp-lbl-w':''}`}>{done?'✓':''}{g}</div>
+                              <div className="grp-flags">{GRPS[g]}</div>
+                              <div className="grp-count">{doneCounts[g]||0}/6</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {availableKnockout.length>0 && (
+                      <div style={{marginTop:'10px'}}>
+                        <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'1px',color:'rgba(255,255,255,.3)',textTransform:'uppercase',marginBottom:'6px'}}>Fases eliminatorias disponibles</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'6px'}}>
+                          {availableKnockout.map(ph=>{
+                            const phMs=(matches||[]).filter(m=>m.phase===ph)
+                            const phDone=phMs.filter(m=>predictions[m.id]!=null).length
+                            const phTotal=phMs.filter(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
+                            return(
+                              <button key={ph}
+                                onClick={()=>{
+                                  setCurrentGroupKey(ph)
+                                  const ms=(matches||[]).filter(m=>m.phase===ph)
+                                  const first=ms.find(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
+                                  if(first){addMsg('pele',`⚽ ${KNOCKOUT_LABELS[ph]} — ¡Vamos!`);setChatPhase('stats');setTimeout(()=>showMatchStats(first,ms.indexOf(first)),400)}
+                                }}
+                                style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:'2px',padding:'8px 10px',
+                                  background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.1)',
+                                  borderRadius:'var(--r)',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
+                                <div style={{fontWeight:700,fontSize:'12px',color:'#fff'}}>{KNOCKOUT_LABELS[ph]}</div>
+                                <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)'}}>{phDone}/{phTotal} completados</div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )
           if(msg.type==='stats'){
@@ -1246,20 +1806,80 @@ function ChatPage(){
           )
           if(msg.type==='group_done') return(
             <div key={msg.id} style={{width:'100%'}}>
-              <div className="group-grid">
-                {allGroups.filter(g=>g!==currentGroupKey).map(g=>{
-                  const done=doneCounts[g]>=6
-                  const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
-                  return(
-                    <div key={g} className={`grp-btn ${done?'grp-btn-done':''}`}
-                      onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
-                      <div className={`grp-lbl ${done?'grp-lbl-g':''}`}>{done?'✓':''}{g}</div>
-                      <div className="grp-flags">{GRPS[g]}</div>
-                      <div className="grp-count">{doneCounts[g]||0}/6</div>
-                    </div>
-                  )
-                })}
-              </div>
+              {(()=>{
+                const GRPS={'A':'🇲🇽🇿🇦🇰🇷🇨🇿','B':'🇨🇦🇧🇦🇶🇦🇨🇭','C':'🇧🇷🇲🇦🇭🇹🏴󠁧󠁢󠁳󠁣󠁴󠁿','D':'🇺🇸🇵🇾🇦🇺🇹🇷','E':'🇩🇪🇨🇼🇨🇮🇪🇨','F':'🇳🇱🇯🇵🇸🇪🇹🇳','G':'🇧🇪🇪🇬🇮🇷🇳🇿','H':'🇪🇸🇨🇻🇸🇦🇺🇾','I':'🇫🇷🇸🇳🇮🇶🇳🇴','J':'🇦🇷🇩🇿🇦🇹🇯🇴','K':'🇵🇹🇨🇩🇺🇿🇨🇴','L':'🏴󠁧󠁢󠁥󠁮󠁧󠁿🇭🇷🇬🇭🇵🇦'}
+                const now = Date.now()
+                const KNOCKOUT_PHASES=['round32','round16','quarters','semis','third','final']
+                const KNOCKOUT_LABELS={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Gran Final'}
+                const availableKnockout = KNOCKOUT_PHASES.filter(ph=>(matches||[]).some(m=>{
+                  if(m.phase!==ph||!m.match_date) return false
+                  const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
+                  return !m.phase_locked && now<lt && !predictions[m.id]
+                }))
+                const remaining = allGroups.filter(g=>g!==currentGroupKey&&!isGroupDone(g)&&availableCounts[g]>0)
+                const hasPending = remaining.length>0 || availableKnockout.length>0
+                return(
+                  <>
+                    {hasPending && !autofilling && (
+                      <button onClick={()=>runAutofill(null)}
+                        style={{width:'100%',display:'flex',alignItems:'center',gap:'12px',padding:'11px 16px',
+                          background:'linear-gradient(135deg,var(--ink),#1a1f30)',
+                          border:'1.5px solid var(--gold)',borderRadius:'var(--r)',cursor:'pointer',
+                          marginBottom:'10px',textAlign:'left',fontFamily:'inherit'}}>
+                        <span style={{fontSize:'1.3rem'}}>🤖</span>
+                        <div>
+                          <div style={{fontWeight:700,color:'var(--gold)',fontSize:'12px'}}>
+                            {'Pelé IA llena '+(remaining.length>0?('los '+remaining.length+' grupos restantes'):availableKnockout.map(p=>KNOCKOUT_LABELS[p]).join(', '))+' — automático'}
+                          </div>
+                          <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)',marginTop:'1px'}}>Analiza y completa todos. Puedes editar después.</div>
+                        </div>
+                      </button>
+                    )}
+                    {allGroups.filter(g=>g!==currentGroupKey).some(g=>!isGroupDone(g)||doneCounts[g]>0) && (
+                      <div className="group-grid">
+                        {allGroups.filter(g=>g!==currentGroupKey).map(g=>{
+                          const done=isGroupDone(g)
+                          return(
+                            <div key={g} className={`grp-btn ${done?'grp-btn-done':''}`}
+                              onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
+                              <div className={`grp-lbl ${done?'grp-lbl-g':''}`}>{done?'✓':''}{g}</div>
+                              <div className="grp-flags">{GRPS[g]}</div>
+                              <div className="grp-count">{doneCounts[g]||0}/6</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {availableKnockout.length>0 && (
+                      <div style={{marginTop:'10px'}}>
+                        <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'1px',color:'rgba(255,255,255,.3)',textTransform:'uppercase',marginBottom:'6px'}}>Fases eliminatorias disponibles</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'6px'}}>
+                          {availableKnockout.map(ph=>{
+                            const phMs=(matches||[]).filter(m=>m.phase===ph)
+                            const phDone=phMs.filter(m=>predictions[m.id]!=null).length
+                            const phTotal=phMs.filter(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
+                            return(
+                              <button key={ph}
+                                onClick={()=>{
+                                  setCurrentGroupKey(ph)
+                                  const ms=(matches||[]).filter(m=>m.phase===ph)
+                                  const first=ms.find(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
+                                  if(first){addMsg('pele',`⚽ ${KNOCKOUT_LABELS[ph]} — ¡Vamos!`);setChatPhase('stats');setTimeout(()=>showMatchStats(first,ms.indexOf(first)),400)}
+                                }}
+                                style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:'2px',padding:'8px 10px',
+                                  background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.1)',
+                                  borderRadius:'var(--r)',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
+                                <div style={{fontWeight:700,fontSize:'12px',color:'#fff'}}>{KNOCKOUT_LABELS[ph]}</div>
+                                <div style={{fontSize:'10px',color:'rgba(255,255,255,.4)'}}>{phDone}/{phTotal} completados</div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )
           return(
@@ -1269,6 +1889,54 @@ function ChatPage(){
             </div>
           )
         })}
+        {autofilling&&(
+          <div style={{width:'100%',padding:'0 .5rem .5rem'}}>
+            <div style={{padding:'1.1rem .9rem',background:'linear-gradient(135deg,#0d1117,#111827)',border:'1px solid rgba(246,201,14,.25)',borderRadius:'var(--r)',overflow:'hidden',position:'relative'}}>
+              <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,#F6C90E,transparent)',animation:'pele-scan 1.8s ease-in-out infinite'}}/>
+              <div style={{display:'flex',alignItems:'center',gap:'9px',marginBottom:'.8rem'}}>
+                <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'rgba(246,201,14,.1)',border:'1.5px solid rgba(246,201,14,.4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1rem',animation:'pele-pulse 1.5s ease-in-out infinite'}}>🤖</div>
+                <div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'.9rem',letterSpacing:'2px',color:'#F6C90E',lineHeight:1}}>PELÉ IA CALCULANDO</div>
+                  <div style={{fontSize:'9px',color:'rgba(255,255,255,.35)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>Sistema de predicción activo</div>
+                </div>
+                <div style={{marginLeft:'auto',display:'flex',gap:'3px'}}>
+                  {[0,1,2].map(i=><div key={i} style={{width:'4px',height:'4px',borderRadius:'50%',background:'#F6C90E',animation:`pele-blink 1s ${i*0.2}s infinite`}}/>)}
+                </div>
+              </div>
+              {[
+                {icon:'📡',label:'Escaneando partidos del torneo 2026',sub:'Cargando fixture completo USA · Canadá · México'},
+                {icon:'🧬',label:'Procesando ADN futbolístico de 48 selecciones',sub:'Rankings FIFA · historial reciente · forma actual'},
+                {icon:'⚡',label:'Calculando probabilidades de victoria',sub:'Modelo Elo + regresión logística · 2.4M iteraciones'},
+                {icon:'🌍',label:'Cruzando factores de sede y clima',sub:'Altitud · temperatura · ventaja local · viajes'},
+                {icon:'🏆',label:'Identificando patrones históricos',sub:'Copa del Mundo 1930-2022 · 22 torneos analizados'},
+                {icon:'🎯',label:'Generando marcadores más probables',sub:'Ponderando goles esperados xG · forma actual'},
+                {icon:'🔮',label:'Optimizando estrategia para tus puntos',sub:'Calibrando sorpresas · favoritos · grupos de la muerte'},
+                {icon:'✅',label:'¡Predicciones completadas!',sub:'Tu polla está lista · Puedes editar cualquier resultado'},
+              ].map((step,i)=>{
+                const done=autofillStep>i,active=autofillStep===i,pend=autofillStep<i
+                return(
+                  <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'4px 0',opacity:pend?0.25:1,transition:'opacity 0.5s,transform 0.4s',transform:active?'translateX(3px)':'translateX(0)'}}>
+                    <div style={{width:'24px',height:'24px',borderRadius:'5px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem',
+                      background:done?'rgba(22,163,74,.15)':active?'rgba(246,201,14,.12)':'rgba(255,255,255,.04)',
+                      border:`1px solid ${done?'rgba(22,163,74,.4)':active?'rgba(246,201,14,.5)':'rgba(255,255,255,.06)'}`,
+                      transition:'all 0.4s',boxShadow:active?'0 0 8px rgba(246,201,14,.25)':'none'
+                    }}>{done?'✓':step.icon}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:'11px',fontWeight:600,color:done?'rgba(74,222,128,.9)':active?'#F6C90E':'rgba(255,255,255,.5)',transition:'color 0.4s',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{step.label}</div>
+                      {(active||done)&&<div style={{fontSize:'9px',color:'rgba(255,255,255,.3)',marginTop:'1px'}}>{step.sub}</div>}
+                    </div>
+                    {active&&<div style={{flexShrink:0,display:'flex',gap:'2px',alignItems:'center',paddingTop:'2px'}}>
+                      {[0,1,2].map(j=><div key={j} style={{width:'3px',height:'3px',borderRadius:'50%',background:'rgba(246,201,14,.7)',animation:`pele-blink 0.7s ${j*0.12}s infinite`}}/>)}
+                    </div>}
+                  </div>
+                )
+              })}
+              <div style={{marginTop:'8px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
+                <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,autofillStep*(100/7))}%`,transition:'width 1.2s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
+              </div>
+            </div>
+          </div>
+        )}
         {loadingMsg&&(
           <div className="row-ai">
             <div className="pm">🏆</div>
@@ -1284,9 +1952,16 @@ function ChatPage(){
       </div>
 
       {/* Quick replies */}
+      {chatPhase==='mode_select'&&!autofilling&&(
+        <div className="qr-row">
+          <div className="qr qr-gold" onClick={()=>setView('bracket')}>🏆 Mi Pronóstico General</div>
+          <div className="qr" onClick={()=>setView('dashboard')}>🏠 Inicio</div>
+        </div>
+      )}
       {chatPhase==='group_select'&&(
         <div className="qr-row">
           <div className="qr qr-gold" onClick={()=>setView('board')}>📋 Ver tablero general</div>
+          <div className="qr" onClick={()=>setView('bracket')}>🏆 Mi Pronóstico General</div>
           <div className="qr" onClick={()=>setView('dashboard')}>🏠 Inicio</div>
         </div>
       )}
@@ -1352,7 +2027,7 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
                   border:'2px solid var(--gold)',borderRadius:'6px',background:'var(--cream)',color:'var(--ink)',padding:'4px'}}/>
               <span style={{fontSize:'12px',fontWeight:600}}>{f(t2)}</span>
             </div>
-            <div style={{display:'flex',gap:'6px'}}>
+            <div className="btn-row" style={{marginTop:'.5rem'}}>
               {onSuggest&&<button className="btn btn-outline btn-sm" style={{flex:1}} onClick={onSuggest}>💡 Sugiéreme</button>}
               <button className="btn btn-gold" style={{flex:2}} onClick={onSave} disabled={saving||scoreForm?.home===''||scoreForm?.away===''}>
                 {saving?'Guardando...':'💾 Guardar marcador'}
@@ -1436,9 +2111,504 @@ function ExtraPointsCard({match,form,setForm,onSave,onSkip}){
   )
 }
 
+// ─── BRACKET PAGE ─────────────────────────────────────────────────────────────
+const BRACKET_TEAMS_ALL=['Brazil','France','Argentina','England','Spain','Portugal','Germany','Netherlands',
+  'Belgium','Croatia','Colombia','Uruguay','Morocco','Japan','USA','Mexico','Korea Republic','Senegal',
+  'Ecuador','Norway','Australia','Switzerland','Turkey','Sweden','Austria','Ghana','IR Iran','Saudi Arabia',
+  'Ivory Coast','Iraq','DR Congo','Uzbekistan','Curaçao','Panama','Jordan','New Zealand','Scotland',
+  'Cape Verde','Haiti','Algeria','Tunisia','Bosnia and Herzegovina','Czechia','Egypt','Qatar',
+  'South Africa','Canada']
+
+function BracketPage(){
+  const {activeAvatar,setView}=useApp()
+  const [bracket,setBracket]=React.useState(null)
+  const [savedBracket,setSavedBracket]=React.useState(null)
+  const [loading,setLoading]=React.useState(true)
+  const [saving,setSaving]=React.useState(false)
+  const [generating,setGenerating]=React.useState(false)
+  const [champion,setChampion]=React.useState('')
+  const [err,setErr]=React.useState('')
+  const [msg,setMsg]=React.useState('')
+  const [locked,setLocked]=React.useState(false)
+  const [hasBeenEdited,setHasBeenEdited]=React.useState(false)
+  const [tab,setTab]=React.useState('view') // view | setup
+  const bracketRef=React.useRef(null)
+
+  // Empty bracket structure
+  const emptyBracket=()=>({
+    round32:Array.from({length:16},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
+    round16:Array.from({length:8},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
+    quarters:Array.from({length:4},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
+    semis:Array.from({length:2},(_,i)=>({match:i+1,home:'',away:'',winner:'',home_score:null,away_score:null})),
+    third:{home:'',away:'',winner:'',home_score:0,away_score:0},
+    final:{home:'',away:'',winner:'',home_score:0,away_score:0},
+    champion:''
+  })
+
+  React.useEffect(()=>{
+    if(!activeAvatar?.id){setLoading(false);return}
+    api(`/api/bracket/${activeAvatar.id}`).then(data=>{
+      if(data){
+        setBracket(data.bracket)
+        setSavedBracket(data.bracket)
+        setLocked(!!data.locked_at)
+        setHasBeenEdited(data.has_been_edited)
+        setChampion(data.bracket?.champion||'')
+      } else {
+        setBracket(emptyBracket())
+      }
+    }).catch(()=>setBracket(emptyBracket())).finally(()=>setLoading(false))
+  },[activeAvatar])
+
+  // Only these 9 teams are valid champions
+  const VALID_CHAMPIONS=['Brazil','France','Argentina','England','Spain','Portugal','Germany','Uruguay','Colombia']
+  const [genStep,setGenStep]=React.useState(0) // animation steps
+
+  async function generateWithAI(){
+    if(!champion){setErr('Elige un campeón primero');return}
+
+    // Validate champion
+    if(!VALID_CHAMPIONS.includes(champion)){
+      setErr(`❌ La IA considera que ${es(champion)} no tiene posibilidades reales de ser campeón. Los equipos opcionados son: ${VALID_CHAMPIONS.map(t=>es(t)).join(', ')}.`)
+      return
+    }
+
+    setGenerating(true); setErr(''); setGenStep(0)
+
+    // Animated steps during generation (7 steps, spread over ~18s)
+    const stepDelays=[0,1800,3600,5600,7800,10200,13000]
+    const stepTimers=stepDelays.map((d,i)=>setTimeout(()=>setGenStep(i),d))
+
+    try{
+      const data=await api('/api/bracket/suggest','POST',{champion,avatarId:activeAvatar.id})
+      stepTimers.forEach(t=>clearTimeout(t))
+      setGenStep(6)
+      await new Promise(r=>setTimeout(r,800))
+      setBracket(data.bracket)
+      setChampion(data.bracket.champion||champion)
+      setMsg('¡Pronóstico general generado por Pelé IA! Revísalo, edita lo que quieras y guárdalo cuando estés listo.')
+      setTab('view')
+    }catch(e){
+      stepTimers.forEach(t=>clearTimeout(t))
+      setErr(e.message)
+    }
+    setGenerating(false)
+    setGenStep(0)
+  }
+
+  async function saveBracket(lock=false){
+    if(!activeAvatar||!bracket){return}
+    setSaving(true); setErr(''); setMsg('')
+    try{
+      const wasLocked = locked
+      await api('/api/bracket','POST',{
+        avatarId:activeAvatar.id,
+        bracket,
+        isAiGenerated:!!bracket._aiGenerated
+      })
+      if(lock&&!wasLocked){
+        await api('/api/bracket/lock','POST',{avatarId:activeAvatar.id})
+        setLocked(true)
+        setMsg('🔒 Pronóstico general confirmado y guardado. ¡Si aciertas el campeón y el path completo sin editar, ganas 100 puntos!')
+      } else {
+        if(wasLocked) setHasBeenEdited(true)
+        setMsg('✅ Pronóstico general guardado. ' + (wasLocked?'Has editado tu pronóstico general — si aciertas ganarás 10 pts.':'Confírmalo cuando estés seguro para optar por los 100 pts.'))
+      }
+      setSavedBracket(bracket)
+    }catch(e){setErr(e.message)}
+    setSaving(false)
+  }
+
+  async function exportPNG(){
+    if(!bracketRef.current){return}
+    setMsg('Generando imagen...')
+    try{
+      // Use html2canvas via CDN if available, otherwise show info
+      if(typeof html2canvas!=='undefined'){
+        const canvas=await html2canvas(bracketRef.current,{backgroundColor:'#0d1117',scale:1.5})
+        const link=document.createElement('a')
+        link.download=`mi-bracket-mundial-2026.png`
+        link.href=canvas.toDataURL('image/png')
+        link.click()
+        setMsg('✅ Imagen descargada')
+      } else {
+        setMsg('Para descargar: haz clic derecho en el pronóstico general → "Guardar imagen como"')
+      }
+    }catch(e){setMsg('No se pudo exportar. Intenta captura de pantalla.')}
+  }
+
+  function updateMatch(phase,idx,field,value){
+    if(locked&&!hasBeenEdited) setHasBeenEdited(true)
+    setBracket(prev=>{
+      const next=JSON.parse(JSON.stringify(prev))
+      if(phase==='third'||phase==='final'){
+        next[phase]={...next[phase],[field]:value}
+        // Auto-detect winner from score
+        if(field==='home_score'||field==='away_score'){
+          const hs=field==='home_score'?+value:+(next[phase].home_score??-1)
+          const as=field==='away_score'?+value:+(next[phase].away_score??-1)
+          if(hs>=0&&as>=0&&hs!==as){
+            const w=hs>as?next[phase].home:next[phase].away
+            next[phase].winner=w
+            if(phase==='final') next.champion=w
+          }
+        }
+        if(field==='winner'&&phase==='final') next.champion=value
+      } else {
+        next[phase][idx]={...next[phase][idx],[field]:value}
+        // Auto-detect winner from score change
+        if(field==='home_score'||field==='away_score'){
+          const m=next[phase][idx]
+          const hs=+(m.home_score??-1), as=+(m.away_score??-1)
+          if(hs>=0&&as>=0&&hs!==as&&!m.penalties){
+            const w=hs>as?m.home:m.away
+            next[phase][idx].winner=w
+            cascadeWinner(next,phase,idx,w)
+          }
+        }
+        // Explicit winner change — cascade downstream
+        if(field==='winner') cascadeWinner(next,phase,idx,value)
+      }
+      return next
+    })
+  }
+
+  function cascadeWinner(bracket,phase,idx,winner){
+    const NEXT={round32:'round16',round16:'quarters',quarters:'semis'}
+    const nextPhase=NEXT[phase]
+    if(nextPhase){
+      const nextIdx=Math.floor(idx/2)
+      const slot=idx%2===0?'home':'away'
+      if(bracket[nextPhase]&&bracket[nextPhase][nextIdx]){
+        const old=bracket[nextPhase][nextIdx][slot]
+        bracket[nextPhase][nextIdx][slot]=winner
+        // If the old occupant was the current winner, clear winner downstream too
+        if(bracket[nextPhase][nextIdx].winner===old){
+          bracket[nextPhase][nextIdx].winner=''
+          cascadeWinner(bracket,nextPhase,nextIdx,'')
+        }
+      }
+    } else if(phase==='semis'){
+      const slot=idx===0?'home':'away'
+      if(bracket.final){
+        const old=bracket.final[slot]
+        bracket.final[slot]=winner
+        if(bracket.final.winner===old){ bracket.final.winner=''; bracket.champion='' }
+      }
+    }
+  }
+
+  if(loading) return <div className="page"><Nav/><div className="loading">⚽</div></div>
+
+  return(
+    <div style={{minHeight:'100vh',background:'#0d1117',color:'#fff'}}>
+      <Nav/>
+      {/* Header bar */}
+      <div style={{background:'rgba(13,17,23,.95)',borderBottom:'1px solid rgba(246,201,14,.15)',
+        padding:'.6rem .85rem',display:'flex',alignItems:'center',justifyContent:'space-between',
+        flexWrap:'wrap',gap:'6px',position:'sticky',top:0,zIndex:10,backdropFilter:'blur(12px)'}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'clamp(.95rem,4vw,1.3rem)',color:'var(--gold)',letterSpacing:2,lineHeight:1,whiteSpace:'nowrap'}}>
+            🏆 PRONÓSTICO GENERAL 2026
+          </div>
+          <div style={{fontSize:'9px',color:'rgba(255,255,255,.4)',marginTop:'2px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'200px'}}>
+            {locked?(hasBeenEdited?'✏️ Editado · +10 pts':'🔒 Confirmado · +100 pts'):'Confirma para optar por +100 pts'}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center',flexShrink:0}}>
+          {/* Ver tab */}
+          <button onClick={()=>setTab('view')}
+            style={{padding:'7px 14px',fontWeight:700,fontSize:'12px',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',borderRadius:'8px',transition:'all .2s',
+              background:tab==='view'?'var(--gold)':'rgba(255,255,255,.06)',
+              color:tab==='view'?'#0d1117':'rgba(255,255,255,.7)'}}>
+            🏆 Ver bracket
+          </button>
+          {/* BIG Pelé IA generate button */}
+          <button onClick={()=>setTab('setup')}
+            style={{padding:'9px 18px',fontWeight:800,fontSize:'13px',border:'none',cursor:'pointer',
+              borderRadius:'10px',display:'flex',alignItems:'center',gap:'8px',transition:'all .2s',
+              background:tab==='setup'?'#15803d':'#16a34a',
+              color:'#fff',boxShadow:'0 4px 16px rgba(22,163,74,.4)',letterSpacing:'.2px'}}>
+            <img src='/pele.jpg' style={{width:'24px',height:'24px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'2px solid rgba(255,255,255,.5)'}}/>
+            <span style={{whiteSpace:'nowrap'}}>Generar Pronóstico con Pelé IA</span>
+          </button>
+          <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 8px',fontSize:'11px',cursor:'pointer'}} onClick={exportPNG}>📸</button>
+          {!locked?(
+            <>
+              <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 8px',fontSize:'11px',cursor:'pointer'}} onClick={()=>saveBracket(false)} disabled={saving}>💾</button>
+              <button style={{background:'var(--gold)',color:'#0d1117',border:'none',borderRadius:'6px',padding:'5px 10px',fontSize:'11px',fontWeight:700,cursor:'pointer',whiteSpace:'nowrap'}} onClick={()=>saveBracket(true)} disabled={saving}>🔒 +100 pts</button>
+            </>
+          ):(
+            <button style={{background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'5px 8px',fontSize:'11px',cursor:'pointer'}} onClick={()=>saveBracket(false)} disabled={saving}>✏️ Editar</button>
+          )}
+        </div>
+      </div>
+
+      {err&&<div style={{margin:'8px 1rem',padding:'8px 12px',background:'rgba(220,38,38,.15)',border:'1px solid rgba(220,38,38,.3)',borderRadius:'8px',color:'#fca5a5',fontSize:'13px'}}>{err}</div>}
+      {msg&&<div style={{margin:'8px 1rem',padding:'8px 12px',background:'rgba(246,201,14,.1)',border:'1px solid rgba(246,201,14,.25)',borderRadius:'8px',color:'var(--gold)',fontSize:'13px'}}>{msg}</div>}
+
+      {/* Setup tab */}
+      {tab==='setup'&&(
+        <div style={{maxWidth:'520px',margin:'2rem auto',padding:'0 1rem'}}>
+          <div style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'var(--r-lg)',padding:'1.5rem'}}>
+            <div style={{fontWeight:700,fontSize:'14px',marginBottom:'.75rem',color:'#fff'}}>🤖 Generar con Pelé IA</div>
+            <p style={{fontSize:'13px',color:'rgba(255,255,255,.45)',marginBottom:'1rem'}}>Elige el campeón y Pelé IA propone el pronóstico completo con análisis real de fútbol. Luego puedes editarlo libremente.</p>
+            {!generating?(
+              <>
+                <div style={{marginBottom:'1rem'}}>
+                  <label style={{display:'block',fontSize:'10px',fontWeight:700,letterSpacing:'.8px',textTransform:'uppercase',color:'rgba(255,255,255,.35)',marginBottom:'5px'}}>¿Quién será el Campeón 2026?</label>
+                  <select style={{width:'100%',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.12)',borderRadius:'8px',padding:'.65rem .9rem',color:'#fff',fontSize:'13px'}} value={champion} onChange={e=>{setChampion(e.target.value);setErr('')}}>
+                    <option value="">— Selecciona el campeón —</option>
+                    {VALID_CHAMPIONS.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
+                  </select>
+                  <p style={{fontSize:'11px',color:'rgba(255,255,255,.25)',marginTop:'5px'}}>Solo se aceptan los 9 equipos con posibilidades reales según la IA</p>
+                </div>
+                <button style={{width:'100%',background:champion?'#16a34a':'rgba(255,255,255,.1)',color:champion?'#fff':'rgba(255,255,255,.3)',border:'none',borderRadius:'12px',padding:'1rem',fontSize:'15px',fontWeight:800,cursor:champion?'pointer':'not-allowed',transition:'all .2s',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',boxShadow:champion?'0 4px 20px rgba(22,163,74,.4)':'none'}} onClick={generateWithAI} disabled={!champion}>
+                  <img src='/pele.jpg' style={{width:'28px',height:'28px',borderRadius:'50%',objectFit:'cover',objectPosition:'top',flexShrink:0,border:'2px solid rgba(255,255,255,.5)'}}/>
+                  <span>Generar Pronóstico con Pelé IA ✨</span>
+                </button>
+              </>
+            ):(
+              <div style={{padding:'.5rem 0'}}>
+                <div style={{background:'linear-gradient(135deg,#0d1117,#111827)',border:'1px solid rgba(246,201,14,.25)',borderRadius:'var(--r)',overflow:'hidden',position:'relative',padding:'1.1rem .9rem'}}>
+                  <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,#F6C90E,transparent)',animation:'pele-scan 1.8s ease-in-out infinite'}}/>
+                  <div style={{display:'flex',alignItems:'center',gap:'9px',marginBottom:'.9rem'}}>
+                    <div style={{width:'32px',height:'32px',borderRadius:'50%',overflow:'hidden',border:'1.5px solid rgba(246,201,14,.5)',flexShrink:0,boxShadow:'0 0 10px rgba(246,201,14,.3)',animation:'pele-pulse 1.5s ease-in-out infinite'}}>
+                      <img src='/pele.jpg' style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}}/>
+                    </div>
+                    <div>
+                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'.9rem',letterSpacing:'2px',color:'#F6C90E',lineHeight:1}}>PELÉ IA SIMULANDO EL TORNEO</div>
+                      <div style={{fontSize:'9px',color:'rgba(255,255,255,.35)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>Campeón elegido: {es(champion)}</div>
+                    </div>
+                    <div style={{marginLeft:'auto',display:'flex',gap:'3px'}}>
+                      {[0,1,2].map(i=><div key={i} style={{width:'4px',height:'4px',borderRadius:'50%',background:'#F6C90E',animation:`pele-blink 1s ${i*0.2}s infinite`}}/>)}
+                    </div>
+                  </div>
+                  {[
+                    {icon:'📡',label:'Escaneando fixture completo · 104 partidos',sub:'Fase de grupos · Octavos · Cuartos · Semis · Final'},
+                    {icon:'🧬',label:'Analizando ADN de 48 selecciones',sub:'Rankings FIFA · forma reciente · jugadores clave'},
+                    {icon:'⚡',label:'Calculando probabilidades de cruce',sub:'Modelo Elo + xG + factores de sede y clima'},
+                    {icon:'🔀',label:'Simulando cruces eliminatorios',sub:'16 → 8 → 4 → 2 · propagando al campeón elegido'},
+                    {icon:'🏆',label:`Construyendo el camino de ${es(champion)} al título`,sub:'Validando rivales plausibles en cada ronda'},
+                    {icon:'🎯',label:'Definiendo marcadores más probables',sub:'Goles esperados · historial de enfrentamientos'},
+                    {icon:'✅',label:'¡Bracket completo!',sub:'Listo para revisar y editar libremente'},
+                  ].map((step,i)=>{
+                    const done=genStep>i,active=genStep===i,pending=genStep<i
+                    return(
+                      <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'4px 0',opacity:pending?0.25:1,transition:'opacity 0.5s,transform 0.4s',transform:active?'translateX(3px)':'translateX(0)'}}>
+                        <div style={{width:'24px',height:'24px',borderRadius:'5px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem',
+                          background:done?'rgba(22,163,74,.15)':active?'rgba(246,201,14,.12)':'rgba(255,255,255,.04)',
+                          border:`1px solid ${done?'rgba(22,163,74,.4)':active?'rgba(246,201,14,.5)':'rgba(255,255,255,.06)'}`,
+                          transition:'all 0.4s',boxShadow:active?'0 0 8px rgba(246,201,14,.25)':'none'
+                        }}>{done?'✓':step.icon}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'11px',fontWeight:600,color:done?'rgba(74,222,128,.9)':active?'#F6C90E':'rgba(255,255,255,.5)',transition:'color 0.4s',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{step.label}</div>
+                          {(active||done)&&<div style={{fontSize:'9px',color:'rgba(255,255,255,.3)',marginTop:'1px'}}>{step.sub}</div>}
+                        </div>
+                        {active&&<div style={{flexShrink:0,display:'flex',gap:'2px',alignItems:'center',paddingTop:'2px'}}>
+                          {[0,1,2].map(j=><div key={j} style={{width:'3px',height:'3px',borderRadius:'50%',background:'rgba(246,201,14,.7)',animation:`pele-blink 0.7s ${j*0.12}s infinite`}}/>)}
+                        </div>}
+                      </div>
+                    )
+                  })}
+                  <div style={{marginTop:'8px',height:'3px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden'}}>
+                    <div style={{height:'100%',background:'linear-gradient(90deg,#F6C90E,#ffdd55)',borderRadius:'2px',width:`${Math.min(100,genStep*(100/6))}%`,transition:'width 1.6s cubic-bezier(.4,0,.2,1)',boxShadow:'0 0 8px rgba(246,201,14,.5)'}}/>
+                  </div>
+
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* View tab — fullscreen bracket */}
+      {tab==='view'&&bracket&&(
+        <div ref={bracketRef} style={{padding:'1rem',overflowX:'auto'}}>
+          <BracketViz bracket={bracket} onUpdate={updateMatch} locked={locked}/>
+          {bracket.champion&&(
+            <div style={{textAlign:'center',margin:'1.5rem auto',maxWidth:'300px',padding:'1rem',
+              background:'linear-gradient(135deg,rgba(246,201,14,.15),rgba(246,201,14,.05))',
+              border:'2px solid var(--gold)',borderRadius:'var(--r-lg)'}}>
+              <div style={{fontSize:'1.5rem',marginBottom:'.25rem'}}>🏆</div>
+              <div style={{fontFamily:'Bebas Neue',fontSize:'1.4rem',color:'var(--gold)'}}>
+                CAMPEÓN: {f(bracket.champion)} {es(bracket.champion)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BracketViz({bracket,onUpdate,locked}){
+  const r32 = bracket?.round32 || Array(16).fill(null)
+  const r16 = bracket?.round16 || Array(8).fill(null)
+  const qf  = bracket?.quarters || Array(4).fill(null)
+  const sf  = bracket?.semis    || Array(2).fill(null)
+  const fin = bracket?.final    || {}
+  const trd = bracket?.third    || {}
+
+  // Each match card is ~52px tall, gap between cards scales by round
+  const CARD_H = 52  // px per match card (2 teams)
+  const CARD_GAP = [8, 68, 148, 308]  // gap between match pairs per round (R32,R16,QF,SF)
+
+  function TeamRow({team,score,isWinner,onWin,onChange,onScoreChange}){
+    return(
+      <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'4px 6px',
+        background:isWinner?'rgba(246,201,14,.16)':'transparent',
+        borderLeft:isWinner?'3px solid var(--gold)':'3px solid transparent',
+        minHeight:'26px',transition:'all .15s'}}>
+        <button onClick={onWin} title="Marcar ganador" style={{width:'10px',height:'10px',borderRadius:'50%',border:'none',
+          cursor:'pointer',flexShrink:0,background:isWinner?'var(--gold)':'rgba(255,255,255,.18)',transition:'all .15s'}}/>
+        <span style={{fontSize:'11px',flexShrink:0,lineHeight:1,width:'16px'}}>{team?f(team):'❓'}</span>
+        <select value={team||''} onChange={e=>onChange(e.target.value)}
+          style={{flex:1,fontSize:'9px',border:'none',background:'transparent',
+            color:isWinner?'var(--gold)':'rgba(255,255,255,.78)',fontWeight:isWinner?700:400,cursor:'pointer',minWidth:0}}>
+          <option value=''>— Equipo —</option>
+          {BRACKET_TEAMS_ALL.map(t=><option key={t} value={t}>{es(t)}</option>)}
+        </select>
+        <input type='number' min='0' max='20' value={score!=null&&score!==''?score:''}
+          onChange={e=>onScoreChange(e.target.value===''?null:+e.target.value)}
+          placeholder='—'
+          style={{width:'26px',fontSize:'13px',fontWeight:700,textAlign:'center',padding:'2px 1px',
+            border:'1px solid '+(isWinner?'rgba(246,201,14,.5)':'rgba(255,255,255,.2)'),borderRadius:'4px',
+            background:isWinner?'rgba(246,201,14,.25)':'rgba(255,255,255,.08)',
+            color:isWinner?'var(--gold)':'rgba(255,255,255,.9)',outline:'none'}}/>
+      </div>
+    )
+  }
+
+  function MatchCard({phase,idx,match}){
+    const m=match||{}
+    const hasPen=!!(m.penalties)
+    return(
+      <div style={{background:'#1a1f2e',border:'1px solid rgba(255,255,255,.12)',borderRadius:'6px',
+        overflow:'hidden',boxShadow:'0 2px 8px rgba(0,0,0,.5)',width:'100%',minWidth:'155px'}}>
+        <TeamRow team={m.home} score={m.home_score} isWinner={!!(m.winner&&m.winner===m.home)}
+          onWin={()=>onUpdate(phase,idx,'winner',m.home)}
+          onChange={v=>onUpdate(phase,idx,'home',v)}
+          onScoreChange={v=>onUpdate(phase,idx,'home_score',v)}/>
+        <div style={{height:'1px',background:'rgba(255,255,255,.08)'}}/>
+        <TeamRow team={m.away} score={m.away_score} isWinner={!!(m.winner&&m.winner===m.away)}
+          onWin={()=>onUpdate(phase,idx,'winner',m.away)}
+          onChange={v=>onUpdate(phase,idx,'away',v)}
+          onScoreChange={v=>onUpdate(phase,idx,'away_score',v)}/>
+        {/* Penalty toggle for knockout rounds */}
+        {(phase!=='group')&&(
+          <div style={{display:'flex',alignItems:'center',gap:'4px',padding:'2px 6px',
+            background:'rgba(255,255,255,.03)',borderTop:'1px solid rgba(255,255,255,.05)'}}>
+            <button onClick={()=>onUpdate(phase,idx,'penalties',!hasPen)}
+              style={{fontSize:'8px',fontWeight:700,padding:'1px 5px',border:'none',cursor:'pointer',borderRadius:'3px',
+                background:hasPen?'rgba(251,146,60,.25)':'rgba(255,255,255,.08)',
+                color:hasPen?'#fb923c':'rgba(255,255,255,.3)',transition:'all .15s'}}>
+              {hasPen?'⚽ PENS':'+ PEN'}
+            </button>
+            {hasPen&&<span style={{fontSize:'8px',color:'rgba(251,146,60,.7)',letterSpacing:.5}}>Definido por penaltis</span>}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // PhaseCol with connector lines between matches going to the next round
+  function PhaseColWithConnectors({label,matches,phase,startIdx,side}){
+    // side: 'left' connectors go right, 'right' connectors go left
+    const isRight = side==='right'
+    return(
+      <div style={{display:'flex',flexDirection:'column',flex:1,minWidth:'140px',position:'relative'}}>
+        <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
+          textAlign:'center',marginBottom:'8px',textTransform:'uppercase',padding:'3px 0',
+          background:'rgba(246,201,14,.08)',borderRadius:'4px',border:'1px solid rgba(246,201,14,.18)'}}>
+          {label}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',justifyContent:'space-around',gap:'8px',flex:1,position:'relative'}}>
+          {matches.map((m,i)=>(
+            <div key={i} style={{position:'relative'}}>
+              <MatchCard phase={phase} idx={startIdx+i} match={m}/>
+              {/* Connector: horizontal line from card edge */}
+              <div style={{
+                position:'absolute',
+                top:'50%',
+                [isRight?'left':'right']:'-18px',
+                width:'18px',
+                height:'1px',
+                background:'rgba(246,201,14,.45)',
+                transform:'translateY(-50%)',
+              }}/>
+              {/* Vertical bracket line: connects pairs */}
+              {i%2===0&&matches[i+1]&&(
+                <div style={{
+                  position:'absolute',
+                  top:'50%',
+                  [isRight?'left':'right']:'-18px',
+                  width:'1px',
+                  // Height from center of this card to center of next card
+                  height:'calc(100% + 8px + 100%)',
+                  background:'rgba(246,201,14,.45)',
+                }}/>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const gap = '18px'  // wider to fit connectors
+
+  return(
+    <div style={{overflowX:'auto',width:'100%',minWidth:0}}>
+      <div style={{display:'flex',gap:gap,alignItems:'stretch',width:'100%',padding:'4px 8px'}}>
+        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(0,8)} phase='round32' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(0,4)} phase='round16' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(0,2)} phase='quarters' startIdx={0} side='left'/>
+        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(0,1)} phase='semis' startIdx={0} side='left'/>
+
+        {/* CENTER: Final */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:'170px',
+          width:'170px',justifyContent:'center',gap:'12px'}}>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'10px',color:'var(--gold)',letterSpacing:1,
+            textAlign:'center',padding:'3px 0',width:'100%',
+            background:'rgba(246,201,14,.08)',borderRadius:'4px',border:'1px solid rgba(246,201,14,.2)'}}>GRAN FINAL</div>
+          <MatchCard phase='final' idx={0} match={fin}/>
+          {fin.winner?(
+            <div style={{background:'linear-gradient(135deg,rgba(246,201,14,.22),rgba(246,201,14,.08))',
+              border:'2px solid var(--gold)',borderRadius:'10px',padding:'8px 10px',textAlign:'center',width:'100%',
+              boxShadow:'0 0 20px rgba(246,201,14,.2)'}}>
+              <div style={{fontSize:'10px',fontWeight:700,color:'var(--gold)',letterSpacing:1}}>🏆 CAMPEÓN</div>
+              <div style={{fontSize:'13px',fontWeight:700,color:'#fff',marginTop:'3px'}}>
+                {f(fin.winner)} {es(fin.winner)}
+              </div>
+            </div>
+          ):(
+            <div style={{background:'rgba(246,201,14,.04)',border:'1.5px dashed rgba(246,201,14,.3)',
+              borderRadius:'8px',padding:'10px',textAlign:'center',width:'100%'}}>
+              <div style={{fontSize:'1.5rem'}}>🏆</div>
+              <div style={{fontSize:'9px',color:'rgba(246,201,14,.5)',marginTop:'3px'}}>Por definir</div>
+            </div>
+          )}
+          <div style={{width:'100%'}}>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'9px',color:'rgba(255,255,255,.3)',letterSpacing:1,
+              textAlign:'center',marginBottom:'5px'}}>3ER PUESTO</div>
+            <MatchCard phase='third' idx={0} match={trd}/>
+          </div>
+        </div>
+
+        <PhaseColWithConnectors label='Semifinales' matches={sf.slice(1,2)} phase='semis' startIdx={1} side='right'/>
+        <PhaseColWithConnectors label='Cuartos' matches={qf.slice(2,4)} phase='quarters' startIdx={2} side='right'/>
+        <PhaseColWithConnectors label='Round of 16' matches={r16.slice(4,8)} phase='round16' startIdx={4} side='right'/>
+        <PhaseColWithConnectors label='Round of 32' matches={r32.slice(8,16)} phase='round32' startIdx={8} side='right'/>
+      </div>
+    </div>
+  )
+}
+
+
 // ─── BOARD PAGE ───────────────────────────────────────────────────────────────
 function BoardPage(){
-  const {matches,activeAvatar,setView}=useApp()
+  const {user,matches,activeAvatar,setView}=useApp()
   const [predictions,setPredictions]=React.useState({})
   const [filterPhase,setFilterPhase]=React.useState('all')
   const [filterGroup,setFilterGroup]=React.useState('all')
@@ -1517,7 +2687,7 @@ function BoardPage(){
                     {pred&&(
                       <div className="match-pred">
                         <span style={{color:'var(--ink3)'}}>Pronóstico: {pred.score_home}–{pred.score_away}</span>
-                        {hasResult&&<span className={`pts-badge ${pts>=PHASE_PTS[ph]?.exact?'pts-exact':pts>0?'pts-win':'pts-miss'}`}>{pts>0?`+${pts}pts`:'Sin pts'}</span>}
+                        {hasResult&&<span className={('pts-badge '+(pts>=PHASE_PTS[ph]?.exact?'pts-exact':pts>0?'pts-win':'pts-miss'))}>{pts>0?`+${pts}pts`:'Sin pts'}</span>}
                         <span className={`chip ${locked?'chip-r':'chip-g'}`} style={{fontSize:'8px'}}>{locked?'🔒 Bloqueado':'✏️ Editable'}</span>
                       </div>
                     )}
@@ -1557,22 +2727,8 @@ function RankingPage(){
     <div className="page">
       <Nav/>
       <div className="container pad">
-        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.25rem'}}>🏅 RANKING FINAL</h2>
-        <p className="text-muted text-xs mb2">Se actualiza en tiempo real · {ranking.length} avatares activos</p>
-
-        {/* Prizes */}
-        {ranking.length>0&&(
-          <div className="prize-row">
-            <div className="prize-card p-card-g">
-              <div className="p-icon">🥇</div><div className="p-label">1er Lugar</div>
-              <div className="p-amt">80%</div><div className="p-pct">del pozo total</div>
-            </div>
-            <div className="prize-card p-card-n">
-              <div className="p-icon">🥈</div><div className="p-label">2do Lugar</div>
-              <div className="p-amt">20%</div><div className="p-pct">del pozo total</div>
-            </div>
-          </div>
-        )}
+        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.25rem'}}>🏅 RANKING</h2>
+        <p className="text-muted text-xs mb2">Se actualiza en tiempo real · {ranking.length} participantes activos</p>
 
         {/* Podium top 3 */}
         {top3.length>0&&(
@@ -1615,7 +2771,7 @@ function RankingPage(){
               </div>
             </div>
           ))}
-          {ranking.length===0&&<div style={{padding:'2rem',textAlign:'center',color:'var(--ink3)'}}>Aún no hay avatares activos 🏆</div>}
+          {ranking.length===0&&<div style={{padding:'2rem',textAlign:'center',color:'var(--ink3)'}}>Aún no hay participantes activos 🏆</div>}
         </div>
       </div>
     </div>
@@ -1632,14 +2788,17 @@ function ResultsPage(){
   React.useEffect(()=>{
     if(!activeAvatar){setLoading(false);return}
     Promise.all([
-      api(`/api/results/${activeAvatar.id}`),
-      api(`/api/special/${activeAvatar.id}`)
-    ]).then(([r,s])=>{setResults(r);setSpecial(s)}).catch(()=>{}).finally(()=>setLoading(false))
+      activeAvatar?.id?api(`/api/results/${activeAvatar.id}`):Promise.resolve([]),
+      activeAvatar?.id?api(`/api/special/${activeAvatar.id}`):Promise.resolve([])
+    ]).then(([r,s])=>{
+      setResults(Array.isArray(r)?r:[])
+      setSpecial(s&&typeof s==='object'&&!Array.isArray(s)?s:null)
+    }).catch(()=>{setResults([]);setSpecial(null)}).finally(()=>setLoading(false))
   },[activeAvatar])
 
   if(loading) return <div className="page"><Nav/><Spinner/></div>
 
-  const totalPts=results.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0)
+  const totalPts=Array.isArray(results)?results.reduce((s,r)=>(r.points_earned||0)+(r.extra_pts||0)+s,0):0
   const specPts=special?(special.champion_pts||0)+(special.surprise_pts||0)+(special.balon_pts||0)+(special.guante_pts||0)+(special.bota_pts||0):0
 
   return(
@@ -1675,7 +2834,7 @@ function ResultsPage(){
           </div>
         )}
 
-        {results.length===0&&(
+        {(!results||results.length===0)&&(
           <div className="card text-center">
             <div style={{fontSize:'2rem',marginBottom:'.5rem'}}>⚽</div>
             <div className="text-muted">Aún no hay partidos con resultado oficial.</div>
@@ -1683,11 +2842,11 @@ function ResultsPage(){
           </div>
         )}
 
-        {results.map(r=>{
+        {(results||[]).map(r=>{
           const pts=(r.points_earned||0)+(r.extra_pts||0)
           const exact=r.points_earned>=PHASE_PTS[r.phase]?.exact
           return(
-            <div key={r.id} className={`match-row ${pts>0?'match-row-done':''}`} style={{marginBottom:'.4rem'}}>
+            <div key={r.id} className={'match-row'+(pts>0?' match-row-done':'')} style={{marginBottom:'.4rem'}}>
               <div className="match-teams">
                 <span style={{flex:1,textAlign:'right'}}>{f(r.team1)} {es(r.team1)}</span>
                 <span className="match-score">{r.real_home}–{r.real_away}</span>
@@ -1731,7 +2890,7 @@ function AdminRanking(){
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
         <div>
           <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',letterSpacing:1,color:'var(--ink)'}}>🏅 RANKING EN TIEMPO REAL</div>
-          <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:2}}>{ranking.length} avatar{ranking.length!==1?'es':''} activo{ranking.length!==1?'s':''} · actualiza cada 30s</div>
+          <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:2}}>{ranking.length} participante{ranking.length!==1?'s':''} activo{ranking.length!==1?'s':''} · actualiza cada 30s</div>
         </div>
         <button className="btn btn-outline btn-sm" onClick={()=>{setLoading(true);api('/api/ranking').then(d=>{setRanking(d||[]);setLoading(false)}).catch(()=>setLoading(false))}}>🔄 Actualizar</button>
       </div>
@@ -1739,38 +2898,40 @@ function AdminRanking(){
       {ranking.length===0?(
         <div className="card" style={{textAlign:'center',padding:'2rem',color:'var(--ink3)'}}>
           <div style={{fontSize:'2rem',marginBottom:8}}>🏆</div>
-          <div style={{fontWeight:700,marginBottom:4}}>Aún no hay avatares activos con pago confirmado</div>
-          <div style={{fontSize:12}}>Confirma el pago de los jugadores en la pestaña Usuarios para que aparezcan aquí.</div>
+          <div style={{fontWeight:700,marginBottom:4}}>Aún no hay participantes activos</div>
+          <div style={{fontSize:12}}>Aprueba participantes en la pestaña Participantes para que aparezcan aquí.</div>
         </div>
       ):(
         <div className="card" style={{padding:0,overflow:'hidden'}}>
-          <div style={{display:'grid',gridTemplateColumns:'44px 1fr 64px 64px 70px',background:'var(--cream2)',borderBottom:'1px solid var(--border)'}}>
-            {['#','Jugador','Aciertos','Extras','Puntos'].map(h=>(
-              <div key={h} style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',padding:'9px 10px'}}>{h}</div>
+          <div style={{display:'grid',gridTemplateColumns:'40px 1fr 64px 64px 70px',background:'var(--cream2)',borderBottom:'1px solid var(--border)'}}>
+            {['#','Jugador','Aciertos','Pronóst.','Puntos'].map(h=>(
+              <div key={h} style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',padding:'9px 8px'}}>{h}</div>
             ))}
           </div>
           {ranking.map((r,i)=>(
-            <div key={r.id} style={{display:'grid',gridTemplateColumns:'44px 1fr 64px 64px 70px',
+            <div key={r.id} style={{display:'grid',gridTemplateColumns:'40px 1fr 64px 64px 70px',
               borderBottom:'1px solid var(--border)',alignItems:'center',
               background:i===0?'rgba(200,168,75,.07)':i===1?'rgba(192,192,192,.04)':i===2?'rgba(205,127,50,.04)':'transparent'}}>
-              <div style={{padding:'10px',textAlign:'center',fontSize:'18px'}}>{i<3?MEDAL[i]:<span style={{fontSize:'13px',fontWeight:700,color:'var(--ink3)'}}>{r.rank}</span>}</div>
-              <div style={{padding:'10px 8px'}}>
+              <div style={{padding:'10px',textAlign:'center',fontSize:'16px'}}>
+                {i<3?MEDAL[i]:<span style={{fontSize:'12px',fontWeight:700,color:'var(--ink3)'}}>{r.rank}</span>}
+              </div>
+              <div style={{padding:'8px 6px'}}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <AvatarCircle nickname={r.nickname} photoUrl={r.photo_url} size={30}/>
-                  <div>
-                    <div style={{fontSize:'13px',fontWeight:700,color:'var(--ink)'}}>{r.nickname}</div>
-                    <div style={{fontSize:'10px',color:'var(--ink3)'}}>{r.user_name}</div>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:'12px',fontWeight:700,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.nickname}</div>
+                    <div style={{fontSize:'10px',color:'var(--ink3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.user_name}</div>
                   </div>
                 </div>
               </div>
-              <div style={{padding:'10px',textAlign:'center'}}>
+              <div style={{padding:'10px 8px',textAlign:'center'}}>
                 <span style={{fontSize:'13px',fontWeight:700,color:'var(--green)'}}>{r.hits||0}</span>
               </div>
-              <div style={{padding:'10px',textAlign:'center'}}>
-                <span style={{fontSize:'12px',color:'var(--gold)'}}>{r.extra_hits||0}</span>
+              <div style={{padding:'10px 8px',textAlign:'center'}}>
+                <span style={{fontSize:'12px',color:'var(--ink2)'}}>{r.matches_predicted||0}</span>
               </div>
-              <div style={{padding:'10px',textAlign:'right',paddingRight:14}}>
-                <div style={{fontFamily:'Bebas Neue',fontSize:'1.3rem',color:'var(--ink)'}}>{r.total_pts||0}</div>
+              <div style={{padding:'10px',textAlign:'right',paddingRight:12}}>
+                <div style={{fontFamily:'Bebas Neue',fontSize:'1.25rem',color:'var(--gold)'}}>{r.total_pts||0}</div>
                 <div style={{fontSize:'9px',color:'var(--ink3)'}}>pts</div>
               </div>
             </div>
@@ -1782,36 +2943,248 @@ function AdminRanking(){
 }
 
 function AdminPage(){
-  const {user,setView}=useApp()
+  const {user,tournament,setView}=useApp()
   const [tab,setTab]=React.useState('users')
   if(!user?.isAdmin) return null
-  const tabs=[
-    {k:'users',l:'👥 Usuarios'},
-    {k:'ranking',l:'🏅 Ranking'},
-    {k:'locks',l:'🔒 Fases'},
-    {k:'teams',l:'⚽ Equipos'},
-    {k:'results',l:'📊 Resultados'},
-    {k:'sync',l:'🔄 Sync'},
-    {k:'whatsapp',l:'💬 WhatsApp'},
-    {k:'config',l:'⚙️ Config'},
+
+  const navItems=[
+    {k:'users',icon:'👥',l:'Participantes'},
+    {k:'ranking',icon:'🏅',l:'Ranking'},
+    {k:'trivia',icon:'🧠',l:'Extra Points'},
+    {k:'results',icon:'📊',l:'Resultados'},
+    {k:'locks',icon:'🔒',l:'Fases'},
+    {k:'teams',icon:'⚽',l:'Equipos'},
+    {k:'config',icon:'⚙️',l:'Config'},
   ]
+
   return(
     <div className="page">
       <Nav/>
       <div className="container pad">
-        <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.5rem'}}>⚙️ ADMIN · POLLA 2026</h2>
-        <div className="admin-tabs">
-          {tabs.map(({k,l})=><button key={k} className={`at ${tab===k?'at-on':''}`} onClick={()=>setTab(k)}>{l}</button>)}
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem',flexWrap:'wrap',gap:8}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <img src={tournament?.logo_url||"/logo.png"} style={{width:28,height:28,objectFit:'contain',borderRadius:6,border:'1px solid var(--border)',flexShrink:0}} alt=""/>
+            <div>
+              <div style={{fontFamily:'Bebas Neue',fontSize:'1.2rem',letterSpacing:1,color:'var(--ink)'}}>⚙️ ADMIN</div>
+              <div style={{fontSize:'10px',color:'var(--ink3)',marginTop:-2}}>{tournament?.name||'Mi Polla'}</div>
+            </div>
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={()=>setView('dashboard')}>← App</button>
         </div>
+        {/* Tabs — horizontal scroll on mobile */}
+        <div style={{display:'flex',gap:'.4rem',overflowX:'auto',paddingBottom:4,marginBottom:'1rem',
+          scrollbarWidth:'none',WebkitOverflowScrolling:'touch'}}>
+          {navItems.map(({k,icon,l})=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{display:'flex',alignItems:'center',gap:5,padding:'.45rem .85rem',
+                borderRadius:'50px',fontSize:'11px',fontWeight:600,whiteSpace:'nowrap',flexShrink:0,
+                border:'1.5px solid',cursor:'pointer',transition:'all .15s',
+                background:tab===k?'var(--ink)':'transparent',
+                color:tab===k?'var(--cream)':'var(--ink3)',
+                borderColor:tab===k?'var(--ink)':'var(--border2)'}}>
+              <span style={{fontSize:'13px'}}>{icon}</span>
+              <span>{l}</span>
+            </button>
+          ))}
+        </div>
+        {/* Content */}
         {tab==='users'&&<AdminUsers/>}
         {tab==='ranking'&&<AdminRanking/>}
+        {tab==='trivia'&&<AdminTrivia/>}
+        {tab==='results'&&<AdminResults/>}
         {tab==='locks'&&<AdminLocks/>}
         {tab==='teams'&&<AdminTeams/>}
-        {tab==='results'&&<AdminResults/>}
-        {tab==='sync'&&<AdminSync/>}
-        {tab==='whatsapp'&&<AdminWhatsApp/>}
         {tab==='config'&&<AdminConfig/>}
       </div>
+    </div>
+  )
+}
+
+function AdminTrivia(){
+  const {activeAvatar}=useApp()
+  const [questions,setQuestions]=React.useState([])
+  const [loading,setLoading]=React.useState(true)
+  const [generating,setGenerating]=React.useState(false)
+  const [saving,setSaving]=React.useState(false)
+  const [msg,setMsg]=React.useState(null)
+  const [showForm,setShowForm]=React.useState(false)
+  const [topic,setTopic]=React.useState('')
+  const [difficulty,setDifficulty]=React.useState('easy')
+  const [draft,setDraft]=React.useState(null) // AI-generated draft
+  const [editDraft,setEditDraft]=React.useState(null) // editable version
+
+  const DIFF_LABELS={easy:'🟢 Fácil (2 pts)',medium:'🟡 Refácil (3 pts)',hard:'🔴 Muy fácil (4 pts)'}
+  const DIFF_COLORS={easy:'#16a34a',medium:'#d97706',hard:'#dc2626'}
+
+  React.useEffect(()=>{ loadQuestions() },[])
+
+  async function loadQuestions(){
+    setLoading(true)
+    try{ const d=await api('/api/admin/trivia'); setQuestions(d||[]) }
+    catch(e){ setMsg({type:'error',text:e.message}) }
+    setLoading(false)
+  }
+
+  async function generateWithAI(){
+    if(!topic.trim()){ setMsg({type:'error',text:'Escribe un tema primero'}); return }
+    setGenerating(true); setMsg(null); setDraft(null)
+    try{
+      const d=await api('/api/admin/trivia/generate','POST',{topic,difficulty})
+      setDraft(d)
+      setEditDraft({...d, options:[...d.options]})
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+    setGenerating(false)
+  }
+
+  async function saveQuestion(){
+    if(!editDraft) return
+    setSaving(true); setMsg(null)
+    try{
+      const q=await api('/api/admin/trivia','POST',{
+        question:editDraft.question,
+        options:editDraft.options,
+        correct_answer:editDraft.correct_answer,
+        difficulty
+      })
+      setQuestions(p=>[q,...p])
+      setDraft(null); setEditDraft(null); setTopic(''); setShowForm(false)
+      setMsg({type:'success',text:'✅ Pregunta creada y publicada para todos los jugadores!'})
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+    setSaving(false)
+  }
+
+  async function toggleQuestion(id){
+    try{
+      const d=await api('/api/admin/trivia/'+id+'/toggle','PUT',{})
+      setQuestions(p=>p.map(q=>q.id===id?{...q,is_active:d.is_active}:q))
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+  }
+
+  async function deleteQuestion(id){
+    if(!window.confirm('¿Eliminar esta pregunta? Los jugadores que ya respondieron conservan sus puntos.')) return
+    try{
+      await api('/api/admin/trivia/'+id,'DELETE',null)
+      setQuestions(p=>p.filter(q=>q.id!==id))
+    }catch(e){ setMsg({type:'error',text:e.message}) }
+  }
+
+  return(
+    <div>
+      {/* Header card */}
+      <div className="card" style={{marginBottom:'1rem',background:'linear-gradient(135deg,#0d1117,#111827)',border:'1.5px solid rgba(246,201,14,.3)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'1rem'}}>
+          <div style={{width:44,height:44,borderRadius:'50%',overflow:'hidden',border:'2px solid var(--gold)',flexShrink:0}}>
+            <img src="/pele.jpg" style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'top'}} alt="Pele"/>
+          </div>
+          <div>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--gold)',letterSpacing:1}}>EXTRA POINTS CON PELÉ IA</div>
+            <div style={{fontSize:'11px',color:'rgba(255,255,255,.5)',marginTop:2}}>Crea preguntas de trivia de fútbol. Los jugadores responden desde su tablero y suman puntos extra.</div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'1rem'}}>
+          <div style={{background:'rgba(22,163,74,.12)',border:'1px solid rgba(22,163,74,.3)',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#4ade80'}}>🟢 Fácil — 2 pts</div>
+          <div style={{background:'rgba(217,119,6,.12)',border:'1px solid rgba(217,119,6,.3)',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#fbbf24'}}>🟡 Refácil — 3 pts</div>
+          <div style={{background:'rgba(220,38,38,.12)',border:'1px solid rgba(220,38,38,.3)',borderRadius:8,padding:'6px 12px',fontSize:11,color:'#f87171'}}>🔴 Muy fácil — 4 pts</div>
+        </div>
+        {!showForm?(
+          <button className="btn btn-gold btn-full" onClick={()=>setShowForm(true)}>🤖 Crear nueva pregunta con Pelé IA</button>
+        ):(
+          <div style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:10,padding:'1rem'}}>
+            <div style={{fontWeight:700,color:'#fff',marginBottom:'0.75rem',fontSize:13}}>🤖 Pelé IA genera la pregunta</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,marginBottom:8}}>
+              <input className="inp" placeholder="Tema: ej. Goleadores historicos del Mundial, Reglas del futbol..." value={topic} onChange={e=>setTopic(e.target.value)} onKeyDown={e=>e.key==='Enter'&&generateWithAI()}/>
+              <select className="inp" value={difficulty} onChange={e=>setDifficulty(e.target.value)} style={{width:130}}>
+                <option value="easy">Fácil (2 pts)</option>
+                <option value="medium">Refácil (3 pts)</option>
+                <option value="hard">Muy fácil (4 pts)</option>
+              </select>
+            </div>
+            <div style={{display:'flex',gap:8,marginBottom:draft?'1rem':0}}>
+              <button className="btn btn-gold" onClick={generateWithAI} disabled={generating} style={{flex:1}}>
+                {generating?'⏳ Generando...':(draft?'🔄 Regenerar':'✨ Generar con Pelé IA')}
+              </button>
+              <button className="btn btn-outline" onClick={()=>{setShowForm(false);setDraft(null);setEditDraft(null)}}>Cancelar</button>
+            </div>
+
+            {generating&&(
+              <div style={{textAlign:'center',padding:'1rem 0',color:'rgba(255,255,255,.5)',fontSize:12}}>
+                <div style={{fontSize:'1.5rem',marginBottom:6}}>🤔</div>
+                Pelé IA está pensando la pregunta perfecta...
+              </div>
+            )}
+
+            {editDraft&&(
+              <div style={{marginTop:'1rem'}}>
+                <div style={{height:1,background:'rgba(255,255,255,.08)',margin:'0 0 1rem'}}/>
+                <div style={{fontSize:11,fontWeight:700,color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:1,marginBottom:8}}>Edita si quieres antes de guardar</div>
+                <textarea className="inp" rows={3} value={editDraft.question} onChange={e=>setEditDraft(p=>({...p,question:e.target.value}))} style={{marginBottom:8,resize:'vertical'}}/>
+                {editDraft.options.map((opt,i)=>(
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                    <button onClick={()=>setEditDraft(p=>({...p,correct_answer:i}))}
+                      style={{width:22,height:22,borderRadius:'50%',border:'none',cursor:'pointer',flexShrink:0,
+                        background:editDraft.correct_answer===i?'var(--gold)':'rgba(255,255,255,.15)',transition:'all .15s'}} title="Marcar como correcta"/>
+                    <input className="inp" value={opt} onChange={e=>{const o=[...editDraft.options];o[i]=e.target.value;setEditDraft(p=>({...p,options:o}))}}
+                      style={{flex:1,fontSize:12,borderColor:editDraft.correct_answer===i?'rgba(246,201,14,.5)':'rgba(255,255,255,.12)'}}/>
+                    <span style={{fontSize:10,color:'rgba(255,255,255,.3)',flexShrink:0}}>{editDraft.correct_answer===i?'✅ Correcta':''}</span>
+                  </div>
+                ))}
+                {editDraft.explanation&&(
+                  <div style={{background:'rgba(246,201,14,.06)',border:'1px solid rgba(246,201,14,.15)',borderRadius:8,padding:'8px 12px',fontSize:11,color:'rgba(255,255,255,.5)',marginBottom:12}}>
+                    💡 {editDraft.explanation}
+                  </div>
+                )}
+                <button className="btn btn-gold btn-full" onClick={saveQuestion} disabled={saving}>
+                  {saving?'Guardando...':'💾 Publicar pregunta — aparece en el tablero de todos'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {msg&&<Alert type={msg.type} style={{marginBottom:'1rem'}}>{msg.text}</Alert>}
+
+      {/* Questions list */}
+      <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',letterSpacing:1,color:'var(--ink)',marginBottom:'0.5rem'}}>{questions.length} PREGUNTA{questions.length!==1?'S':''} CREADA{questions.length!==1?'S':''}</div>
+      {loading?<Spinner/>:(
+        questions.length===0?(
+          <div className="card" style={{textAlign:'center',padding:'2rem',color:'var(--ink3)'}}>
+            <div style={{fontSize:'2rem',marginBottom:8}}>🧠</div>
+            <div style={{fontWeight:700,marginBottom:4}}>Aún no hay preguntas</div>
+            <div style={{fontSize:12}}>Crea la primera con Pelé IA y aparecerá en el tablero de tus jugadores automáticamente.</div>
+          </div>
+        ):(
+          questions.map(q=>(
+            <div key={q.id} className="card" style={{marginBottom:'0.75rem',borderLeft:`3px solid ${DIFF_COLORS[q.difficulty]||'var(--gold)'}`,opacity:q.is_active?1:0.5}}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:700,color:'var(--ink)',marginBottom:4}}>{q.question}</div>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    <span style={{fontSize:10,background:DIFF_COLORS[q.difficulty]+'20',color:DIFF_COLORS[q.difficulty],border:'1px solid '+DIFF_COLORS[q.difficulty]+'40',borderRadius:20,padding:'2px 8px',fontWeight:700}}>{DIFF_LABELS[q.difficulty]}</span>
+                    <span style={{fontSize:10,color:'var(--ink3)'}}>{ℹ️} {q.answer_count||0} resp · {q.correct_count||0} correctas</span>
+                    {!q.is_active&&<span style={{fontSize:10,color:'var(--ink3)',background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:20,padding:'2px 8px'}}>💤 Oculta</span>}
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:5,flexShrink:0}}>
+                  <button className="btn btn-outline btn-sm" onClick={()=>toggleQuestion(q.id)}>{q.is_active?'💤 Ocultar':'👁️ Mostrar'}</button>
+                  <button className="btn btn-sm" style={{background:'rgba(220,38,38,.1)',color:'#dc2626',border:'1px solid rgba(220,38,38,.2)'}} onClick={()=>deleteQuestion(q.id)}>🗑️</button>
+                </div>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+                {(q.options||[]).map((opt,i)=>(
+                  <div key={i} style={{fontSize:11,padding:'4px 8px',borderRadius:6,
+                    background:i===q.correct_answer?'rgba(22,163,74,.12)':'rgba(255,255,255,.02)',
+                    border:'1px solid '+(i===q.correct_answer?'rgba(22,163,74,.3)':'rgba(0,0,0,.05)'),
+                    color:i===q.correct_answer?'#16a34a':'var(--ink2)',fontWeight:i===q.correct_answer?700:400}}>
+                    {['A','B','C','D'][i]}. {opt} {i===q.correct_answer?'✅':''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )
+      )}
     </div>
   )
 }
@@ -1820,6 +3193,10 @@ function AdminUsers(){
   const [users,setUsers]=React.useState([])
   const [loading,setLoading]=React.useState(true)
   const [search,setSearch]=React.useState('')
+  const [detail,setDetail]=React.useState(null) // {userId, name, bg}
+  const [detailData,setDetailData]=React.useState(null)
+  const [detailTab,setDetailTab]=React.useState('predictions')
+  const [loadingDetail,setLoadingDetail]=React.useState(false)
 
   React.useEffect(()=>{
     api('/api/admin/users').then(d=>{setUsers(d);setLoading(false)}).catch(()=>setLoading(false))
@@ -1828,57 +3205,237 @@ function AdminUsers(){
   async function toggleAvatar(avId,field,val){
     try{
       await api(`/api/admin/avatars/${avId}`,'PUT',{[field]:val})
-      setUsers(us=>us.map(u=>({...u,avatars:(u.avatars||[]).map(a=>a.id===avId?{...a,[field==='isPaid'?'is_paid':'is_active']:val}:a)})))
+      setUsers(us=>us.map(u=>({...u,avatars:(u.avatars||[]).map(a=>a.id===avId?{...a,is_active:val}:a)})))
     }catch(e){alert(e.message)}
   }
 
-  async function deleteUser(uid,name){
-    if(!confirm(`¿Eliminar a "${name}" y todos sus datos? Esta acción no se puede deshacer.`)) return
+  async function deleteUser(uid,name,e){
+    e&&e.stopPropagation()
+    if(!confirm(`¿Eliminar a "${name}" y todos sus datos?`)) return
     try{
       await api(`/api/admin/users/${uid}`,'DELETE')
       setUsers(us=>us.filter(u=>u.id!==uid))
-    }catch(e){alert('Error al eliminar: '+e.message)}
+    }catch(e){alert('Error: '+e.message)}
+  }
+
+  async function openDetail(u,e){
+    e&&e.stopPropagation()
+    const bg=generateAvatarColor(u.name||'x')
+    setDetail({userId:u.id,name:u.name,email:u.email,bg,created_at:u.created_at})
+    setDetailTab('predictions')
+    setLoadingDetail(true)
+    try{
+      const d=await api(`/api/admin/users/${u.id}/details`)
+      setDetailData(d)
+    }catch(err){ setDetailData(null) }
+    setLoadingDetail(false)
   }
 
   if(loading) return <Spinner/>
+
+  // ── DETAIL VIEW ──
+  if(detail){
+    const initials=(detail.name||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase()
+    const d=detailData
+    const approved=d?.avatars?.[0]?.is_active
+    return(
+      <div>
+        <button className="btn btn-outline btn-sm" style={{marginBottom:'1rem'}} onClick={()=>{setDetail(null);setDetailData(null)}}>← Volver a participantes</button>
+        {/* User header */}
+        <div className="card" style={{display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1rem',flexWrap:'wrap'}}>
+          <AvatarCircle nickname={detail.name||'?'} size={52}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:'15px',fontWeight:700,color:'var(--ink)'}}>{detail.name}</div>
+            <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:'2px'}}>{detail.email} · Se unió {detail.created_at?new Date(detail.created_at).toLocaleDateString('es-CO'):''}</div>
+            <div style={{display:'flex',gap:6,marginTop:6,flexWrap:'wrap',alignItems:'center'}}>
+              {approved
+                ?<span className="chip chip-g">✅ Aprobado</span>
+                :<span className="chip chip-gold">⏳ Pendiente aprobación</span>}
+              <span style={{fontSize:'11px',color:'var(--ink3)'}}>
+                {d?.stats?.played||0} pronósticos jugados ·
+                <strong style={{color:'var(--gold)',marginLeft:4}}>{d?.stats?.total||0} pts</strong>
+              </span>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:6,flexShrink:0}}>
+            {d?.avatars?.[0]&&(
+              <button className={`btn btn-sm ${d.avatars[0].is_active?'btn-red':'btn-green'}`}
+                onClick={()=>{
+                  const av=d.avatars[0]; const newVal=!av.is_active
+                  toggleAvatar(av.id,'isActive',newVal)
+                  setDetailData(dd=>({...dd,avatars:dd.avatars.map(a=>a.id===av.id?{...a,is_active:newVal}:a)}))
+                }}>
+                {d.avatars[0].is_active?'🚫 Suspender':'✅ Aprobar'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:'flex',gap:4,marginBottom:'1rem',background:'var(--cream2)',borderRadius:'50px',padding:3,width:'fit-content'}}>
+          {[['predictions','Pronósticos'],['special','Predicciones especiales'],['bracket','Bracket']].map(([k,l])=>(
+            <button key={k} onClick={()=>setDetailTab(k)}
+              style={{padding:'6px 14px',borderRadius:'50px',fontSize:'11px',fontWeight:600,border:'none',cursor:'pointer',transition:'all .15s',
+                background:detailTab===k?'var(--white)':'transparent',
+                color:detailTab===k?'var(--ink)':'var(--ink3)',
+                boxShadow:detailTab===k?'0 1px 3px rgba(26,24,20,.1)':'none'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {loadingDetail&&<Spinner/>}
+
+        {!loadingDetail&&detailTab==='predictions'&&(
+          <div className="card" style={{padding:0,overflow:'hidden'}}>
+            <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.3fr',background:'var(--cream2)',borderBottom:'1px solid var(--border)'}}>
+              {['Partido','Pronóstico','Pts','Ingresado'].map(h=>(
+                <div key={h} style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',padding:'9px 12px'}}>{h}</div>
+              ))}
+            </div>
+            {(d?.predictions||[]).slice(0,50).map((p,i)=>(
+              <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1.3fr',borderBottom:'1px solid var(--border)',alignItems:'center'}}>
+                <div style={{padding:'9px 12px'}}>
+                  <div style={{fontSize:'12px',fontWeight:700,color:'var(--ink)'}}>{es(p.team1)} vs {es(p.team2)}</div>
+                  <div style={{fontSize:'10px',color:'var(--ink3)'}}>{PHASE_LABELS[p.phase]||p.phase}{p.group_name?` · Grupo ${p.group_name}`:''}</div>
+                </div>
+                <div style={{padding:'9px 12px',fontWeight:700,color:'var(--gold)',fontSize:'13px'}}>{p.score_home} – {p.score_away}</div>
+                <div style={{padding:'9px 12px'}}>
+                  {p.points_earned>0
+                    ?<span className="chip chip-g">+{p.points_earned}</span>
+                    :p.real_home!=null
+                      ?<span className="chip chip-ink">+0</span>
+                      :<span style={{fontSize:'11px',color:'var(--ink3)'}}>Pendiente</span>}
+                </div>
+                <div style={{padding:'9px 12px',fontSize:'10px',color:'var(--ink3)'}}>
+                  {p.predicted_at?new Date(p.predicted_at).toLocaleString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—'}
+                </div>
+              </div>
+            ))}
+            {(!d?.predictions||d.predictions.length===0)&&(
+              <div style={{padding:'2rem',textAlign:'center',color:'var(--ink3)',fontSize:'13px'}}>Sin pronósticos aún</div>
+            )}
+          </div>
+        )}
+
+        {!loadingDetail&&detailTab==='special'&&(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
+            {[
+              ['Campeón del torneo',d?.special?.champion_team,'+10 pts'],
+              ['Equipo sorpresa',d?.special?.surprise_team,'+3 pts'],
+              ['Balón de Oro',d?.special?.balon_de_oro,'+5 pts'],
+              ['Guante de Oro',d?.special?.guante_de_oro,'+5 pts'],
+              ['Bota de Oro',d?.special?.bota_de_oro,'+5 pts'],
+            ].map(([label,val,pts])=>(
+              <div key={label} className="card-sm" style={label==='Campeón del torneo'?{gridColumn:'span 2'}:{}}>
+                <div style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>{label}</div>
+                <div style={{fontSize:'14px',fontWeight:700,color:'var(--ink)'}}>{val?`${f(val)?.[0]!=='❓'?f(val):''} ${es(val)||val}`:'—'}</div>
+                <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:2}}>{pts} si acierta</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loadingDetail&&detailTab==='bracket'&&(
+          <div className="card">
+            {d?.bracket?.bracket?(
+              <>
+                <div style={{fontWeight:700,fontSize:'13px',marginBottom:'8px'}}>
+                  Campeón pronosticado: {d.bracket.bracket.champion?`${f(d.bracket.bracket.champion)} ${es(d.bracket.bracket.champion)}`:'No definido'}
+                </div>
+                <div style={{fontSize:'11px',color:'var(--ink3)',marginBottom:'12px'}}>
+                  {d.bracket.locked_at?`Confirmado ${new Date(d.bracket.locked_at).toLocaleDateString('es-CO')}`:'No confirmado'}
+                  {' · '}{d.bracket.has_been_edited?'Editado después de generarse':'Sin editar'}
+                  {' · '}{d.bracket.is_ai_generated?'Generado con Pelé IA':'Manual'}
+                </div>
+                <div style={{overflowX:'auto'}}>
+                  {[['round32','R32'],['round16','R16'],['quarters','QF'],['semis','SF']].map(([phase,label])=>(
+                    <div key={phase} style={{marginBottom:'8px'}}>
+                      <div style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>{label}</div>
+                      <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                        {(d.bracket.bracket[phase]||[]).map((m,i)=>(
+                          <div key={i} style={{background:'var(--cream2)',border:`1px solid ${m.winner?'var(--gold-border)':'var(--border)'}`,borderRadius:6,padding:'3px 8px',fontSize:'10px',
+                            color:m.winner?'var(--gold)':'var(--ink2)',fontWeight:m.winner?700:400}}>
+                            {m.winner?`✓ ${es(m.winner)} ${m.home_score}–${m.away_score}`:`${es(m.home)||'?'} vs ${es(m.away)||'?'}`}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{marginTop:'8px',padding:'10px',background:'var(--gold-bg)',border:'1px solid var(--gold-border)',borderRadius:8}}>
+                    <div style={{fontSize:'11px',fontWeight:700,color:'var(--gold)'}}>
+                      🏆 Final: {d.bracket.bracket.final?.home?`${es(d.bracket.bracket.final.home)} ${d.bracket.bracket.final.home_score}–${d.bracket.bracket.final.away_score} ${es(d.bracket.bracket.final.away)}`:'Por definir'}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ):(
+              <div style={{textAlign:'center',color:'var(--ink3)',fontSize:'13px',padding:'1rem'}}>No ha generado bracket todavía</div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── LIST VIEW ──
   const filtered=users.filter(u=>!search||u.name?.toLowerCase().includes(search.toLowerCase())||u.email?.toLowerCase().includes(search.toLowerCase()))
+  const approved=filtered.filter(u=>(u.avatars||[]).some(a=>a.is_active)).length
+  const pending=filtered.length-approved
 
   return(
     <div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem'}}>
-        <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',color:'var(--ink3)'}}>{users.length} USUARIOS · {users.reduce((s,u)=>s+(u.avatars?.length||0),0)} AVATARES</div>
-        <input className="inp" style={{maxWidth:200}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..."/>
+      {/* Approval info banner */}
+      <div className="card" style={{background:'rgba(200,168,75,.06)',border:'1px solid var(--gold-border)',borderRadius:'var(--r)',padding:'10px 14px',marginBottom:'1rem',display:'flex',gap:10,alignItems:'flex-start'}}>
+        <span style={{fontSize:'14px',flexShrink:0}}>ℹ️</span>
+        <div style={{fontSize:'11px',color:'var(--ink2)',lineHeight:1.6}}>
+          <strong>Sistema de aprobación:</strong> Los participantes pueden registrarse y cargar pronósticos libremente.
+          Sus resultados quedan guardados pero <strong>no suman puntos al ranking hasta que los apruebes.</strong>
+          Si apruebas después de que empezó el torneo, los puntos se calculan retroactivamente.
+        </div>
       </div>
-      {filtered.map(u=>(
-        <div key={u.id} className="user-row">
-          <div className="ua-av" style={{background:generateAvatarColor(u.name||'x')}}>
-            {u.picture?<img src={u.picture} style={{width:38,height:38,borderRadius:'50%',objectFit:'cover'}} alt=""/>
-              :(u.name||'?').substring(0,2).toUpperCase()}
-          </div>
-          <div className="ua-info">
-            <div className="ua-name">{u.name}</div>
-            <div className="ua-email">{u.email}{u.phone&&<>{' · '}<a href={`https://wa.me/${u.phone.replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer" style={{color:'#25D366',fontWeight:600,textDecoration:'none'}} title="Abrir WhatsApp">📱 {u.phone}</a></>}</div>
-            <div className="ua-avatars">
-              {(u.avatars||[]).map(av=>(
-                <div key={av.id} style={{background:'var(--cream2)',border:'1px solid var(--border)',borderRadius:6,padding:'3px 8px',fontSize:10}}>
-                  <span className="font-bold">{av.nickname}</span>{' '}
-                  <span className={`chip ${av.is_paid?'chip-g':'chip-o'}`}>{av.is_paid?'Pagado':'Pendiente'}</span>{' '}
-                  <button className={`btn btn-sm ${av.is_paid?'btn-red':'btn-green'}`} style={{padding:'1px 6px',fontSize:9}} onClick={()=>toggleAvatar(av.id,'isPaid',!av.is_paid)}>
-                    {av.is_paid?'Desactivar pago':'✓ Confirmar pago'}
-                  </button>{' '}
-                  <button className={`btn btn-sm btn-outline`} style={{padding:'1px 6px',fontSize:9}} onClick={()=>toggleAvatar(av.id,'isActive',!av.is_active)}>
-                    {av.is_active?'🚫 Suspender':'✓ Activar'}
-                  </button>
-                </div>
-              ))}
+
+      {/* Stats row */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'1rem'}}>
+        <div className="stat-card"><div className="stat-n">{filtered.length}</div><div className="stat-l">Total</div></div>
+        <div className="stat-card"><div className="stat-n" style={{color:'var(--green)'}}>{approved}</div><div className="stat-l">Aprobados</div></div>
+        <div className="stat-card"><div className="stat-n" style={{color:'var(--gold)'}}>{pending}</div><div className="stat-l">Pendientes</div></div>
+      </div>
+
+      {/* Search */}
+      <input className="inp" style={{marginBottom:'1rem'}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar participante..."/>
+
+      {filtered.map(u=>{
+        const mainAv=(u.avatars||[])[0]
+        const isApproved=mainAv?.is_active
+        return(
+          <div key={u.id} className="card-sm" style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'8px',cursor:'pointer',transition:'all .12s'}}
+            onClick={()=>openDetail(u)}>
+            <AvatarCircle nickname={u.name||'?'} size={40}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:'13px',fontWeight:700,color:'var(--ink)'}}>{u.name}</div>
+              <div style={{fontSize:'10px',color:'var(--ink3)',marginTop:'1px'}}>{u.email}</div>
+              <div style={{display:'flex',gap:5,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
+                {isApproved
+                  ?<span className="chip chip-g" style={{fontSize:'9px'}}>✅ Aprobado</span>
+                  :<span className="chip chip-gold" style={{fontSize:'9px'}}>⏳ Pendiente</span>}
+                <span style={{fontSize:'10px',color:'var(--ink3)'}}>{new Date(u.created_at).toLocaleDateString('es-CO')}</span>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:'flex',alignItems:'center',gap:4}}>
+                <Toggle on={!!isApproved} onChange={v=>mainAv&&toggleAvatar(mainAv.id,'isActive',v)}/>
+                <span style={{fontSize:'10px',color:'var(--ink3)',minWidth:50}}>{isApproved?'Activo':'Aprobar'}</span>
+              </div>
+              <button className="btn btn-sm" style={{padding:'4px 10px',fontSize:'11px',background:'var(--gold-bg)',color:'var(--gold)',border:'1px solid var(--gold-border)'}}
+                onClick={(e)=>{e.stopPropagation();openDetail(u,e)}}>Ver →</button>
+              <button className="btn btn-sm" style={{padding:'4px 8px',fontSize:'10px',background:'var(--red-bg)',color:'var(--red)',border:'1px solid rgba(192,57,43,.18)'}}
+                onClick={(e)=>deleteUser(u.id,u.name,e)}>🗑</button>
             </div>
           </div>
-          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'4px'}}>
-            <div style={{fontSize:10,color:'var(--ink3)'}}>{new Date(u.created_at).toLocaleDateString('es-CO')}</div>
-            <button className="btn btn-sm" style={{background:'#fee2e2',color:'#dc2626',border:'1px solid #fca5a5',padding:'2px 8px',fontSize:9,fontWeight:700}} onClick={()=>deleteUser(u.id,u.name)}>🗑 Eliminar</button>
-          </div>
-        </div>
-      ))}
+        )
+      })}
+      {filtered.length===0&&<div style={{textAlign:'center',padding:'2rem',color:'var(--ink3)',fontSize:'13px'}}>No hay participantes aún. Comparte el link de tu polla.</div>}
     </div>
   )
 }
@@ -1902,6 +3459,14 @@ function AdminLocks(){
       await api(`/api/admin/phase-locks/${phase}`,'PUT',{isLocked:locks.find(l=>l.phase===phase)?.is_locked,autoLockHours:+h})
       setLocks(ls=>ls.map(l=>l.phase===phase?{...l,auto_lock_hours:+h}:l))
     }catch(e){alert(e.message)}
+  }
+
+  async function deleteUser(uid,name){
+    if(!confirm(`¿Eliminar a "${name}" y todos sus datos? Esta acción no se puede deshacer.`)) return
+    try{
+      await api(`/api/admin/users/${uid}`,'DELETE')
+      setUsers(us=>us.filter(u=>u.id!==uid))
+    }catch(e){alert('Error al eliminar: '+e.message)}
   }
 
   if(loading) return <Spinner/>
@@ -2176,51 +3741,113 @@ function AdminWhatsApp(){
   )
 }
 
+const COLOR_PRESETS=[
+  {name:'Dorado',hex:'#F6C90E',dark:'#0d1117',label:'⚽ Clásico'},
+  {name:'Rojo',hex:'#E53E3E',dark:'#1a0000',label:'🔴 Pasión'},
+  {name:'Azul',hex:'#3B82F6',dark:'#0d1a2e',label:'🔵 Élite'},
+  {name:'Verde',hex:'#22C55E',dark:'#0d1a10',label:'🟢 Cancha'},
+]
 function AdminConfig(){
-  const {settings,setSettings}=useApp()
+  const {settings,setSettings,tournament,setTournament}=useApp()
   const [form,setForm]=React.useState({})
   const [loading,setLoading]=React.useState(false)
   const [msg,setMsg]=React.useState(null)
 
   React.useEffect(()=>{
     if(settings) setForm({
-      paypal:settings.paypal||'',nequi:settings.nequi||'',
-      inscription_fee:settings.inscription_fee||'20',
-      predictions_open:settings.predictions_open==='true',
-      bg_brightness:settings.bg_brightness||'30',bg_blur:settings.bg_blur||'4',
+      predictions_open:settings.predictions_open===true||settings.predictions_open==='true',
+      primary_color:settings.primary_color||'#F6C90E',
     })
   },[settings])
 
   async function save(e){
     e.preventDefault(); setLoading(true); setMsg(null)
     try{
-      const body={paypal:form.paypal,nequi:form.nequi,inscription_fee:form.inscription_fee,
-        predictions_open:String(form.predictions_open),bg_brightness:form.bg_brightness,bg_blur:form.bg_blur}
-      await api('/api/admin/settings','PUT',body)
-      setSettings(s=>({...s,...body}))
+      await api('/api/admin/tournament','PUT',{
+        predictions_open:form.predictions_open,
+        primary_color:form.primary_color
+      })
+      await api('/api/settings','PUT',{
+        predictions_open:form.predictions_open,
+        primary_color:form.primary_color
+      })
+      setSettings(s=>({...s,...form}))
+      if(tournament) setTournament(t=>({...t,primary_color:form.primary_color}))
+      document.documentElement.style.setProperty('--gold',form.primary_color)
       setMsg({type:'success',text:'✅ Configuración guardada'})
     }catch(e){setMsg({type:'error',text:e.message})}
     setLoading(false)
   }
 
+  const [logoInput,setLogoInput]=React.useState(tournament?.logo_url||'')
+  const logoUrl=tournament?.logo_url||'/logo.png'
+
+  async function saveLogo(){
+    const url=logoInput.trim()
+    if(!url) return
+    try{
+      await api('/api/admin/tournament','PUT',{logoUrl:url})
+      setTournament(t=>({...t,logo_url:url}))
+      setMsg({type:'success',text:'✅ Logo actualizado'})
+    }catch(e){setMsg({type:'error',text:'Error: '+e.message})}
+  }
+
   return(
     <div className="card">
       {msg&&<Alert type={msg.type}>{msg.text}</Alert>}
-      <form onSubmit={save}>
-        <div className="form-group">
-          <label>Pronósticos abiertos</label>
-          <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginTop:'.25rem'}}>
-            <Toggle on={form.predictions_open} onChange={v=>setForm(p=>({...p,predictions_open:v}))}/>
-            <span className="text-sm">{form.predictions_open?'✅ Abiertos':'🔒 Cerrados'}</span>
+
+      {/* LOGO */}
+      <div className="form-group">
+        <label style={{fontWeight:700,marginBottom:'.5rem',display:'block'}}>🖼️ Logo de tu Polla</label>
+        <div style={{display:'flex',alignItems:'flex-start',gap:'1rem',flexWrap:'wrap',marginBottom:'.5rem'}}>
+          <img src={logoUrl} alt="Logo" onError={e=>e.target.src='/logo.png'}
+            style={{width:72,height:72,objectFit:'contain',background:'var(--cream2)',borderRadius:'var(--r)',border:'1px solid var(--border)',padding:4,flexShrink:0}}/>
+          <div style={{flex:1,minWidth:200}}>
+            <input className="inp" value={logoInput} onChange={e=>setLogoInput(e.target.value)}
+              placeholder="https://drive.google.com/..." style={{marginBottom:'.4rem'}}/>
+            <button className="btn btn-outline btn-sm" onClick={saveLogo}>💾 Guardar logo</button>
           </div>
         </div>
-        <div className="form-group"><label>💙 PayPal</label><input className="inp" value={form.paypal||''} onChange={e=>setForm(p=>({...p,paypal:e.target.value}))} placeholder="tu@paypal.com"/></div>
-        <div className="form-group"><label>📱 Nequi</label><input className="inp" value={form.nequi||''} onChange={e=>setForm(p=>({...p,nequi:e.target.value}))} placeholder="300-000-0000"/></div>
-        <div className="form-group"><label>💰 Costo de inscripción (USD)</label><input className="inp" type="number" value={form.inscription_fee||20} onChange={e=>setForm(p=>({...p,inscription_fee:e.target.value}))}/></div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.65rem'}}>
-          <div className="form-group"><label>🌃 Brillo del fondo ({form.bg_brightness}%)</label><input type="range" min="5" max="80" value={form.bg_brightness||30} onChange={e=>setForm(p=>({...p,bg_brightness:e.target.value}))} style={{width:'100%'}}/></div>
-          <div className="form-group"><label>🌁 Desenfoque del fondo ({form.bg_blur}px)</label><input type="range" min="0" max="20" value={form.bg_blur||4} onChange={e=>setForm(p=>({...p,bg_blur:e.target.value}))} style={{width:'100%'}}/></div>
+        <div className="text-muted text-xs" style={{lineHeight:1.6}}>
+          📌 <strong>Cómo obtener el link de Google Drive:</strong><br/>
+          1. Sube tu logo a Google Drive → clic derecho → "Compartir" → "Cualquier persona con el link"<br/>
+          2. Copia el link, extrae el ID (la parte entre <code>/d/</code> y <code>/view</code>)<br/>
+          3. Usa este formato: <code>https://drive.google.com/uc?id=TU_ID</code><br/>
+          Si no tienes logo, dejamos el nuestro 🏆
         </div>
+      </div>
+
+      <div style={{height:1,background:'var(--border)',margin:'1rem 0'}}/>
+
+      {/* COLOR */}
+      <div className="form-group">
+        <label style={{fontWeight:700,marginBottom:'.75rem',display:'block'}}>🎨 Color principal</label>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.5rem'}}>
+          {COLOR_PRESETS.map(c=>(
+            <div key={c.hex} onClick={()=>setForm(p=>({...p,primary_color:c.hex}))}
+              style={{border:`2px solid ${form.primary_color===c.hex?c.hex:'var(--border)'}`,
+                borderRadius:8,padding:'.6rem .4rem',textAlign:'center',cursor:'pointer',
+                background:form.primary_color===c.hex?c.hex+'18':'var(--cream2)',transition:'all .15s'}}>
+              <div style={{width:28,height:28,borderRadius:'50%',background:c.hex,margin:'0 auto .4rem',
+                boxShadow:form.primary_color===c.hex?`0 0 12px ${c.hex}80`:undefined}}/>
+              <div style={{fontSize:9,fontWeight:700,color:form.primary_color===c.hex?c.hex:'var(--ink3)'}}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{height:1,background:'var(--border)',margin:'1rem 0'}}/>
+
+      <form onSubmit={save}>
+        {/* Pronósticos */}
+        <div className="form-group">
+          <label>🔓 Pronósticos</label>
+          <div style={{display:'flex',alignItems:'center',gap:'.75rem',marginTop:'.25rem'}}>
+            <Toggle on={form.predictions_open} onChange={v=>setForm(p=>({...p,predictions_open:v}))}/>
+            <span className="text-sm">{form.predictions_open?'✅ Abiertos — participantes pueden ingresar marcadores':'🔒 Cerrados — solo el admin puede abrir'}</span>
+          </div>
+        </div>
+
         <button className="btn btn-gold btn-full" disabled={loading}>{loading?'Guardando...':'💾 Guardar configuración'}</button>
       </form>
     </div>
@@ -2236,29 +3863,54 @@ function AppRoot(){
   const [matches,setMatches]=React.useState([])
   const [settings,setSettings]=React.useState({})
 
-  // Load matches on mount
+  const [tournament,setTournament]=React.useState(null)
+
+  // Load tournament config FIRST, then init everything else
   React.useEffect(()=>{
-    api('/api/matches').then(setMatches).catch(()=>{})
-    api('/api/settings').then(setSettings).catch(()=>{})
-    // Try auto-login from stored token
-    const token=getToken()
-    if(token){
-      api('/api/me').then(({user:u,avatars:avs})=>{
-        setUser(u); setAvatars(avs||[])
-        if(avs&&avs.length>0){
-          const first=avs.find(a=>a.is_paid&&a.is_active)||avs[0]
-          setActiveAvatar(first)
-        }
-        if(!u.termsAccepted) setView('terms')
-        else if(!avs||!avs.length) setView('avatars')
-        else setView('dashboard')
-      }).catch(()=>{ localStorage.removeItem('polla_token') })
+    async function init(){
+      // Step 1: load tournament (required for all subsequent calls)
+      if(TOURNAMENT_SLUG){
+        try{
+          const r=await fetch(`/api/tournaments/${TOURNAMENT_SLUG}`)
+          const t=await r.json()
+          if(t.id){
+            window.__TOURNAMENT_ID__=t.id
+            setTournament(t)
+            setSettings({
+              predictions_open:t.predictions_open,
+              primary_color:t.primary_color||'#F6C90E',
+            })
+            if(t.primary_color&&t.primary_color!=='#F6C90E')
+              document.documentElement.style.setProperty('--gold',t.primary_color)
+            document.title=t.name+' · La Polla IA'
+          } else if(t.error) {
+            setView('not_found')
+            return
+          }
+        }catch(e){ setView('not_found'); return }
+      }
+      // Step 2: load matches (global, no tournament needed)
+      api('/api/matches').then(setMatches).catch(()=>{})
+      // Step 3: auto-login from stored token
+      const token=getToken()
+      if(token){
+        api('/api/me').then(({user:u,avatars:avs})=>{
+          setUser(u); setAvatars(avs||[])
+          if(avs&&avs.length>0){
+            const first=avs.find(a=>a.is_active)||avs[0]
+            setActiveAvatar(first)
+          }
+          if(!u.termsAccepted) setView('terms')
+          else setView('dashboard')
+        }).catch(()=>{ localStorage.removeItem('polla_token') })
+      }
     }
+    init()
   },[])
 
   React.useEffect(()=>{
     if(avatars.length&&!activeAvatar){
-      const first=avatars.find(a=>a.is_paid&&a.is_active)||avatars[0]
+      const first=avatars.find(a=>a.is_active)||avatars[0]
       setActiveAvatar(first)
     }
   },[avatars])
@@ -2270,19 +3922,11 @@ function AppRoot(){
   }
 
   const ctx={view,setView,user,setUser,avatars,setAvatars,activeAvatar,setActiveAvatar,
-    matches,setMatches,settings,setSettings,logout}
+    matches,setMatches,settings,setSettings,logout,tournament,setTournament}
 
-  // Animated chat bounce keyframes
-  const bounceStyle=`.bounce-dot{width:6px;height:6px;border-radius:50%;background:var(--ink3);}
-@keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}`
 
   return(
     <AppCtx.Provider value={ctx}>
-      <style>{bounceStyle+`
-        [class*="bounce"]{animation:bounce .9s infinite;}
-        .bounce-1{animation-delay:.15s!important;}
-        .bounce-2{animation-delay:.3s!important;}
-      `}</style>
 
       {view==='landing'&&<LandingPage/>}
 
@@ -2294,13 +3938,24 @@ function AppRoot(){
       {view==='guide'&&<><LandingPage/><GuidePage/></>}
 
       {/* Authenticated views */}
-      {view==='avatars'&&<AvatarsPage/>}
+      {view==='avatars'&&<DashboardPage/>}
       {view==='special'&&<SpecialPredictionsPage/>}
+      {view==='bracket'&&<BracketPage/>}
       {view==='dashboard'&&<DashboardPage/>}
       {view==='chat'&&<ChatPage/>}
+      {view==='pele_chat'&&<PeleFreeChatPage/>}
       {view==='board'&&<BoardPage/>}
       {view==='ranking'&&<RankingPage/>}
       {view==='results'&&<ResultsPage/>}
+      {view==='not_found'&&(
+        <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',
+          background:'var(--ink)',flexDirection:'column',gap:'1rem',textAlign:'center',padding:'2rem'}}>
+          <img src="/logo.png" style={{width:80,opacity:.4}}/>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'2rem',color:'var(--gold)',letterSpacing:2}}>Polla no encontrada</div>
+          <div style={{color:'rgba(255,255,255,.4)',fontSize:14}}>Esta polla no existe o aún no ha sido activada.</div>
+          <a href="/" style={{color:'var(--gold)',fontSize:13,marginTop:'.5rem'}}>← Crear una Polla IA</a>
+        </div>
+      )}
       {view==='admin'&&<AdminPage/>}
     </AppCtx.Provider>
   )
