@@ -2032,6 +2032,66 @@ app.get('/superadmin/courtesy', superAdmin, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message})}
 })
 
+// SUPERADMIN: listar todos los partidos con su resultado oficial actual
+app.get('/superadmin/matches', superAdmin, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT m.id, m.match_num, m.phase, m.team1, m.team2, m.label, m.match_date,
+        r.score_home, r.score_away, r.had_penalties, r.penalty_winner,
+        r.yellow_cards, r.red_cards, r.penalties_count,
+        r.goals_first_half, r.goals_second_half, r.mvp_player
+      FROM matches m LEFT JOIN match_results r ON r.match_id=m.id
+      ORDER BY m.match_num`)
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+// SUPERADMIN: guardar resultado OFICIAL de un partido y recalcular puntos en TODAS las pollas
+app.post('/superadmin/results', superAdmin, async(req,res)=>{
+  const {matchId,home,away,hadPenalties,penaltyWinner,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
+  if(matchId==null||home==null||away==null) return res.status(400).json({error:'matchId, home y away son requeridos'})
+  try{
+    await pool.query(`
+      INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,yellow_cards=$6,red_cards=$7,penalties_count=$8,goals_first_half=$9,goals_second_half=$10,mvp_player=$11,entered_at=NOW()`,
+      [matchId,+home,+away,!!hadPenalties,penaltyWinner||null,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
+
+    const {rows:[match]}=await pool.query('SELECT phase FROM matches WHERE id=$1',[matchId])
+    const result={match_id:matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:penaltyWinner||null,
+      yellow_cards:yellowCards??null,red_cards:redCards??null,penalties_count:penaltiesCount??null,
+      goals_first_half:goalsFirstHalf??null,goals_second_half:goalsSecondHalf??null,mvp_player:mvpPlayer||null}
+
+    // Recalcular predicciones de ESTE partido en TODAS las pollas
+    const {rows:preds}=await pool.query('SELECT * FROM predictions WHERE match_id=$1',[matchId])
+    for(const p of preds){
+      const pts=calcPoints(p,result,match?.phase||'group')
+      await pool.query('UPDATE predictions SET points_earned=$1 WHERE id=$2',[pts,p.id])
+    }
+    // Recalcular extra points de ESTE partido en TODAS las pollas
+    const {rows:extras}=await pool.query('SELECT * FROM extra_predictions WHERE match_id=$1',[matchId])
+    for(const ep of extras){
+      const epts=calcExtraPoints(ep,result)
+      await pool.query('UPDATE extra_predictions SET points_earned=$1 WHERE id=$2',[epts,ep.id])
+    }
+    res.json({success:true,predictionsUpdated:preds.length,extrasUpdated:extras.length})
+  }catch(e){console.error('superadmin results:',e);res.status(500).json({error:e.message})}
+})
+
+// SUPERADMIN: resetear resultado de un partido que aún no se ha jugado
+// Borra SOLO el resultado oficial (match_results) y pone en 0 los puntos de ese partido en todas las pollas.
+// NO toca los pronósticos de los usuarios — siguen intactos para cuando se juegue de verdad.
+app.delete('/superadmin/results/:matchId', superAdmin, async(req,res)=>{
+  const matchId=+req.params.matchId
+  if(!matchId) return res.status(400).json({error:'matchId inválido'})
+  try{
+    const {rowCount:deleted}=await pool.query('DELETE FROM match_results WHERE match_id=$1',[matchId])
+    const {rowCount:predsReset}=await pool.query('UPDATE predictions SET points_earned=0 WHERE match_id=$1',[matchId])
+    const {rowCount:extrasReset}=await pool.query('UPDATE extra_predictions SET points_earned=0 WHERE match_id=$1',[matchId])
+    res.json({success:true,resultDeleted:deleted>0,predictionsReset:predsReset,extrasReset})
+  }catch(e){console.error('superadmin reset result:',e);res.status(500).json({error:e.message})}
+})
+
 // SUPERADMIN: recalcular puntos de TODAS las pollas — usa los resultados ya guardados en match_results
 // No modifica resultados, solo recalcula points_earned por pronóstico. Útil si hubo cambios de lógica de puntos.
 app.post('/superadmin/recalc-all', superAdmin, async(req,res)=>{
@@ -2237,6 +2297,40 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
     <button onclick="recalcAll()" id="btn-recalc" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔄 Recalcular ahora</button>
   </div>
   <div id="recalc-result" style="margin-bottom:1rem"></div>
+
+  <!-- RESULTADOS OFICIALES -->
+  <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:var(--ink);margin-bottom:4px">📊 RESULTADOS OFICIALES (TODAS LAS POLLAS)</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:12px">Ingresa o corrige el resultado oficial de un partido. Al guardar, recalcula los puntos de ese partido en TODAS las pollas automáticamente.</div>
+    <div style="display:grid;grid-template-columns:1fr;gap:10px">
+      <select id="sa-match" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff;font-family:inherit" onchange="saMatchSelected()">
+        <option value="">— Cargando partidos... —</option>
+      </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <input id="sa-home" type="number" min="0" placeholder="Goles local" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit">
+        <input id="sa-away" type="number" min="0" placeholder="Goles visitante" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);cursor:pointer">
+        <input id="sa-pen" type="checkbox" onchange="document.getElementById('sa-penwin-wrap').style.display=this.checked?'block':'none'"> ¿Hubo definición por penales?
+      </label>
+      <div id="sa-penwin-wrap" style="display:none">
+        <select id="sa-penwin" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff;font-family:inherit">
+          <option value="">— Ganador en penales —</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+        <input id="sa-yellow" type="number" min="0" placeholder="🟨 Amar." style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
+        <input id="sa-red" type="number" min="0" placeholder="🟥 Rojas" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
+        <input id="sa-pencount" type="number" min="0" placeholder="⚡ Pen." style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
+        <input id="sa-g1h" type="number" min="0" placeholder="⚽ 1T" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
+        <input id="sa-g2h" type="number" min="0" placeholder="⚽ 2T" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
+      </div>
+      <input id="sa-mvp" placeholder="🏅 MVP del partido (opcional)" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit">
+      <button onclick="saSaveResult()" id="sa-save-btn" style="background:var(--ink);color:var(--cream);border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer">💾 Guardar resultado oficial y recalcular TODAS las pollas</button>
+      <button onclick="saResetResult()" id="sa-reset-btn" style="display:none;background:transparent;color:var(--red);border:1.5px solid var(--red-border);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Resetear resultado (partido aún no jugado) — borra el marcador y pone los puntos de este partido en 0</button>
+      <div id="sa-result-msg"></div>
+    </div>
+  </div>
 
   <!-- COURTESY SECTION -->
   <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--gold-border);border-radius:var(--r-lg);padding:1.25rem 1.5rem">
@@ -2455,6 +2549,123 @@ async function recalcAll(){
   btn.disabled=false; btn.textContent='🔄 Recalcular ahora'
 }
 
+// ── Resultados oficiales (superadmin) ──
+var saMatches=[]
+async function saLoadMatches(){
+  try{
+    var r=await fetch('/superadmin/matches',{headers:{'x-super-key':KEY}})
+    saMatches=await r.json()
+    var sel=document.getElementById('sa-match')
+    sel.innerHTML='<option value="">— Selecciona partido —</option>'
+    saMatches.forEach(function(m){
+      var teams=(m.team1||m.team2)?(m.team1||'?')+' vs '+(m.team2||'?'):(m.label||'Partido')
+      var res=m.score_home!=null?(' ✅ ('+m.score_home+'-'+m.score_away+')'):''
+      var opt=document.createElement('option')
+      opt.value=m.id
+      opt.textContent='#'+m.match_num+' · '+teams+' · '+m.phase+res
+      sel.appendChild(opt)
+    })
+  }catch(e){
+    document.getElementById('sa-match').innerHTML='<option value="">Error cargando partidos</option>'
+  }
+}
+function saMatchSelected(){
+  var id=+document.getElementById('sa-match').value
+  var m=saMatches.find(function(x){return x.id===id})
+  if(!m){ document.getElementById('sa-reset-btn').style.display='none'; return }
+  // Mostrar botón de reset solo si el partido ya tiene resultado oficial
+  document.getElementById('sa-reset-btn').style.display=m.score_home!=null?'block':'none'
+  document.getElementById('sa-home').value=m.score_home!=null?m.score_home:''
+  document.getElementById('sa-away').value=m.score_away!=null?m.score_away:''
+  document.getElementById('sa-pen').checked=!!m.had_penalties
+  document.getElementById('sa-penwin-wrap').style.display=m.had_penalties?'block':'none'
+  var pw=document.getElementById('sa-penwin')
+  pw.innerHTML='<option value="">— Ganador en penales —</option>'
+  ;[m.team1,m.team2].filter(Boolean).forEach(function(t){
+    var o=document.createElement('option'); o.value=t; o.textContent=t
+    if(m.penalty_winner===t) o.selected=true
+    pw.appendChild(o)
+  })
+  document.getElementById('sa-yellow').value=m.yellow_cards!=null?m.yellow_cards:''
+  document.getElementById('sa-red').value=m.red_cards!=null?m.red_cards:''
+  document.getElementById('sa-pencount').value=m.penalties_count!=null?m.penalties_count:''
+  document.getElementById('sa-g1h').value=m.goals_first_half!=null?m.goals_first_half:''
+  document.getElementById('sa-g2h').value=m.goals_second_half!=null?m.goals_second_half:''
+  document.getElementById('sa-mvp').value=m.mvp_player||''
+}
+async function saSaveResult(){
+  var matchId=+document.getElementById('sa-match').value
+  var home=document.getElementById('sa-home').value
+  var away=document.getElementById('sa-away').value
+  var msgEl=document.getElementById('sa-result-msg')
+  if(!matchId||home===''||away===''){
+    msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Selecciona el partido e ingresa ambos marcadores</div>'
+    return
+  }
+  if(!confirm('¿Guardar este resultado oficial? Se recalcularán los puntos de este partido en TODAS las pollas.')) return
+  var btn=document.getElementById('sa-save-btn')
+  btn.disabled=true; btn.textContent='Guardando y recalculando...'
+  try{
+    var body={
+      matchId:matchId, home:+home, away:+away,
+      hadPenalties:document.getElementById('sa-pen').checked,
+      penaltyWinner:document.getElementById('sa-penwin').value||null,
+      yellowCards:document.getElementById('sa-yellow').value!==''?+document.getElementById('sa-yellow').value:null,
+      redCards:document.getElementById('sa-red').value!==''?+document.getElementById('sa-red').value:null,
+      penaltiesCount:document.getElementById('sa-pencount').value!==''?+document.getElementById('sa-pencount').value:null,
+      goalsFirstHalf:document.getElementById('sa-g1h').value!==''?+document.getElementById('sa-g1h').value:null,
+      goalsSecondHalf:document.getElementById('sa-g2h').value!==''?+document.getElementById('sa-g2h').value:null,
+      mvpPlayer:document.getElementById('sa-mvp').value||null
+    }
+    var r=await fetch('/superadmin/results',{method:'POST',headers:{'Content-Type':'application/json','x-super-key':KEY},body:JSON.stringify(body)})
+    var d=await r.json()
+    if(!r.ok){
+      msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Error: '+(d.error||'desconocido')+'</div>'
+    }else{
+      msgEl.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">✅ Resultado oficial guardado · '+d.predictionsUpdated+' pronósticos y '+d.extrasUpdated+' extras recalculados en todas las pollas</div>'
+      saLoadMatches()
+    }
+  }catch(e){
+    msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Error: '+e.message+'</div>'
+  }
+  btn.disabled=false; btn.textContent='💾 Guardar resultado oficial y recalcular TODAS las pollas'
+}
+
+async function saResetResult(){
+  var matchId=+document.getElementById('sa-match').value
+  var msgEl=document.getElementById('sa-result-msg')
+  if(!matchId){ msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Selecciona el partido</div>'; return }
+  var m=saMatches.find(function(x){return x.id===matchId})
+  var nombre=m?('#'+m.match_num+' '+(m.team1||'?')+' vs '+(m.team2||'?')):('#'+matchId)
+  if(!confirm('¿Resetear el resultado del partido '+nombre+'?\n\nEsto borra el marcador oficial y pone en 0 los puntos de este partido en TODAS las pollas.\n\nLos pronósticos de los usuarios NO se borran — quedan intactos para cuando el partido se juegue de verdad.')) return
+  var btn=document.getElementById('sa-reset-btn')
+  btn.disabled=true; btn.textContent='Reseteando...'
+  try{
+    var r=await fetch('/superadmin/results/'+matchId,{method:'DELETE',headers:{'x-super-key':KEY}})
+    var d=await r.json()
+    if(!r.ok){
+      msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Error: '+(d.error||'desconocido')+'</div>'
+    }else{
+      msgEl.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">✅ Resultado reseteado · '+d.predictionsReset+' pronósticos y '+d.extrasReset+' extras puestos en 0. Los pronósticos de los usuarios siguen intactos.</div>'
+      document.getElementById('sa-home').value=''
+      document.getElementById('sa-away').value=''
+      document.getElementById('sa-pen').checked=false
+      document.getElementById('sa-penwin-wrap').style.display='none'
+      document.getElementById('sa-yellow').value=''
+      document.getElementById('sa-red').value=''
+      document.getElementById('sa-pencount').value=''
+      document.getElementById('sa-g1h').value=''
+      document.getElementById('sa-g2h').value=''
+      document.getElementById('sa-mvp').value=''
+      btn.style.display='none'
+      saLoadMatches()
+    }
+  }catch(e){
+    msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Error: '+e.message+'</div>'
+  }
+  btn.disabled=false; btn.textContent='🗑️ Resetear resultado (partido aún no jugado) — borra el marcador y pone los puntos de este partido en 0'
+}
+
 // Bind event listeners to all row buttons and rows (delegated, more robust than inline onclick)
 function bindRowHandlers(){
   document.querySelectorAll('.t-row').forEach(function(row){
@@ -2481,6 +2692,7 @@ function bindRowHandlers(){
 
 bindRowHandlers()
 loadCourtesy()
+saLoadMatches()
 </script>
 </body>
 </html>`)
