@@ -2488,8 +2488,8 @@ async function loadCourtesy(){
           '<div style="font-family:monospace;font-size:10px;color:var(--gold)">lapollaia.com/t/'+t.slug+'</div>'+
         '</div>'+
         '<div style="font-size:11px;'+(uc>0?'color:var(--green);font-weight:700':'color:var(--ink3)')+'">'+uc+' participantes</div>'+
-        '<button onclick="copyCourtesyLink(\''+link+'\')" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Copiar link</button>'+
-        '<button onclick="delTournament(\''+t.id+'\',\''+t.name+'\')" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Eliminar</button>'+
+        '<button onclick="copyCourtesyLink(\\''+link+'\\')" style="background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Copiar link</button>'+
+        '<button onclick="delTournament(\\''+t.id+'\\',\\''+t.name+'\\')" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer">Eliminar</button>'+
       '</div>'
     }).join('')
   }catch(e){document.getElementById('courtesy-list').innerHTML='<div style="font-size:12px;color:red">Error: '+e.message+'</div>'}
@@ -2511,7 +2511,7 @@ async function createCourtesy(){
     res_el.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;padding:.75rem 1rem">'+
       '<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">Polla creada exitosamente</div>'+
       '<div id="courtesy-link-box" style="font-family:monospace;font-size:11px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--ink);word-break:break-all;margin-bottom:8px">'+link+'</div>'+
-      '<button onclick="copyCourtesyLink(\''+link+'\')" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">Copiar link</button>'+
+      '<button onclick="copyCourtesyLink(\\''+link+'\\')" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">Copiar link</button>'+
     '</div>'
     document.getElementById('c-name').value=''
     document.getElementById('c-slug').value=''
