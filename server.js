@@ -962,28 +962,41 @@ app.post('/api/extra-predictions', auth, async(req,res)=>{
 app.get('/api/ranking', auth, async(req,res)=>{
   try{
     const tid=req.user.tournamentId
+    // Use subqueries to pre-aggregate each table SEPARATELY
+    // This prevents cartesian product when a user has N predictions × M extras × K trivia
     const {rows}=await pool.query(`
-      SELECT av.id,av.nickname,av.photo_url,u.name as user_name,
-        COALESCE(SUM(p.points_earned),0)+COALESCE(SUM(ep.points_earned),0)+
-        COALESCE(sp.champion_pts,0)+COALESCE(sp.surprise_pts,0)+
-        COALESCE(sp.balon_pts,0)+COALESCE(sp.guante_pts,0)+COALESCE(sp.bota_pts,0)+
-        COALESCE(rb.points,0)+COALESCE(SUM(ta.points_earned),0)+
+      SELECT av.id, av.nickname, av.photo_url, u.name as user_name,
+        COALESCE(pred.pts,0) + COALESCE(ext.pts,0) +
+        COALESCE(sp.champion_pts,0) + COALESCE(sp.surprise_pts,0) +
+        COALESCE(sp.balon_pts,0) + COALESCE(sp.guante_pts,0) + COALESCE(sp.bota_pts,0) +
+        COALESCE(rb.points,0) + COALESCE(triv.pts,0) +
         COALESCE(av.points_adjustment,0) as total_pts,
         COALESCE(rb.points,0) as registration_pts,
         COALESCE(av.points_adjustment,0) as adjustment_pts,
         av.adjustment_reason,
-        COUNT(DISTINCT p.match_id) FILTER(WHERE p.score_home IS NOT NULL) as matches_predicted,
-        COUNT(DISTINCT p.match_id) FILTER(WHERE p.points_earned > 0) as hits
+        COALESCE(pred.total_predicted,0) as matches_predicted,
+        COALESCE(pred.hits,0) as hits
       FROM avatars av
       JOIN users u ON u.id=av.user_id
-      LEFT JOIN predictions p ON p.avatar_id=av.id
-      LEFT JOIN extra_predictions ep ON ep.avatar_id=av.id
+      LEFT JOIN (
+        SELECT avatar_id,
+          SUM(points_earned) as pts,
+          COUNT(DISTINCT match_id) FILTER(WHERE score_home IS NOT NULL) as total_predicted,
+          COUNT(DISTINCT match_id) FILTER(WHERE points_earned > 0) as hits
+        FROM predictions GROUP BY avatar_id
+      ) pred ON pred.avatar_id=av.id
+      LEFT JOIN (
+        SELECT avatar_id, SUM(points_earned) as pts
+        FROM extra_predictions GROUP BY avatar_id
+      ) ext ON ext.avatar_id=av.id
       LEFT JOIN special_predictions sp ON sp.avatar_id=av.id
       LEFT JOIN registration_bonus rb ON rb.avatar_id=av.id
-      LEFT JOIN trivia_answers ta ON ta.avatar_id=av.id AND ta.is_correct=TRUE
+      LEFT JOIN (
+        SELECT avatar_id, SUM(points_earned) as pts
+        FROM trivia_answers WHERE is_correct=TRUE GROUP BY avatar_id
+      ) triv ON triv.avatar_id=av.id
       WHERE av.tournament_id=$1 AND av.is_active=TRUE
-      GROUP BY av.id,av.nickname,av.photo_url,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts,rb.points,av.points_adjustment,av.adjustment_reason
-      ORDER BY total_pts DESC,matches_predicted ASC`,[tid])
+      ORDER BY total_pts DESC, matches_predicted ASC`,[tid])
     res.json(rows.map((r,i)=>({...r,rank:i+1})))
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
