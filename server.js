@@ -318,6 +318,10 @@ async function initDb() {
 
       -- Courtesy tournaments (created by superadmin, no payment required)
       ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS is_courtesy BOOLEAN DEFAULT FALSE;
+
+      -- Manual points adjustment per avatar (admin can add/subtract points for corrections)
+      ALTER TABLE avatars ADD COLUMN IF NOT EXISTS points_adjustment INTEGER DEFAULT 0;
+      ALTER TABLE avatars ADD COLUMN IF NOT EXISTS adjustment_reason TEXT;
     `)
 
     const {rows:[{count}]} = await c.query('SELECT COUNT(*) FROM matches')
@@ -888,7 +892,13 @@ app.post('/api/avatars', auth, async(req,res)=>{
 // ─── MATCHES ──────────────────────────────────────────────────────────────────
 app.get('/api/matches', async(req,res)=>{
   try{
-    const {rows}=await pool.query('SELECT * FROM matches ORDER BY match_num')
+    const {rows}=await pool.query(`
+      SELECT m.*, r.score_home as r_home, r.score_away as r_away,
+        r.had_penalties, r.penalty_winner, r.yellow_cards, r.red_cards,
+        r.penalties_count, r.goals_first_half, r.goals_second_half, r.mvp_player
+      FROM matches m
+      LEFT JOIN match_results r ON r.match_id=m.id
+      ORDER BY m.match_num`)
     res.json(rows)
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
@@ -957,7 +967,11 @@ app.get('/api/ranking', auth, async(req,res)=>{
         COALESCE(SUM(p.points_earned),0)+COALESCE(SUM(ep.points_earned),0)+
         COALESCE(sp.champion_pts,0)+COALESCE(sp.surprise_pts,0)+
         COALESCE(sp.balon_pts,0)+COALESCE(sp.guante_pts,0)+COALESCE(sp.bota_pts,0)+
-        COALESCE(rb.points,0)+COALESCE(SUM(ta.points_earned),0) as total_pts,
+        COALESCE(rb.points,0)+COALESCE(SUM(ta.points_earned),0)+
+        COALESCE(av.points_adjustment,0) as total_pts,
+        COALESCE(rb.points,0) as registration_pts,
+        COALESCE(av.points_adjustment,0) as adjustment_pts,
+        av.adjustment_reason,
         COUNT(DISTINCT p.match_id) FILTER(WHERE p.score_home IS NOT NULL) as matches_predicted,
         COUNT(DISTINCT p.match_id) FILTER(WHERE p.points_earned > 0) as hits
       FROM avatars av
@@ -968,7 +982,7 @@ app.get('/api/ranking', auth, async(req,res)=>{
       LEFT JOIN registration_bonus rb ON rb.avatar_id=av.id
       LEFT JOIN trivia_answers ta ON ta.avatar_id=av.id AND ta.is_correct=TRUE
       WHERE av.tournament_id=$1 AND av.is_active=TRUE
-      GROUP BY av.id,av.nickname,av.photo_url,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts,rb.points
+      GROUP BY av.id,av.nickname,av.photo_url,u.name,sp.champion_pts,sp.surprise_pts,sp.balon_pts,sp.guante_pts,sp.bota_pts,rb.points,av.points_adjustment,av.adjustment_reason
       ORDER BY total_pts DESC,matches_predicted ASC`,[tid])
     res.json(rows.map((r,i)=>({...r,rank:i+1})))
   }catch(e){ res.status(500).json({error:'Error'}) }
@@ -1588,6 +1602,61 @@ app.put('/api/admin/avatars/:id', auth, tournamentAdmin, async(req,res)=>{
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
 
+// Manual points adjustment — admin de la polla puede sumar/restar puntos para corregir inconsistencias
+app.put('/api/admin/avatars/:id/adjustment', auth, tournamentAdmin, async(req,res)=>{
+  const {adjustment, reason}=req.body
+  const adj=Number(adjustment)
+  if(!Number.isInteger(adj)) return res.status(400).json({error:'El ajuste debe ser un número entero (puede ser negativo)'})
+  if(adj<-1000||adj>1000) return res.status(400).json({error:'Ajuste fuera de rango (-1000 a 1000)'})
+  try{
+    // Verify avatar belongs to admin's tournament
+    const {rows:[av]}=await pool.query('SELECT id FROM avatars WHERE id=$1 AND tournament_id=$2',[req.params.id,req.user.tournamentId])
+    if(!av) return res.status(404).json({error:'Avatar no encontrado'})
+    const {rows:[updated]}=await pool.query(
+      'UPDATE avatars SET points_adjustment=$1, adjustment_reason=$2 WHERE id=$3 RETURNING id, points_adjustment, adjustment_reason',
+      [adj, reason||null, req.params.id])
+    res.json({success:true, avatar:updated})
+  }catch(e){console.error('adjustment:',e); res.status(500).json({error:e.message})}
+})
+
+// Recalcular puntos de TODA la polla del admin — usa resultados ya guardados
+app.post('/api/admin/recalc', auth, tournamentAdmin, async(req,res)=>{
+  try{
+    const tid=req.user.tournamentId
+    const {rows:playedMatches}=await pool.query(`
+      SELECT m.id, m.phase,
+        r.score_home, r.score_away, r.had_penalties, r.penalty_winner,
+        r.yellow_cards, r.red_cards, r.penalties_count,
+        r.goals_first_half, r.goals_second_half, r.mvp_player
+      FROM matches m JOIN match_results r ON r.match_id=m.id`)
+    let predsUpdated=0, extrasUpdated=0
+    for(const m of playedMatches){
+      const result={match_id:m.id,score_home:m.score_home,score_away:m.score_away,had_penalties:m.had_penalties,penalty_winner:m.penalty_winner,
+        yellow_cards:m.yellow_cards,red_cards:m.red_cards,penalties_count:m.penalties_count,
+        goals_first_half:m.goals_first_half,goals_second_half:m.goals_second_half,mvp_player:m.mvp_player}
+      const {rows:preds}=await pool.query(`
+        SELECT p.* FROM predictions p
+        JOIN avatars av ON av.id=p.avatar_id
+        WHERE p.match_id=$1 AND av.tournament_id=$2`,[m.id,tid])
+      for(const p of preds){
+        const pts=calcPoints(p,result,m.phase)
+        await pool.query('UPDATE predictions SET points_earned=$1 WHERE id=$2',[pts,p.id])
+        predsUpdated++
+      }
+      const {rows:extras}=await pool.query(`
+        SELECT ep.* FROM extra_predictions ep
+        JOIN avatars av ON av.id=ep.avatar_id
+        WHERE ep.match_id=$1 AND av.tournament_id=$2`,[m.id,tid])
+      for(const ep of extras){
+        const epts=calcExtraPoints(ep,result)
+        await pool.query('UPDATE extra_predictions SET points_earned=$1 WHERE id=$2',[epts,ep.id])
+        extrasUpdated++
+      }
+    }
+    res.json({success:true,matchesProcessed:playedMatches.length,predictionsUpdated:predsUpdated,extrasUpdated})
+  }catch(e){console.error('admin recalc:',e);res.status(500).json({error:e.message})}
+})
+
 app.delete('/api/admin/users/:id', auth, tournamentAdmin, async(req,res)=>{
   try{
     const uid=req.params.id
@@ -1911,6 +1980,38 @@ app.get('/superadmin/courtesy', superAdmin, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message})}
 })
 
+// SUPERADMIN: recalcular puntos de TODAS las pollas — usa los resultados ya guardados en match_results
+// No modifica resultados, solo recalcula points_earned por pronóstico. Útil si hubo cambios de lógica de puntos.
+app.post('/superadmin/recalc-all', superAdmin, async(req,res)=>{
+  try{
+    const {rows:playedMatches}=await pool.query(`
+      SELECT m.id, m.phase,
+        r.score_home, r.score_away, r.had_penalties, r.penalty_winner,
+        r.yellow_cards, r.red_cards, r.penalties_count,
+        r.goals_first_half, r.goals_second_half, r.mvp_player
+      FROM matches m JOIN match_results r ON r.match_id=m.id`)
+    let predsUpdated=0, extrasUpdated=0
+    for(const m of playedMatches){
+      const result={match_id:m.id,score_home:m.score_home,score_away:m.score_away,had_penalties:m.had_penalties,penalty_winner:m.penalty_winner,
+        yellow_cards:m.yellow_cards,red_cards:m.red_cards,penalties_count:m.penalties_count,
+        goals_first_half:m.goals_first_half,goals_second_half:m.goals_second_half,mvp_player:m.mvp_player}
+      const {rows:preds}=await pool.query('SELECT * FROM predictions WHERE match_id=$1',[m.id])
+      for(const p of preds){
+        const pts=calcPoints(p,result,m.phase)
+        await pool.query('UPDATE predictions SET points_earned=$1 WHERE id=$2',[pts,p.id])
+        predsUpdated++
+      }
+      const {rows:extras}=await pool.query('SELECT * FROM extra_predictions WHERE match_id=$1',[m.id])
+      for(const ep of extras){
+        const epts=calcExtraPoints(ep,result)
+        await pool.query('UPDATE extra_predictions SET points_earned=$1 WHERE id=$2',[epts,ep.id])
+        extrasUpdated++
+      }
+    }
+    res.json({success:true,matchesProcessed:playedMatches.length,predictionsUpdated:predsUpdated,extrasUpdated})
+  }catch(e){console.error('recalc-all:',e);res.status(500).json({error:e.message})}
+})
+
 
 // Panel HTML del super admin
 app.get('/superadmin', superAdmin, async(req,res)=>{
@@ -1925,8 +2026,6 @@ app.get('/superadmin', superAdmin, async(req,res)=>{
     const pendingPay=rows.filter(r=>!r.is_active&&r.slug!=='demo').length
     const revenue=(active*3.99).toFixed(2)
 
-    const safeStr=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')
-
     const rows_html=rows.map(t=>{
       const paid=t.is_active
       const isDemo=t.slug==='demo'
@@ -1935,22 +2034,24 @@ app.get('/superadmin', superAdmin, async(req,res)=>{
         :paid
           ?`<span class="badge badge-green">✅ Pagada</span>`
           :`<span class="badge badge-amber">⏳ Pend. pago</span>`
+      // Escape for HTML attribute (use data-* attributes instead of inline JS args for safety)
+      const escAttr=s=>String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       return `
-      <div class="t-row" onclick="viewTournament('${safeStr(t.id)}','${safeStr(t.name)}','${safeStr(t.slug)}')">
+      <div class="t-row" data-tid="${escAttr(t.id)}" data-tname="${escAttr(t.name)}" data-tslug="${escAttr(t.slug)}">
         <div class="t-cell">
-          <div class="t-name">${t.name}</div>
-          <div class="t-slug">/t/${t.slug}</div>
+          <div class="t-name">${escAttr(t.name)}</div>
+          <div class="t-slug">/t/${escAttr(t.slug)}</div>
         </div>
         <div class="t-cell">
-          <div class="t-admin">${t.owner_name}</div>
-          <div class="t-email">${t.owner_email}</div>
+          <div class="t-admin">${escAttr(t.owner_name)}</div>
+          <div class="t-email">${escAttr(t.owner_email)}</div>
         </div>
         <div class="t-cell">${statusBadge}</div>
         <div class="t-cell t-center"><strong>${t.user_count}</strong></div>
         <div class="t-cell t-date">${new Date(t.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'2-digit'})}</div>
-        <div class="t-cell t-actions" onclick="event.stopPropagation()">
-          <button class="btn-act btn-view-t" onclick="viewTournament('${safeStr(t.id)}','${safeStr(t.name)}','${safeStr(t.slug)}')">Ver →</button>
-          <button class="btn-act btn-del" onclick="delTournament('${safeStr(t.id)}','${safeStr(t.name)}')">Eliminar</button>
+        <div class="t-cell t-actions">
+          <button class="btn-act btn-view-t" data-action="view">Ver →</button>
+          <button class="btn-act btn-del" data-action="del">Eliminar</button>
         </div>
       </div>`}).join('')
 
@@ -2074,6 +2175,16 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
     <div class="stat"><div class="stat-n amber">${pendingPay}</div><div class="stat-l">Pendientes de pago</div></div>
     <div class="stat"><div class="stat-n gold">$${revenue}</div><div class="stat-l">Ingresos USD</div></div>
   </div>
+
+  <!-- ACTUALIZAR PUNTOS GLOBAL -->
+  <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1rem 1.25rem;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:.95rem;letter-spacing:1px;color:var(--ink)">🔄 ACTUALIZAR PUNTOS GLOBALMENTE</div>
+      <div style="font-size:11px;color:var(--ink3);margin-top:2px">Recalcula los puntos de TODAS las pollas según los resultados ya ingresados. No borra nada — solo re-aplica la fórmula de puntos.</div>
+    </div>
+    <button onclick="recalcAll()" id="btn-recalc" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔄 Recalcular ahora</button>
+  </div>
+  <div id="recalc-result" style="margin-bottom:1rem"></div>
 
   <!-- COURTESY SECTION -->
   <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--gold-border);border-radius:var(--r-lg);padding:1.25rem 1.5rem">
@@ -2272,6 +2383,51 @@ function copyCourtesyLink(url){
   })
 }
 
+async function recalcAll(){
+  if(!confirm('¿Recalcular los puntos de TODAS las pollas? Esto puede tardar unos segundos. No borra nada — solo re-aplica la fórmula de puntos sobre los resultados ya ingresados.')) return
+  var btn=document.getElementById('btn-recalc')
+  var resEl=document.getElementById('recalc-result')
+  btn.disabled=true; btn.textContent='Recalculando...'
+  resEl.innerHTML='<div style="font-size:12px;color:var(--ink3)">Procesando...</div>'
+  try{
+    var r=await fetch('/superadmin/recalc-all',{method:'POST',headers:{'x-super-key':KEY}})
+    var d=await r.json()
+    if(!r.ok){
+      resEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.75rem 1rem;font-size:12px;font-weight:700">Error: '+(d.error||'desconocido')+'</div>'
+    }else{
+      resEl.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:8px;padding:.75rem 1rem;font-size:12px;font-weight:700">✅ Recalculado · '+d.matchesProcessed+' partidos · '+d.predictionsUpdated+' pronósticos · '+d.extrasUpdated+' extras</div>'
+    }
+  }catch(e){
+    resEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.75rem 1rem;font-size:12px;font-weight:700">Error: '+e.message+'</div>'
+  }
+  btn.disabled=false; btn.textContent='🔄 Recalcular ahora'
+}
+
+// Bind event listeners to all row buttons and rows (delegated, more robust than inline onclick)
+function bindRowHandlers(){
+  document.querySelectorAll('.t-row').forEach(function(row){
+    var tid=row.dataset.tid, tname=row.dataset.tname, tslug=row.dataset.tslug
+    // Whole row opens detail view
+    row.addEventListener('click',function(e){
+      // If a button inside was clicked, the button handler will run first; we still want to open detail
+      // unless action button (view/del) handles it
+      if(e.target.dataset.action) return
+      viewTournament(tid,tname,tslug)
+    })
+    // Buttons inside the row
+    row.querySelectorAll('button[data-action]').forEach(function(btn){
+      btn.addEventListener('click',function(e){
+        e.stopPropagation()
+        e.preventDefault()
+        var action=btn.dataset.action
+        if(action==='view') viewTournament(tid,tname,tslug)
+        else if(action==='del') delTournament(tid,tname)
+      })
+    })
+  })
+}
+
+bindRowHandlers()
 loadCourtesy()
 </script>
 </body>
