@@ -2637,7 +2637,7 @@ async function saResetResult(){
   if(!matchId){ msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Selecciona el partido</div>'; return }
   var m=saMatches.find(function(x){return x.id===matchId})
   var nombre=m?('#'+m.match_num+' '+(m.team1||'?')+' vs '+(m.team2||'?')):('#'+matchId)
-  if(!confirm('¿Resetear el resultado del partido '+nombre+'?\n\nEsto borra el marcador oficial y pone en 0 los puntos de este partido en TODAS las pollas.\n\nLos pronósticos de los usuarios NO se borran — quedan intactos para cuando el partido se juegue de verdad.')) return
+  if(!confirm('¿Resetear el resultado del partido '+nombre+'? Esto borra el marcador oficial y pone en 0 los puntos de este partido en TODAS las pollas. Los pronósticos de los usuarios NO se borran.')) return
   var btn=document.getElementById('sa-reset-btn')
   btn.disabled=true; btn.textContent='Reseteando...'
   try{
