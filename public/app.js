@@ -2741,9 +2741,10 @@ function RankingPage(){
             {PODIUM_ORDER.map(pos=>{
               const r=top3[pos]
               if(!r) return <div key={pos} className="pod-col"/>
-              const heights=[130,160,110]
-              const sizes=[40,50,36]
-              const colors=['linear-gradient(135deg,#C0C0C0,#E0E0E0)','linear-gradient(135deg,#C8A84B,#F6C90E)','linear-gradient(135deg,#CD7F32,#D4913A)']
+              // Indexed by rank: pos 0 = 1st place (tallest, gold), 1 = 2nd (silver), 2 = 3rd (bronze)
+              const heights=[160,130,110]
+              const sizes=[50,40,36]
+              const colors=['linear-gradient(135deg,#C8A84B,#F6C90E)','linear-gradient(135deg,#C0C0C0,#E0E0E0)','linear-gradient(135deg,#CD7F32,#D4913A)']
               return(
                 <div key={r.id} className="pod-col">
                   <div className="pod-face" style={{fontSize:pos===0?'1.6rem':'1.4rem'}}><MedalRank rank={r.rank}/></div>
