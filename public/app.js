@@ -2726,39 +2726,12 @@ function RankingPage(){
 
   if(loading) return <div className="page"><Nav/><Spinner/></div>
 
-  const PODIUM_ORDER=[1,0,2] // Silver, Gold, Bronze positioning
-
   return(
     <div className="page">
       <Nav/>
       <div className="container pad">
         <h2 style={{fontFamily:'Bebas Neue',fontSize:'1.5rem',marginBottom:'.25rem'}}>🏅 RANKING</h2>
         <p className="text-muted text-xs mb2">Se actualiza en tiempo real · {ranking.length} participantes activos</p>
-
-        {/* Podium top 3 */}
-        {top3.length>0&&(
-          <div className="podium">
-            {PODIUM_ORDER.map(pos=>{
-              const r=top3[pos]
-              if(!r) return <div key={pos} className="pod-col"/>
-              // Indexed by rank: pos 0 = 1st place (tallest, gold), 1 = 2nd (silver), 2 = 3rd (bronze)
-              const heights=[160,130,110]
-              const sizes=[50,40,36]
-              const colors=['linear-gradient(135deg,#C8A84B,#F6C90E)','linear-gradient(135deg,#C0C0C0,#E0E0E0)','linear-gradient(135deg,#CD7F32,#D4913A)']
-              return(
-                <div key={r.id} className="pod-col">
-                  <div className="pod-face" style={{fontSize:pos===0?'1.6rem':'1.4rem'}}><MedalRank rank={r.rank}/></div>
-                  <AvatarCircle nickname={r.nickname} photoUrl={r.photo_url} size={sizes[pos]} style={{marginBottom:'5px'}}/>
-                  <div style={{fontWeight:700,fontSize:'10px',color:'var(--ink)',marginBottom:'4px',textAlign:'center',maxWidth:'70px',lineHeight:'1.2'}}>{r.nickname}</div>
-                  <div className="pod-bar" style={{height:heights[pos]+'px',background:colors[pos],borderRadius:'.75rem .75rem 0 0'}}>
-                    <div style={{fontFamily:'Bebas Neue',fontSize:'1.3rem',color:'rgba(26,24,20,.7)'}}>{r.total_pts}</div>
-                    <div style={{fontSize:'9px',color:'rgba(26,24,20,.5)'}}>pts</div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
 
         {/* Rest of ranking */}
         <div className="rank-list">
