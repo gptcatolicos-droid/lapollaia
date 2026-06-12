@@ -2874,12 +2874,54 @@ function ResultsPage(){
 function AdminRanking(){
   const [ranking,setRanking]=React.useState([])
   const [loading,setLoading]=React.useState(true)
+  const [editingAv,setEditingAv]=React.useState(null) // avatar object being edited
+  const [adjVal,setAdjVal]=React.useState('')
+  const [adjReason,setAdjReason]=React.useState('')
+  const [savingAdj,setSavingAdj]=React.useState(false)
+  const [recalcing,setRecalcing]=React.useState(false)
+  const [msg,setMsg]=React.useState(null)
+
+  function loadRanking(){
+    api('/api/ranking').then(data=>{setRanking(data||[]);setLoading(false)}).catch(()=>setLoading(false))
+  }
 
   React.useEffect(()=>{
-    api('/api/ranking').then(data=>{setRanking(data||[]);setLoading(false)}).catch(()=>setLoading(false))
-    const id=setInterval(()=>api('/api/ranking').then(d=>setRanking(d||[])).catch(()=>{}),30000)
+    loadRanking()
+    const id=setInterval(loadRanking,30000)
     return()=>clearInterval(id)
   },[])
+
+  function openEdit(av){
+    setEditingAv(av)
+    setAdjVal(av.adjustment_pts!=null?String(av.adjustment_pts):'0')
+    setAdjReason(av.adjustment_reason||'')
+    setMsg(null)
+  }
+
+  async function saveAdjustment(){
+    if(!editingAv) return
+    const adj=parseInt(adjVal,10)
+    if(isNaN(adj)){setMsg({type:'error',text:'Ingresa un número válido'});return}
+    setSavingAdj(true)
+    try{
+      await api(`/api/admin/avatars/${editingAv.id}/adjustment`,'PUT',{adjustment:adj,reason:adjReason.trim()||null})
+      setMsg({type:'success',text:`✅ Puntos ajustados para ${editingAv.nickname}`})
+      setEditingAv(null)
+      loadRanking()
+    }catch(e){setMsg({type:'error',text:e.message})}
+    setSavingAdj(false)
+  }
+
+  async function recalcAll(){
+    if(!confirm('¿Recalcular puntos de todos los participantes? Esto vuelve a calcular los aciertos según los resultados ya ingresados. No borra nada.')) return
+    setRecalcing(true); setMsg(null)
+    try{
+      const d=await api('/api/admin/recalc','POST')
+      setMsg({type:'success',text:`✅ Recalculado: ${d.predictionsUpdated} pronósticos · ${d.extrasUpdated} extras en ${d.matchesProcessed} partidos`})
+      loadRanking()
+    }catch(e){setMsg({type:'error',text:e.message})}
+    setRecalcing(false)
+  }
 
   if(loading) return <Spinner/>
 
@@ -2887,12 +2929,53 @@ function AdminRanking(){
 
   return(
     <div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+      {msg&&<Alert type={msg.type}>{msg.text}</Alert>}
+
+      {/* Edit adjustment modal */}
+      {editingAv&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}}
+          onClick={(e)=>{if(e.target===e.currentTarget)setEditingAv(null)}}>
+          <div className="card" style={{maxWidth:420,width:'100%',padding:'1.25rem'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:'1rem'}}>
+              <AvatarCircle nickname={editingAv.nickname} photoUrl={editingAv.photo_url} size={40}/>
+              <div>
+                <div style={{fontWeight:700,fontSize:14}}>Ajustar puntos · {editingAv.nickname}</div>
+                <div style={{fontSize:11,color:'var(--ink3)'}}>{editingAv.user_name}</div>
+              </div>
+            </div>
+            <div style={{background:'var(--cream2)',borderRadius:8,padding:'10px 12px',marginBottom:'1rem',fontSize:11,lineHeight:1.6,color:'var(--ink2)'}}>
+              <div><strong>Puntos actuales:</strong> {editingAv.total_pts}</div>
+              <div style={{color:'var(--ink3)'}}>· Registro: +{editingAv.registration_pts||0}</div>
+              <div style={{color:'var(--ink3)'}}>· Aciertos partidos: {editingAv.hits||0} aciertos</div>
+              <div style={{color:'var(--ink3)'}}>· Ajuste manual actual: {editingAv.adjustment_pts||0}</div>
+              {editingAv.adjustment_reason&&<div style={{color:'var(--ink3)',marginTop:4}}><em>"{editingAv.adjustment_reason}"</em></div>}
+            </div>
+            <div className="form-group">
+              <label>Ajuste de puntos (+/-)</label>
+              <input className="inp" type="number" value={adjVal} onChange={e=>setAdjVal(e.target.value)} placeholder="Ej: -20 para restar, 5 para sumar" min="-1000" max="1000"/>
+              <div style={{fontSize:10,color:'var(--ink3)',marginTop:4}}>Este valor REEMPLAZA el ajuste anterior. Si quieres anularlo, pon 0.</div>
+            </div>
+            <div className="form-group">
+              <label>Motivo (opcional)</label>
+              <input className="inp" value={adjReason} onChange={e=>setAdjReason(e.target.value)} placeholder="Ej: Corrección por error en marcador"/>
+            </div>
+            <div style={{display:'flex',gap:8,marginTop:'1rem'}}>
+              <button className="btn btn-outline btn-sm" style={{flex:1}} onClick={()=>setEditingAv(null)} disabled={savingAdj}>Cancelar</button>
+              <button className="btn btn-gold btn-sm" style={{flex:1}} onClick={saveAdjustment} disabled={savingAdj}>{savingAdj?'Guardando...':'💾 Guardar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem',gap:8,flexWrap:'wrap'}}>
         <div>
           <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',letterSpacing:1,color:'var(--ink)'}}>🏅 RANKING EN TIEMPO REAL</div>
           <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:2}}>{ranking.length} participante{ranking.length!==1?'s':''} activo{ranking.length!==1?'s':''} · actualiza cada 30s</div>
         </div>
-        <button className="btn btn-outline btn-sm" onClick={()=>{setLoading(true);api('/api/ranking').then(d=>{setRanking(d||[]);setLoading(false)}).catch(()=>setLoading(false))}}>🔄 Actualizar</button>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          <button className="btn btn-outline btn-sm" onClick={recalcAll} disabled={recalcing}>{recalcing?'Recalculando...':'🔄 Recalcular puntos'}</button>
+          <button className="btn btn-outline btn-sm" onClick={loadRanking}>↻ Actualizar</button>
+        </div>
       </div>
 
       {ranking.length===0?(
@@ -2902,41 +2985,51 @@ function AdminRanking(){
           <div style={{fontSize:12}}>Aprueba participantes en la pestaña Participantes para que aparezcan aquí.</div>
         </div>
       ):(
+        <>
+        {/* Info banner about points breakdown */}
+        <div style={{background:'var(--gold-bg)',border:'1px solid var(--gold-border)',borderRadius:8,padding:'8px 12px',marginBottom:'.75rem',fontSize:'11px',color:'var(--ink2)',lineHeight:1.5}}>
+          💡 <strong>Cómo se calculan los puntos:</strong> +20 pts por registro · puntos por pronóstico de partidos (aciertos) · puntos por Extra Points (amarillas, MVP, etc.) · puntos por trivia y predicciones especiales (Balón de Oro, etc.) · ajustes manuales del admin. Es normal ver participantes con 0 aciertos de partidos pero algunos puntos por registro. Si ves inconsistencias, usa el botón ✏️ para ajustar puntos manualmente.
+        </div>
         <div className="card" style={{padding:0,overflow:'hidden'}}>
-          <div style={{display:'grid',gridTemplateColumns:'40px 1fr 64px 64px 70px',background:'var(--cream2)',borderBottom:'1px solid var(--border)'}}>
-            {['#','Jugador','Aciertos','Pronóst.','Puntos'].map(h=>(
-              <div key={h} style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',padding:'9px 8px'}}>{h}</div>
+          <div style={{display:'grid',gridTemplateColumns:'40px 1fr 60px 60px 70px 36px',background:'var(--cream2)',borderBottom:'1px solid var(--border)'}}>
+            {['#','Jugador','Aciertos','Pronóst.','Puntos',''].map((h,i)=>(
+              <div key={i} style={{fontSize:'10px',fontWeight:700,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',padding:'9px 6px'}}>{h}</div>
             ))}
           </div>
           {ranking.map((r,i)=>(
-            <div key={r.id} style={{display:'grid',gridTemplateColumns:'40px 1fr 64px 64px 70px',
+            <div key={r.id} style={{display:'grid',gridTemplateColumns:'40px 1fr 60px 60px 70px 36px',
               borderBottom:'1px solid var(--border)',alignItems:'center',
               background:i===0?'rgba(200,168,75,.07)':i===1?'rgba(192,192,192,.04)':i===2?'rgba(205,127,50,.04)':'transparent'}}>
               <div style={{padding:'10px',textAlign:'center',fontSize:'16px'}}>
-                {i<3?MEDAL[i]:<span style={{fontSize:'12px',fontWeight:700,color:'var(--ink3)'}}>{r.rank}</span>}
+                {i<3?MEDAL[i]:<span style={{fontSize:'12px',fontWeight:700,color:'var(--ink3)'}}>{r.rank||(i+1)}</span>}
               </div>
               <div style={{padding:'8px 6px'}}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <AvatarCircle nickname={r.nickname} photoUrl={r.photo_url} size={30}/>
                   <div style={{minWidth:0}}>
                     <div style={{fontSize:'12px',fontWeight:700,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.nickname}</div>
-                    <div style={{fontSize:'10px',color:'var(--ink3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.user_name}</div>
+                    <div style={{fontSize:'10px',color:'var(--ink3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.user_name}{r.adjustment_pts?` · ✏️ ajuste ${r.adjustment_pts>0?'+':''}${r.adjustment_pts}`:''}</div>
                   </div>
                 </div>
               </div>
-              <div style={{padding:'10px 8px',textAlign:'center'}}>
+              <div style={{padding:'10px 6px',textAlign:'center'}}>
                 <span style={{fontSize:'13px',fontWeight:700,color:'var(--green)'}}>{r.hits||0}</span>
               </div>
-              <div style={{padding:'10px 8px',textAlign:'center'}}>
+              <div style={{padding:'10px 6px',textAlign:'center'}}>
                 <span style={{fontSize:'12px',color:'var(--ink2)'}}>{r.matches_predicted||0}</span>
               </div>
-              <div style={{padding:'10px',textAlign:'right',paddingRight:12}}>
+              <div style={{padding:'10px',textAlign:'right',paddingRight:6}}>
                 <div style={{fontFamily:'Bebas Neue',fontSize:'1.25rem',color:'var(--gold)'}}>{r.total_pts||0}</div>
                 <div style={{fontSize:'9px',color:'var(--ink3)'}}>pts</div>
+              </div>
+              <div style={{padding:'10px 6px',textAlign:'center'}}>
+                <button onClick={()=>openEdit(r)} title="Ajustar puntos manualmente"
+                  style={{background:'transparent',border:'1px solid var(--border2)',borderRadius:6,padding:'4px 6px',cursor:'pointer',fontSize:11}}>✏️</button>
               </div>
             </div>
           ))}
         </div>
+        </>
       )}
     </div>
   )
@@ -3552,20 +3645,40 @@ function KnockoutMatchRow({match,onSave,saving}){
 
 function AdminResults(){
   const {matches}=useApp()
-  const [form,setForm]=React.useState({matchId:'',home:'',away:'',hadPen:false,penWinner:'',
+  const [selectedId,setSelectedId]=React.useState(null)
+  const [form,setForm]=React.useState({home:'',away:'',hadPen:false,penWinner:'',
     yellow:'',red:'',penCount:'',g1h:'',g2h:'',mvp:'',champWinner:'',surprise:'',
     balonDeOro:'',guanteDeOro:'',botaDeOro:''})
   const [loading,setLoading]=React.useState(false)
   const [msg,setMsg]=React.useState(null)
+  const [phaseFilter,setPhaseFilter]=React.useState('all')
+
+  const selectedMatch=(matches||[]).find(m=>+m.id===+selectedId)
   const upd=k=>e=>setForm(p=>({...p,[k]:e.type==='checkbox'?e.target.checked:e.target.value}))
 
-  const selectedMatch=(matches||[]).find(m=>+m.id===+form.matchId)
+  // When a match is selected, pre-fill the form with its existing values (so edits aren't lost)
+  React.useEffect(()=>{
+    if(!selectedMatch){setForm({home:'',away:'',hadPen:false,penWinner:'',yellow:'',red:'',penCount:'',g1h:'',g2h:'',mvp:'',champWinner:'',surprise:'',balonDeOro:'',guanteDeOro:'',botaDeOro:''});return}
+    setForm({
+      home:selectedMatch.r_home!=null?String(selectedMatch.r_home):'',
+      away:selectedMatch.r_away!=null?String(selectedMatch.r_away):'',
+      hadPen:!!selectedMatch.had_penalties,
+      penWinner:selectedMatch.penalty_winner||'',
+      yellow:selectedMatch.yellow_cards!=null?String(selectedMatch.yellow_cards):'',
+      red:selectedMatch.red_cards!=null?String(selectedMatch.red_cards):'',
+      penCount:selectedMatch.penalties_count!=null?String(selectedMatch.penalties_count):'',
+      g1h:selectedMatch.goals_first_half!=null?String(selectedMatch.goals_first_half):'',
+      g2h:selectedMatch.goals_second_half!=null?String(selectedMatch.goals_second_half):'',
+      mvp:selectedMatch.mvp_player||'',
+      champWinner:'',surprise:'',balonDeOro:'',guanteDeOro:'',botaDeOro:''
+    })
+  },[selectedId])
 
   async function submit(e){
     e.preventDefault(); setLoading(true); setMsg(null)
     try{
       const data=await api('/api/admin/results','POST',{
-        matchId:+form.matchId,home:+form.home,away:+form.away,
+        matchId:+selectedId,home:+form.home,away:+form.away,
         hadPenalties:form.hadPen,penaltyWinner:form.penWinner||null,
         yellowCards:form.yellow?+form.yellow:null,redCards:form.red?+form.red:null,
         penaltiesCount:form.penCount?+form.penCount:null,
@@ -3574,96 +3687,163 @@ function AdminResults(){
         surpriseTeamReached:form.surprise||null,balonDeOro:form.balonDeOro||null,
         guanteDeOro:form.guanteDeOro||null,botaDeOro:form.botaDeOro||null
       })
-      setMsg({type:'success',text:`✅ Resultado guardado · ${data.updated} pronósticos actualizados · ${data.extraUpdated} extras`})
+      setMsg({type:'success',text:`✅ Resultado guardado · ${data.updated||0} pronósticos · ${data.extraUpdated||data.extras_updated||0} extras actualizados`})
+      // Reload page after 1.5s to refresh matches data
+      setTimeout(()=>window.location.reload(),1500)
     }catch(e){setMsg({type:'error',text:e.message})}
     setLoading(false)
   }
 
-  const playedMatches=(matches||[]).filter(m=>m.r_home!=null)
-  const pendingMatches=(matches||[]).filter(m=>m.r_home==null&&(m.team1||m.label))
+  const phases=['group','round32','round16','quarters','semis','third','final']
+  const filteredMatches=phaseFilter==='all'?(matches||[]):(matches||[]).filter(m=>m.phase===phaseFilter)
+  const playedCount=(matches||[]).filter(m=>m.r_home!=null).length
+  const totalCount=(matches||[]).length
 
+  // If a match is selected, show the form. Otherwise show the match list.
+  if(selectedMatch){
+    const hasResult=selectedMatch.r_home!=null
+    return(
+      <div>
+        {msg&&<Alert type={msg.type}>{msg.text}</Alert>}
+        <div className="card">
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem',gap:8,flexWrap:'wrap'}}>
+            <button className="btn btn-outline btn-sm" onClick={()=>{setSelectedId(null);setMsg(null)}} type="button">← Volver a la lista</button>
+            {hasResult&&<span style={{fontSize:'10px',background:'var(--green-bg)',color:'var(--green)',border:'1px solid var(--green-border)',padding:'3px 8px',borderRadius:6,fontWeight:700}}>✅ Resultado registrado · Modo edición</span>}
+          </div>
+          <div style={{background:'var(--cream2)',borderRadius:10,padding:'10px 14px',marginBottom:'1rem',fontSize:'13px',fontWeight:600,textAlign:'center'}}>
+            #{selectedMatch.match_num} · {f(selectedMatch.team1)} {es(selectedMatch.team1)} <span style={{color:'var(--ink3)'}}>vs</span> {es(selectedMatch.team2)} {f(selectedMatch.team2)}
+            <div style={{fontSize:'10px',color:'var(--ink3)',fontWeight:400,marginTop:2}}>{formatDateShort(selectedMatch.match_date)} · {PHASE_LABELS[selectedMatch.phase]||selectedMatch.phase}</div>
+          </div>
+          <form onSubmit={submit}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.65rem'}}>
+              <div className="form-group"><label>Goles {es(selectedMatch.team1)}</label><input className="inp" type="number" min="0" value={form.home} onChange={upd('home')} required/></div>
+              <div className="form-group"><label>Goles {es(selectedMatch.team2)}</label><input className="inp" type="number" min="0" value={form.away} onChange={upd('away')} required/></div>
+            </div>
+            <div className="check-row">
+              <div className={`chk ${form.hadPen?'chk-on':''}`} onClick={()=>setForm(p=>({...p,hadPen:!p.hadPen}))}>
+                {form.hadPen&&'✓'}
+              </div>
+              <span>¿Hubo definición por penales?</span>
+            </div>
+            {form.hadPen&&(
+              <div className="form-group mt1">
+                <label>Ganador en penales</label>
+                <select className="inp" value={form.penWinner} onChange={upd('penWinner')}>
+                  <option value="">— Selecciona —</option>
+                  {[selectedMatch.team1,selectedMatch.team2].filter(Boolean).map(t=>(
+                    <option key={t} value={t}>{f(t)} {es(t)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="divider"/>
+            <div style={{fontWeight:700,fontSize:'10px',color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'.5rem'}}>Extra Points (opcional)</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'.6rem'}}>
+              {[
+                {k:'yellow',l:'🟨 Amarillas'},{k:'red',l:'🟥 Rojas'},
+                {k:'penCount',l:'⚡ Penales'},{k:'g1h',l:'⚽ Goles 1T'},{k:'g2h',l:'⚽ Goles 2T'},
+              ].map(({k,l})=>(
+                <div key={k} className="form-group" style={{marginBottom:0}}>
+                  <label style={{fontSize:'9px'}}>{l}</label>
+                  <input className="inp" type="number" min="0" value={form[k]} onChange={upd(k)}/>
+                </div>
+              ))}
+            </div>
+            <div className="form-group">
+              <label>🏅 MVP del partido</label>
+              <input className="inp" value={form.mvp} onChange={upd('mvp')} placeholder="Nombre del jugador..."/>
+            </div>
+
+            {selectedMatch.phase==='final'&&(
+              <>
+                <div className="divider"/>
+                <div style={{fontWeight:700,fontSize:'10px',color:'var(--gold)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'.5rem'}}>🏆 Premios Finales</div>
+                <div className="form-group"><label>⭐ Balón de Oro</label><input className="inp" value={form.balonDeOro} onChange={upd('balonDeOro')} placeholder="Jugador..."/></div>
+                <div className="form-group"><label>🧤 Guante de Oro</label><input className="inp" value={form.guanteDeOro} onChange={upd('guanteDeOro')} placeholder="Portero..."/></div>
+                <div className="form-group"><label>👟 Bota de Oro</label><input className="inp" value={form.botaDeOro} onChange={upd('botaDeOro')} placeholder="Goleador..."/></div>
+                <div className="form-group"><label>😲 Equipo sorpresa que llegó más lejos</label>
+                  <select className="inp" value={form.surprise} onChange={upd('surprise')}>
+                    <option value="">— Selecciona —</option>
+                    {ALL_TEAMS.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
+
+            <button className="btn btn-gold btn-full" disabled={loading}>
+              {loading?'Guardando y calculando...':hasResult?'💾 Actualizar resultado y recalcular':'💾 Guardar resultado y calcular puntos'}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // Match list view
   return(
     <div>
       {msg&&<Alert type={msg.type}>{msg.text}</Alert>}
-      <div className="card">
-        <div style={{fontWeight:700,fontSize:'12px',marginBottom:'.75rem',color:'var(--ink3)',textTransform:'uppercase'}}>Ingresar resultado</div>
-        <form onSubmit={submit}>
-          <div className="form-group">
-            <label>Partido</label>
-            <select className="inp" value={form.matchId} onChange={upd('matchId')} required>
-              <option value="">— Selecciona partido —</option>
-              <optgroup label="Pendientes">
-                {pendingMatches.map(m=><option key={m.id} value={m.id}>#{m.match_num} · {teamDisp(m.team1)} vs {teamDisp(m.team2)} {m.label&&'·'+m.label}</option>)}
-              </optgroup>
-              <optgroup label="Ya ingresados">
-                {playedMatches.map(m=><option key={m.id} value={m.id}>#{m.match_num} · {teamDisp(m.team1)} vs {teamDisp(m.team2)} ({m.r_home}-{m.r_away})</option>)}
-              </optgroup>
-            </select>
-          </div>
-          {selectedMatch&&(
-            <div style={{background:'var(--cream2)',borderRadius:8,padding:'8px 10px',marginBottom:'.75rem',fontSize:'12px'}}>
-              {f(selectedMatch.team1)} {es(selectedMatch.team1)} vs {es(selectedMatch.team2)} {f(selectedMatch.team2)} · {formatDateShort(selectedMatch.match_date)}
-            </div>
-          )}
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.65rem'}}>
-            <div className="form-group"><label>Goles local</label><input className="inp" type="number" min="0" value={form.home} onChange={upd('home')} required/></div>
-            <div className="form-group"><label>Goles visitante</label><input className="inp" type="number" min="0" value={form.away} onChange={upd('away')} required/></div>
-          </div>
-          <div className="check-row">
-            <div className={`chk ${form.hadPen?'chk-on':''}`} onClick={()=>setForm(p=>({...p,hadPen:!p.hadPen}))}>
-              {form.hadPen&&'✓'}
-            </div>
-            <span>¿Hubo definición por penales?</span>
-          </div>
-          {form.hadPen&&(
-            <div className="form-group mt1">
-              <label>Ganador en penales</label>
-              <select className="inp" value={form.penWinner} onChange={upd('penWinner')}>
-                <option value="">— Selecciona —</option>
-                {selectedMatch&&[selectedMatch.team1,selectedMatch.team2].filter(Boolean).map(t=>(
-                  <option key={t} value={t}>{f(t)} {es(t)}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="divider"/>
-          <div style={{fontWeight:700,fontSize:'10px',color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'.5rem'}}>Extra Points</div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.5rem',marginBottom:'.6rem'}}>
-            {[
-              {k:'yellow',l:'🟨 Amarillas'},{k:'red',l:'🟥 Rojas'},
-              {k:'penCount',l:'⚡ Penales'},{k:'g1h',l:'⚽ Goles 1T'},{k:'g2h',l:'⚽ Goles 2T'},
-            ].map(({k,l})=>(
-              <div key={k} className="form-group" style={{marginBottom:0}}>
-                <label style={{fontSize:'9px'}}>{l}</label>
-                <input className="inp" type="number" min="0" value={form[k]} onChange={upd(k)}/>
-              </div>
-            ))}
-          </div>
-          <div className="form-group">
-            <label>🏅 MVP del partido</label>
-            <input className="inp" value={form.mvp} onChange={upd('mvp')} placeholder="Nombre del jugador..."/>
-          </div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem',flexWrap:'wrap',gap:8}}>
+        <div>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',letterSpacing:1,color:'var(--ink)'}}>📊 RESULTADOS DE PARTIDOS</div>
+          <div style={{fontSize:'11px',color:'var(--ink3)',marginTop:2}}>{playedCount} de {totalCount} partidos con resultado · Click en un partido para ingresar o editar</div>
+        </div>
+      </div>
 
-          {selectedMatch?.phase==='final'&&(
-            <>
-              <div className="divider"/>
-              <div style={{fontWeight:700,fontSize:'10px',color:'var(--gold)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:'.5rem'}}>🏆 Premios Finales</div>
-              <div className="form-group"><label>⭐ Balón de Oro</label><input className="inp" value={form.balonDeOro} onChange={upd('balonDeOro')} placeholder="Jugador..."/></div>
-              <div className="form-group"><label>🧤 Guante de Oro</label><input className="inp" value={form.guanteDeOro} onChange={upd('guanteDeOro')} placeholder="Portero..."/></div>
-              <div className="form-group"><label>👟 Bota de Oro</label><input className="inp" value={form.botaDeOro} onChange={upd('botaDeOro')} placeholder="Goleador..."/></div>
-              <div className="form-group"><label>😲 Equipo sorpresa que llegó más lejos</label>
-                <select className="inp" value={form.surprise} onChange={upd('surprise')}>
-                  <option value="">— Selecciona —</option>
-                  {ALL_TEAMS.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
-                </select>
-              </div>
-            </>
-          )}
+      {/* Phase filter */}
+      <div style={{display:'flex',gap:6,overflowX:'auto',paddingBottom:8,marginBottom:'1rem',scrollbarWidth:'none'}}>
+        <button onClick={()=>setPhaseFilter('all')} style={{flexShrink:0,padding:'.35rem .75rem',borderRadius:50,border:'1.5px solid',cursor:'pointer',fontSize:'10px',fontWeight:600,whiteSpace:'nowrap',
+          background:phaseFilter==='all'?'var(--ink)':'transparent',color:phaseFilter==='all'?'var(--cream)':'var(--ink3)',borderColor:phaseFilter==='all'?'var(--ink)':'var(--border2)'}}>
+          Todos ({totalCount})
+        </button>
+        {phases.map(ph=>{
+          const count=(matches||[]).filter(m=>m.phase===ph).length
+          if(count===0) return null
+          return(
+            <button key={ph} onClick={()=>setPhaseFilter(ph)} style={{flexShrink:0,padding:'.35rem .75rem',borderRadius:50,border:'1.5px solid',cursor:'pointer',fontSize:'10px',fontWeight:600,whiteSpace:'nowrap',
+              background:phaseFilter===ph?'var(--ink)':'transparent',color:phaseFilter===ph?'var(--cream)':'var(--ink3)',borderColor:phaseFilter===ph?'var(--ink)':'var(--border2)'}}>
+              {PHASE_LABELS[ph]} ({count})
+            </button>
+          )
+        })}
+      </div>
 
-          <button className="btn btn-gold btn-full" disabled={loading||!form.matchId}>
-            {loading?'Guardando y calculando...':'💾 Guardar resultado y recalcular puntos'}
-          </button>
-        </form>
+      {/* Match list */}
+      <div className="card" style={{padding:0,overflow:'hidden'}}>
+        {filteredMatches.length===0?(
+          <div style={{padding:'2rem 1rem',textAlign:'center',color:'var(--ink3)',fontSize:13}}>No hay partidos en esta fase.</div>
+        ):filteredMatches.map((m,i)=>{
+          const hasResult=m.r_home!=null
+          const teamLabel=(m.team1||m.team2)?`${f(m.team1)} ${es(m.team1)} vs ${es(m.team2)} ${f(m.team2)}`:m.label||`Partido #${m.match_num}`
+          return(
+            <div key={m.id} onClick={()=>{setSelectedId(m.id);setMsg(null);window.scrollTo(0,0)}}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',
+                borderBottom:i<filteredMatches.length-1?'1px solid var(--border)':'none',
+                cursor:'pointer',
+                background:hasResult?'rgba(46,204,113,.04)':'transparent',
+                transition:'background .12s'}}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--cream2)'}
+              onMouseLeave={e=>e.currentTarget.style.background=hasResult?'rgba(46,204,113,.04)':'transparent'}>
+              <div style={{minWidth:34,textAlign:'center',fontSize:'11px',fontWeight:700,color:'var(--ink3)'}}>#{m.match_num}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:'12px',fontWeight:600,color:'var(--ink)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{teamLabel}</div>
+                <div style={{fontSize:'10px',color:'var(--ink3)',marginTop:1}}>{formatDateShort(m.match_date)} · {PHASE_LABELS[m.phase]||m.phase}</div>
+              </div>
+              {hasResult?(
+                <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                  <div style={{fontFamily:'Bebas Neue',fontSize:'1.1rem',color:'var(--ink)',background:'var(--white)',border:'1.5px solid var(--green-border)',borderRadius:8,padding:'2px 10px',minWidth:48,textAlign:'center'}}>
+                    {m.r_home}–{m.r_away}
+                  </div>
+                  <span style={{fontSize:'9px',color:'var(--green)',fontWeight:700}}>✅</span>
+                </div>
+              ):(
+                <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                  <span style={{fontSize:'10px',color:'var(--gold)',background:'var(--gold-bg)',border:'1px solid var(--gold-border)',padding:'3px 9px',borderRadius:6,fontWeight:700}}>Ingresar →</span>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
