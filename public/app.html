@@ -24,13 +24,7 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-  <script>
-    // Force classic JSX runtime so Babel doesn't generate ES module imports
-    Babel.registerPreset('react-classic', {
-      presets: [['react', { runtime: 'classic' }]]
-    });
-  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script type="text/babel" src="/app.js?v=20260616b" data-presets="react-classic"></script>
+  <script type="text/babel" src="/app.js?v=20260616e" data-plugins="transform-react-jsx"></script>
 </body>
 </html>
