@@ -139,6 +139,17 @@ function formatDateShort(d){
   if(!d) return '—'
   return new Date(d).toLocaleString('es-CO',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
 }
+function formatMatchDay(d){
+  if(!d) return 'Por definir'
+  const dt=new Date(d), now=new Date()
+  const same=dt.toDateString()===now.toDateString()
+  if(same) return 'Hoy'
+  return dt.toLocaleDateString('es-CO',{day:'2-digit',month:'short'})
+}
+function formatMatchTime(d){
+  if(!d) return ''
+  return new Date(d).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})
+}
 
 function isLocked(match){
   if(match.phase_locked) return true
@@ -146,8 +157,16 @@ function isLocked(match){
   const hours = match.auto_lock_hours||2
   return Date.now()>=new Date(match.match_date).getTime()-hours*3600000
 }
+function hasTeams(match){ return !!(match?.team1&&match?.team2) }
+function isTodayMatch(match){ return !!match?.match_date && new Date(match.match_date).toDateString()===new Date().toDateString() }
 
 function getWinner(h,a){ return +h>+a?'home':+h<+a?'away':'draw' }
+function isKnockoutPhase(phase){ return phase && phase!=='group' }
+function needsPenaltyPick(match,scoreForm){
+  if(!isKnockoutPhase(match?.phase)||!scoreForm) return false
+  if(scoreForm.home===''||scoreForm.away==='') return false
+  return parseInt(scoreForm.home)===parseInt(scoreForm.away)
+}
 
 function generateAvatarColor(str){
   const colors=[
@@ -821,8 +840,9 @@ function TriviaSection(){
 
 
 function DashboardPage(){
-  const {user,setView,tournament}=useApp()
+  const {user,setView,tournament,matches,activeAvatar}=useApp()
   const [stats,setStats]=React.useState(null)
+  const [predictions,setPredictions]=React.useState({})
 
   React.useEffect(()=>{
     if(!user) return
@@ -837,6 +857,18 @@ function DashboardPage(){
       }
     }).catch(()=>{ setStats({total:0,played:0,position:null}) })
   },[user])
+  React.useEffect(()=>{
+    if(activeAvatar?.id) api(`/api/predictions/${activeAvatar.id}`).then(d=>setPredictions(d.predictions||{})).catch(()=>{})
+  },[activeAvatar])
+
+  const schedulePreview=React.useMemo(()=>{
+    const list=(matches||[]).filter(m=>{
+      if(!hasTeams(m)) return false
+      if(isTodayMatch(m)) return true
+      return m.phase!=='group'&&!isLocked(m)&&!predictions[m.id]
+    }).sort((a,b)=>new Date(a.match_date||0)-new Date(b.match_date||0))
+    return list.slice(0,5)
+  },[matches,predictions])
 
   return(
     <div className="page">
@@ -865,6 +897,33 @@ function DashboardPage(){
             <div className="stat-card"><div className={'stat-n'+(stats.total>0?' stat-n-gold':'')}>{stats.total}</div><div className="stat-l">Puntos</div></div>
             <div className="stat-card"><div className="stat-n">{stats.played}</div><div className="stat-l">Jugados</div></div>
             <div className="stat-card"><div className={'stat-n'+(stats.position?' stat-n-gold':'')}>{stats.position||'—'}</div><div className="stat-l">Posición</div></div>
+          </div>
+        )}
+
+        {schedulePreview.length>0&&(
+          <div style={{background:'var(--white)',border:'1px solid var(--border)',borderRadius:14,padding:'12px 14px',marginBottom:'1rem'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+              <div style={{fontWeight:800,fontSize:13,color:'var(--ink)'}}>Partidos de hoy y llaves disponibles</div>
+              <button className="btn btn-outline btn-sm" onClick={()=>setView('board')}>Ver tablero</button>
+            </div>
+            {schedulePreview.map(m=>{
+              const pred=predictions[m.id]
+              const editable=!isLocked(m)
+              return(
+                <div key={m.id} onClick={()=>setView('board')}
+                  style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,padding:'9px 0',borderTop:'1px solid var(--border)',cursor:'pointer'}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:'var(--ink)'}}>{f(m.team1)} {es(m.team1)} <span style={{color:'var(--ink3)'}}>vs</span> {es(m.team2)} {f(m.team2)}</div>
+                    <div style={{fontSize:10,color:'var(--ink3)',marginTop:2}}>{PHASE_LABELS[m.phase]}{m.group_name?` · Grupo ${m.group_name}`:''} · {m.venue}</div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:11,fontWeight:700,color:'var(--ink2)'}}>{formatMatchDay(m.match_date)}</div>
+                    <div style={{fontSize:10,color:'var(--ink3)'}}>{formatMatchTime(m.match_date)}</div>
+                    <div style={{fontSize:9,color:pred?'var(--green)':editable?'var(--gold)':'var(--red)',fontWeight:700,marginTop:2}}>{pred?'Pronosticado':editable?'Disponible':'Bloqueado'}</div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -1103,14 +1162,16 @@ function ChatPage(){
   const [loadingMsg,setLoadingMsg]=React.useState(false)
   const [saving,setSaving]=React.useState(false)
   const bottomRef=React.useRef(null)
+  const allGroups=['A','B','C','D','E','F','G','H','I','J','K','L']
+  const knockoutPhaseLabels={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Gran Final'}
 
   const groupMatches=React.useMemo(()=>{
     if(!currentGroupKey||!matches) return []
-    return matches.filter(m=>m.phase==='group'&&m.group_name===currentGroupKey)
+    if(allGroups.includes(currentGroupKey))
+      return matches.filter(m=>m.phase==='group'&&m.group_name===currentGroupKey)
+    return matches.filter(m=>m.phase===currentGroupKey&&m.team1&&m.team2)
   },[matches,currentGroupKey])
   const currentMatch=groupMatches[currentMatchIdx]
-
-  const allGroups=['A','B','C','D','E','F','G','H','I','J','K','L']
 
   // doneCounts: predictions already entered per group
   // availableCounts: unlocked matches per group (for the "done" ✓ check)
@@ -1121,7 +1182,7 @@ function ChatPage(){
       const ms=(matches||[]).filter(m=>m.phase==='group'&&m.group_name===g)
       dc[g]=ms.filter(m=>predictions[m.id]!=null).length
       ac[g]=ms.filter(m=>{
-        if(!m.match_date) return false
+        if(!m.match_date||!m.team1||!m.team2) return false
         const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
         return !m.phase_locked && now < lockTime
       }).length
@@ -1144,7 +1205,7 @@ function ChatPage(){
     allGroups.forEach(g=>{
       const gms = (matchList||[]).filter(m=>m.phase==='group'&&m.group_name===g)
       const hasPending = gms.some(m=>{
-        if(!m.match_date) return false
+        if(!m.match_date||!m.team1||!m.team2) return false
         const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
         const locked = m.phase_locked || now >= lockTime
         return !locked && !preds[m.id]
@@ -1161,7 +1222,7 @@ function ChatPage(){
       const gms = (matchList||[]).filter(m=>m.phase==='group'&&m.group_name===g)
       const hasDone = gms.some(m=>preds[m.id]!=null)
       const hasPending = gms.some(m=>{
-        if(!m.match_date) return false
+        if(!m.match_date||!m.team1||!m.team2) return false
         const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
         const locked = m.phase_locked || now >= lockTime
         return !locked && !preds[m.id]
@@ -1184,7 +1245,7 @@ function ChatPage(){
 
       // Count available (unlocked) matches
       const availableMatches = (matches||[]).filter(m=>{
-        if(!m.match_date) return false
+        if(!m.match_date||!m.team1||!m.team2) return false
         const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
         return !m.phase_locked && now < lockTime
       })
@@ -1283,7 +1344,7 @@ function ChatPage(){
     setAutofillStep(0)
     const now2 = Date.now()
     const pendingCount = (matches||[]).filter(m=>{
-      if(!m.match_date) return false
+      if(!m.match_date||!m.team1||!m.team2) return false
       const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
       if(m.phase_locked||now2>=lt) return false
       if(predictions[m.id]!=null) return false
@@ -1396,7 +1457,7 @@ function ChatPage(){
 
     // Find first match that is not locked and has no prediction yet
     let startIdx = ms.findIndex(m=>{
-      if(!m.match_date) return false
+      if(!m.match_date||!m.team1||!m.team2) return false
       const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
       const locked = m.phase_locked || now >= lockTime
       return !locked && !predictions[m.id]
@@ -1404,7 +1465,7 @@ function ChatPage(){
     // If all have predictions or all locked, start at first unlocked (for editing)
     if(startIdx === -1){
       startIdx = ms.findIndex(m=>{
-        if(!m.match_date) return false
+        if(!m.match_date||!m.team1||!m.team2) return false
         const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
         return !m.phase_locked && now < lockTime
       })
@@ -1415,7 +1476,7 @@ function ChatPage(){
     setCurrentMatchIdx(startIdx)
 
     const lockedCount = ms.filter(m=>{
-      if(!m.match_date) return false
+      if(!m.match_date||!m.team1||!m.team2) return false
       const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
       return m.phase_locked || now >= lockTime
     }).length
@@ -1484,6 +1545,11 @@ function ChatPage(){
 
   async function confirmScore(){
     if(!currentMatch||!activeAvatar) return
+    if(needsPenaltyPick(currentMatch,scoreForm)&&!scoreForm.pen){
+      addMsg('pele','En llaves, si pronosticas empate necesito saber quién gana por penales.')
+      setChatPhase('confirm')
+      return
+    }
     setSaving(true)
     try{
       const h=parseInt(scoreForm.home)||0, a=parseInt(scoreForm.away)||0
@@ -1524,7 +1590,7 @@ function ChatPage(){
     let nextIdx = currentMatchIdx + 1
     while(nextIdx < groupMatches.length){
       const m = groupMatches[nextIdx]
-      if(!m.match_date){ nextIdx++; continue }
+      if(!m.match_date||!m.team1||!m.team2){ nextIdx++; continue }
       const lockTime = new Date(m.match_date).getTime() - (m.auto_lock_hours||2)*3600000
       const locked = m.phase_locked || now >= lockTime
       if(!locked) break
@@ -1533,10 +1599,12 @@ function ChatPage(){
     if(nextIdx < groupMatches.length){
       const next = groupMatches[nextIdx]
       const total = groupMatches.length
-      addMsg('pele',`✅ Guardado — partido ${nextIdx}/${total} del Grupo ${currentGroupKey}. Siguiente ⚽`,'ok')
+      const stageLabel = allGroups.includes(currentGroupKey) ? `Grupo ${currentGroupKey}` : (knockoutPhaseLabels[currentGroupKey]||PHASE_LABELS[currentGroupKey]||currentGroupKey)
+      addMsg('pele',`✅ Guardado — partido ${nextIdx}/${total} de ${stageLabel}. Siguiente ⚽`,'ok')
       showMatchStats(next, nextIdx)
     } else {
-      addMsg('pele',`🎉 ¡Grupo ${currentGroupKey} completado! (${groupMatches.length}/${groupMatches.length} partidos) — ¿Cuál grupo seguimos?`,'ok')
+      const stageLabel = allGroups.includes(currentGroupKey) ? `Grupo ${currentGroupKey}` : (knockoutPhaseLabels[currentGroupKey]||PHASE_LABELS[currentGroupKey]||currentGroupKey)
+      addMsg('pele',`🎉 ¡${stageLabel} completado! (${groupMatches.length}/${groupMatches.length} partidos) — ¿Qué seguimos?`,'ok')
       addMsg('pele','__GROUP_DONE__','group_done')
       setChatPhase('group_select')
     }
@@ -1574,7 +1642,7 @@ function ChatPage(){
       {/* Phase strip */}
       {currentGroupKey&&(
         <div className="phase-bar">
-          <div className={`ph ph-on`}>Grupo {currentGroupKey}</div>
+          <div className={`ph ph-on`}>{allGroups.includes(currentGroupKey)?`Grupo ${currentGroupKey}`:(knockoutPhaseLabels[currentGroupKey]||PHASE_LABELS[currentGroupKey]||currentGroupKey)}</div>
           {allGroups.filter(g=>g!==currentGroupKey).map(g=>(
             <div key={g} className={`ph ${isGroupDone(g)?'ph-done':''}`} onClick={()=>selectGroup(g)} style={{cursor:'pointer'}}>
               {isGroupDone(g)?'✓ ':''}{g}
@@ -1696,7 +1764,7 @@ function ChatPage(){
                 const KNOCKOUT_PHASES=['round32','round16','quarters','semis','third','final']
                 const KNOCKOUT_LABELS={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Gran Final'}
                 const availableKnockout = KNOCKOUT_PHASES.filter(ph=>(matches||[]).some(m=>{
-                  if(m.phase!==ph||!m.match_date) return false
+                  if(m.phase!==ph||!m.match_date||!m.team1||!m.team2) return false
                   const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
                   return !m.phase_locked && now<lt && !predictions[m.id]
                 }))
@@ -1741,13 +1809,13 @@ function ChatPage(){
                           {availableKnockout.map(ph=>{
                             const phMs=(matches||[]).filter(m=>m.phase===ph)
                             const phDone=phMs.filter(m=>predictions[m.id]!=null).length
-                            const phTotal=phMs.filter(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
+                            const phTotal=phMs.filter(m=>{if(!m.match_date||!m.team1||!m.team2)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
                             return(
                               <button key={ph}
                                 onClick={()=>{
                                   setCurrentGroupKey(ph)
                                   const ms=(matches||[]).filter(m=>m.phase===ph)
-                                  const first=ms.find(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
+                                  const first=ms.find(m=>{if(!m.match_date||!m.team1||!m.team2)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
                                   if(first){addMsg('pele',`⚽ ${KNOCKOUT_LABELS[ph]} — ¡Vamos!`);setChatPhase('stats');setTimeout(()=>showMatchStats(first,ms.indexOf(first)),400)}
                                 }}
                                 style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:'2px',padding:'8px 10px',
@@ -1817,7 +1885,7 @@ function ChatPage(){
                 const KNOCKOUT_PHASES=['round32','round16','quarters','semis','third','final']
                 const KNOCKOUT_LABELS={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Gran Final'}
                 const availableKnockout = KNOCKOUT_PHASES.filter(ph=>(matches||[]).some(m=>{
-                  if(m.phase!==ph||!m.match_date) return false
+                  if(m.phase!==ph||!m.match_date||!m.team1||!m.team2) return false
                   const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000
                   return !m.phase_locked && now<lt && !predictions[m.id]
                 }))
@@ -1862,13 +1930,13 @@ function ChatPage(){
                           {availableKnockout.map(ph=>{
                             const phMs=(matches||[]).filter(m=>m.phase===ph)
                             const phDone=phMs.filter(m=>predictions[m.id]!=null).length
-                            const phTotal=phMs.filter(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
+                            const phTotal=phMs.filter(m=>{if(!m.match_date||!m.team1||!m.team2)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt}).length
                             return(
                               <button key={ph}
                                 onClick={()=>{
                                   setCurrentGroupKey(ph)
                                   const ms=(matches||[]).filter(m=>m.phase===ph)
-                                  const first=ms.find(m=>{if(!m.match_date)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
+                                  const first=ms.find(m=>{if(!m.match_date||!m.team1||!m.team2)return false;const lt=new Date(m.match_date).getTime()-(m.auto_lock_hours||2)*3600000;return !m.phase_locked&&now<lt&&!predictions[m.id]})||ms[0]
                                   if(first){addMsg('pele',`⚽ ${KNOCKOUT_LABELS[ph]} — ¡Vamos!`);setChatPhase('stats');setTimeout(()=>showMatchStats(first,ms.indexOf(first)),400)}
                                 }}
                                 style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:'2px',padding:'8px 10px',
@@ -1995,6 +2063,8 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
   const s1=TEAM_STATS[t1]||{rank:'?',notes:'Datos en actualización'}
   const s2=TEAM_STATS[t2]||{rank:'?',notes:'Datos en actualización'}
   const locked=isLocked(match)
+  const mustPickPen=needsPenaltyPick(match,scoreForm)
+  const savedPen=pred?.penalty_winner
   return(
     <div className="stats-card" style={{marginBottom:'.25rem'}}>
       <div className="sc-head">
@@ -2020,7 +2090,7 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
         {locked?(<div className="chip" style={{fontSize:'10px',background:'var(--red)',color:'#fff'}}>🔒 Cerrado</div>)
         :scoreForm&&setScoreForm&&onSave?(
           <div style={{marginTop:'.5rem'}}>
-            {pred&&<div className="chip chip-g" style={{fontSize:'10px',marginBottom:'.5rem'}}>✓ Pronóstico guardado: {pred.score_home} – {pred.score_away}</div>}
+            {pred&&<div className="chip chip-g" style={{fontSize:'10px',marginBottom:'.5rem'}}>✓ Pronóstico guardado: {pred.score_home} – {pred.score_away}{savedPen?` · Penales: ${es(savedPen)}`:''}</div>}
             <div style={{display:'flex',alignItems:'center',gap:'8px',justifyContent:'center',marginBottom:'.5rem'}}>
               <span style={{fontSize:'12px',fontWeight:600}}>{f(t1)}</span>
               <input type="number" min="0" max="20" value={scoreForm?.home||''} onChange={e=>setScoreForm(p=>({...p,home:e.target.value}))}
@@ -2032,16 +2102,28 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
                   border:'2px solid var(--gold)',borderRadius:'6px',background:'var(--cream)',color:'var(--ink)',padding:'4px'}}/>
               <span style={{fontSize:'12px',fontWeight:600}}>{f(t2)}</span>
             </div>
+            {mustPickPen&&(
+              <div style={{marginBottom:'.55rem'}}>
+                <div style={{fontSize:'10px',fontWeight:800,color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.4px',marginBottom:'4px',textAlign:'center'}}>Ganador por penales</div>
+                <select value={scoreForm?.pen||''} onChange={e=>setScoreForm(p=>({...p,pen:e.target.value}))}
+                  style={{width:'100%',border:'1.5px solid var(--gold)',borderRadius:'6px',background:'var(--cream)',color:'var(--ink)',padding:'7px 9px',fontFamily:'inherit',fontSize:'12px',fontWeight:700}}>
+                  <option value="">Selecciona ganador</option>
+                  <option value={t1}>{f(t1)} {es(t1)}</option>
+                  <option value={t2}>{f(t2)} {es(t2)}</option>
+                </select>
+                <div style={{fontSize:'10px',color:'var(--ink3)',marginTop:'3px',textAlign:'center'}}>+2 pts si aciertas la definición</div>
+              </div>
+            )}
             <div className="btn-row" style={{marginTop:'.5rem'}}>
               {onSuggest&&<button className="btn btn-outline btn-sm" style={{flex:1}} onClick={onSuggest}>💡 Sugiéreme</button>}
-              <button className="btn btn-gold" style={{flex:2}} onClick={onSave} disabled={saving||scoreForm?.home===''||scoreForm?.away===''}>
+              <button className="btn btn-gold" style={{flex:2}} onClick={onSave} disabled={saving||scoreForm?.home===''||scoreForm?.away===''||(mustPickPen&&!scoreForm?.pen)}>
                 {saving?'Guardando...':'💾 Guardar marcador'}
               </button>
             </div>
           </div>
         ):(
           pred
-            ?<div className="chip chip-g" style={{fontSize:'10px'}}>✓ Tu pronóstico: {pred.score_home} – {pred.score_away}</div>
+            ?<div className="chip chip-g" style={{fontSize:'10px'}}>✓ Tu pronóstico: {pred.score_home} – {pred.score_away}{savedPen?` · Penales: ${es(savedPen)}`:''}</div>
             :null
         )}
       </div>
@@ -2052,6 +2134,8 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
 function ConfirmCard({match,home,away,onOk,onEdit,saving,scoreForm,setScoreForm}){
   const h=parseInt(home)||0, a=parseInt(away)||0
   const winner=h>a?match.team1:h<a?match.team2:'Empate'
+  const mustPickPen=needsPenaltyPick(match,scoreForm||{home,away,pen:''})
+  const penaltyWinner=scoreForm?.pen||''
   return(
     <div className="confirm-card" style={{marginBottom:'.25rem'}}>
       <div className="cc-head">
@@ -2071,9 +2155,21 @@ function ConfirmCard({match,home,away,onOk,onEdit,saving,scoreForm,setScoreForm}
           <div className="cct"><span className="cct-flag">{f(match.team2)}</span><div className="cct-name">{es(match.team2)}</div></div>
         </div>
         <div className="cc-agree">✅ Resultado: {winner==='Empate'?'Empate':es(winner)+' gana'}</div>
+        {mustPickPen&&setScoreForm&&(
+          <div style={{marginBottom:'.75rem'}}>
+            <div style={{fontSize:'10px',fontWeight:800,color:'rgba(247,244,238,.6)',textTransform:'uppercase',letterSpacing:'.4px',marginBottom:'4px'}}>Ganador por penales</div>
+            <select value={penaltyWinner} onChange={e=>setScoreForm(p=>({...p,pen:e.target.value}))}
+              style={{width:'100%',border:'1.5px solid rgba(247,244,238,.25)',borderRadius:'6px',background:'rgba(247,244,238,.08)',color:'var(--cream)',padding:'8px 10px',fontFamily:'inherit',fontSize:'12px',fontWeight:700}}>
+              <option value="">Selecciona ganador</option>
+              <option value={match.team1}>{f(match.team1)} {es(match.team1)}</option>
+              <option value={match.team2}>{f(match.team2)} {es(match.team2)}</option>
+            </select>
+            <div style={{fontSize:'10px',color:'rgba(247,244,238,.55)',marginTop:'4px'}}>Bono: +2 pts si aciertas la definición.</div>
+          </div>
+        )}
         <div style={{display:'flex',gap:'.5rem'}}>
           <button className="btn btn-outline btn-sm" onClick={onEdit}>✏️ Editar</button>
-          <button className="btn btn-green" style={{flex:1}} onClick={onOk} disabled={saving}>
+          <button className="btn btn-green" style={{flex:1}} onClick={onOk} disabled={saving||(mustPickPen&&!penaltyWinner)}>
             {saving?'Guardando...':'✓ Confirmar este pronóstico'}
           </button>
         </div>
@@ -2615,7 +2711,7 @@ function BracketViz({bracket,onUpdate,locked}){
 function BoardPage(){
   const {user,matches,activeAvatar,setView}=useApp()
   const [predictions,setPredictions]=React.useState({})
-  const [filterPhase,setFilterPhase]=React.useState('all')
+  const [filterPhase,setFilterPhase]=React.useState('today')
   const [filterGroup,setFilterGroup]=React.useState('all')
   const [loading,setLoading]=React.useState(true)
 
@@ -2625,10 +2721,16 @@ function BoardPage(){
     setLoading(false)
   },[activeAvatar])
 
-  const phases=['group','round32','round16','quarters','semis','third','final']
+  const phases=['today','group','round32','round16','quarters','semis','third','final']
+  const phaseShort={today:'Hoy',group:'Grupos',round32:'R32',round16:'R16',quarters:'QF',semis:'SF',third:'3RD',final:'Final'}
   const groups=['A','B','C','D','E','F','G','H','I','J','K','L']
 
   const filtered=(matches||[]).filter(m=>{
+    if(filterPhase==='today'){
+      if(!hasTeams(m)) return false
+      if(isTodayMatch(m)) return true
+      return m.phase!=='group'&&!isLocked(m)&&!predictions[m.id]
+    }
     if(filterPhase!=='all'&&m.phase!==filterPhase) return false
     if(filterGroup!=='all'&&filterPhase==='group'&&m.group_name!==filterGroup) return false
     return true
@@ -2656,7 +2758,7 @@ function BoardPage(){
         <div style={{overflowX:'auto',paddingBottom:'5px',marginBottom:'1rem'}}>
           <div style={{display:'flex',gap:'5px',whiteSpace:'nowrap'}}>
             <div className={`ph ${filterPhase==='all'?'ph-on':''}`} style={{cursor:'pointer'}} onClick={()=>setFilterPhase('all')}>Todos</div>
-            {phases.map(ph=><div key={ph} className={`ph ${filterPhase===ph?'ph-on':''}`} style={{cursor:'pointer'}} onClick={()=>setFilterPhase(ph)}>{PHASE_LABELS[ph]}</div>)}
+            {phases.map(ph=><div key={ph} className={`ph ${filterPhase===ph?'ph-on':''}`} style={{cursor:'pointer'}} onClick={()=>setFilterPhase(ph)}>{phaseShort[ph]||PHASE_LABELS[ph]}</div>)}
           </div>
         </div>
 
@@ -2670,7 +2772,9 @@ function BoardPage(){
         {Object.entries(grouped).map(([key,ms])=>{
           const ph=ms[0]?.phase
           const grp=ms[0]?.group_name
-          const header=ph==='group'?`Grupo ${grp} — ${PHASE_LABELS[ph]}`:PHASE_LABELS[ph]||key
+          const header=filterPhase==='today'
+            ? (isTodayMatch(ms[0])?'Hoy · '+formatMatchDay(ms[0].match_date):'Llaves disponibles')
+            : ph==='group'?`Grupo ${grp} — ${PHASE_LABELS[ph]}`:PHASE_LABELS[ph]||key
           return(
             <div key={key}>
               <div className="phase-header">{header}</div>
@@ -2688,10 +2792,10 @@ function BoardPage(){
                         :<span className="match-score" style={{color:'var(--cream3)'}}>vs</span>}
                       <span style={{flex:1}}>{es(m.team2)} {f(m.team2)}</span>
                     </div>
-                    <div className="match-meta">{formatDateShort(m.match_date)} · {m.venue}</div>
+                    <div className="match-meta">{formatMatchDay(m.match_date)} · {formatMatchTime(m.match_date)} · {m.venue}</div>
                     {pred&&(
                       <div className="match-pred">
-                        <span style={{color:'var(--ink3)'}}>Pronóstico: {pred.score_home}–{pred.score_away}</span>
+                        <span style={{color:'var(--ink3)'}}>Pronóstico: {pred.score_home}–{pred.score_away}{pred.penalty_winner?` · Penales: ${es(pred.penalty_winner)}`:''}</span>
                         {hasResult&&<span className={('pts-badge '+(pts>=PHASE_PTS[ph]?.exact?'pts-exact':pts>0?'pts-win':'pts-miss'))}>{pts>0?`+${pts}pts`:'Sin pts'}</span>}
                         <span className={`chip ${locked?'chip-r':'chip-g'}`} style={{fontSize:'8px'}}>{locked?'🔒 Bloqueado':'✏️ Editable'}</span>
                       </div>
@@ -3520,19 +3624,6 @@ function AdminLocks(){
     api('/api/admin/phase-locks').then(d=>{setLocks(d);setLoading(false)}).catch(()=>setLoading(false))
   },[])
 
-  async function toggle(phase,val){
-    try{
-      await api(`/api/admin/phase-locks/${phase}`,'PUT',{isLocked:val})
-      setLocks(ls=>ls.map(l=>l.phase===phase?{...l,is_locked:val}:l))
-    }catch(e){alert(e.message)}
-  }
-  async function setHours(phase,h){
-    try{
-      await api(`/api/admin/phase-locks/${phase}`,'PUT',{isLocked:locks.find(l=>l.phase===phase)?.is_locked,autoLockHours:+h})
-      setLocks(ls=>ls.map(l=>l.phase===phase?{...l,auto_lock_hours:+h}:l))
-    }catch(e){alert(e.message)}
-  }
-
   async function deleteUser(uid,name){
     if(!confirm(`¿Eliminar a "${name}" y todos sus datos? Esta acción no se puede deshacer.`)) return
     try{
@@ -3545,20 +3636,15 @@ function AdminLocks(){
   return(
     <div className="card">
       <div style={{fontWeight:700,fontSize:'12px',marginBottom:'.75rem',color:'var(--ink3)',textTransform:'uppercase',letterSpacing:'.5px'}}>Control de bloqueo por fase</div>
-      <div className="alert alert-info text-xs mb2">🔒 Bloquear una fase impide editar todos sus partidos. El auto-lock cierra cada partido individualmente N horas antes del pitazo.</div>
+      <div className="alert alert-info text-xs mb2">🔒 Los bloqueos y tiempos de cierre los controla el superadmin. Aquí solo ves el estado actual de tu polla.</div>
       {locks.map(l=>(
         <div key={l.phase} className="phase-lock-row">
           <div className="pl-info">
             <div className="pl-name">{PHASE_LABELS[l.phase]}</div>
-            <div className="pl-meta">Auto-lock:{' '}
-              <input type="number" min={0} max={72} value={l.auto_lock_hours||2} onChange={e=>setHours(l.phase,e.target.value)}
-                style={{width:45,border:'1px solid var(--border)',borderRadius:4,padding:'1px 4px',fontSize:11}}
-              /> h antes del partido
-            </div>
+            <div className="pl-meta">Cierre automático: {l.auto_lock_hours||2} h antes del partido</div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:'.5rem'}}>
             <span className={`chip ${l.is_locked?'chip-r':'chip-g'}`}>{l.is_locked?'🔒 Bloqueado':'🔓 Abierto'}</span>
-            <Toggle on={l.is_locked} onChange={v=>toggle(l.phase,v)}/>
           </div>
         </div>
       ))}
@@ -3568,29 +3654,39 @@ function AdminLocks(){
 
 function AdminTeams(){
   const {matches,setMatches}=useApp()
-  const [saving,setSaving]=React.useState({})
+  const [syncing,setSyncing]=React.useState(false)
+  const [msg,setMsg]=React.useState(null)
 
   const knockoutMatches=(matches||[]).filter(m=>m.phase!=='group')
 
-  async function updateMatch(id,team1,team2){
-    setSaving(s=>({...s,[id]:true}))
+  async function syncBracket(){
+    setSyncing(true); setMsg(null)
     try{
-      await api(`/api/admin/matches/${id}`,'PUT',{team1,team2})
-      setMatches(ms=>ms.map(m=>m.id===id?{...m,team1,team2}:m))
-      setSaving(s=>({...s,[id]:false}))
-    }catch(e){alert(e.message);setSaving(s=>({...s,[id]:false}))}
+      const d=await api('/api/admin/bracket/sync','POST',{})
+      const tid=window.__TOURNAMENT_ID__
+      const fresh=await api('/api/matches'+(tid?`?tournamentId=${encodeURIComponent(tid)}`:''))
+      setMatches(fresh)
+      setMsg({type:'success',text:`Llaves sincronizadas · ${d.changesCount||0} partidos actualizados${d.thirdPlaceCombination?` · terceros: ${d.thirdPlaceCombination}`:''}`})
+    }catch(e){setMsg({type:'error',text:e.message})}
+    setSyncing(false)
   }
 
   return(
     <div>
-      <div className="alert alert-info text-sm mb2">⚽ Asigna los equipos para las fases eliminatorias cuando FIFA confirme los clasificados.</div>
+      <div className="alert alert-info text-sm mb2">
+        ⚽ Las llaves se completan automáticamente con los resultados oficiales ya guardados. No se borran resultados, pronósticos, puntos, usuarios ni pollas.
+      </div>
+      {msg&&<Alert type={msg.type}>{msg.text}</Alert>}
+      <button className="btn btn-ink btn-sm mb2" onClick={syncBracket} disabled={syncing}>
+        {syncing?'Sincronizando...':'🔄 Sincronizar llaves ahora'}
+      </button>
       {Object.entries(PHASE_LABELS).filter(([ph])=>ph!=='group').map(([ph,label])=>{
         const phMs=knockoutMatches.filter(m=>m.phase===ph)
         if(!phMs.length) return null
         return(
           <div key={ph}>
             <div className="phase-header">{label}</div>
-            {phMs.map(m=><KnockoutMatchRow key={m.id} match={m} onSave={updateMatch} saving={saving[m.id]}/>)}
+            {phMs.map(m=><KnockoutMatchRow key={m.id} match={m}/>)}
           </div>
         )
       })}
@@ -3598,25 +3694,17 @@ function AdminTeams(){
   )
 }
 
-function KnockoutMatchRow({match,onSave,saving}){
-  const [t1,setT1]=React.useState(match.team1||'')
-  const [t2,setT2]=React.useState(match.team2||'')
+function KnockoutMatchRow({match}){
+  const hasTeams=!!(match.team1&&match.team2)
+  const hasResult=match.r_home!=null
   return(
     <div className="card-sm mb1">
       <div style={{fontSize:'10px',color:'var(--ink3)',marginBottom:'.5rem'}}>{match.label} · {formatDateShort(match.match_date)} · {match.venue}</div>
-      <div style={{display:'flex',gap:'.5rem',alignItems:'center'}}>
-        <select className="inp" style={{flex:1}} value={t1} onChange={e=>setT1(e.target.value)}>
-          <option value="">— Local —</option>
-          {ALL_TEAMS.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
-        </select>
+      <div style={{display:'flex',gap:'.5rem',alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{flex:1,textAlign:'right',fontWeight:700,color:hasTeams?'var(--ink)':'var(--ink3)'}}>{match.team1?`${f(match.team1)} ${es(match.team1)}`:'Por definir'}</div>
         <span style={{fontFamily:'Bebas Neue',fontSize:'1rem',color:'var(--cream3)'}}>VS</span>
-        <select className="inp" style={{flex:1}} value={t2} onChange={e=>setT2(e.target.value)}>
-          <option value="">— Visitante —</option>
-          {ALL_TEAMS.map(t=><option key={t} value={t}>{f(t)} {es(t)}</option>)}
-        </select>
-        <button className="btn btn-ink btn-sm" disabled={saving} onClick={()=>onSave(match.id,t1||null,t2||null)}>
-          {saving?'...':'💾'}
-        </button>
+        <div style={{flex:1,fontWeight:700,color:hasTeams?'var(--ink)':'var(--ink3)'}}>{match.team2?`${es(match.team2)} ${f(match.team2)}`:'Por definir'}</div>
+        {hasResult&&<span className="pts-badge pts-exact">{match.r_home}–{match.r_away}</span>}
       </div>
     </div>
   )
@@ -4049,7 +4137,7 @@ function AppRoot(){
         }catch(e){ setView('not_found'); return }
       }
       // Step 2: load matches (global, no tournament needed)
-      api('/api/matches').then(setMatches).catch(()=>{})
+      api('/api/matches'+(window.__TOURNAMENT_ID__?`?tournamentId=${encodeURIComponent(window.__TOURNAMENT_ID__)}`:'')).then(setMatches).catch(()=>{})
       // Step 3: auto-login from stored token
       const token=getToken()
       if(token){
