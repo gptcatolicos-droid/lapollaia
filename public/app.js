@@ -167,6 +167,13 @@ function needsPenaltyPick(match,scoreForm){
   if(scoreForm.home===''||scoreForm.away==='') return false
   return parseInt(scoreForm.home)===parseInt(scoreForm.away)
 }
+function penaltyText(pred){
+  if(!pred?.penalty_winner) return ''
+  const shootout = pred.penalty_score_home!=null&&pred.penalty_score_away!=null
+    ? ` ${pred.penalty_score_home}-${pred.penalty_score_away}`
+    : ''
+  return ` · Penales${shootout}: ${es(pred.penalty_winner)}`
+}
 
 function generateAvatarColor(str){
   const colors=[
@@ -1155,7 +1162,7 @@ function ChatPage(){
   const [currentGroupKey,setCurrentGroupKey]=React.useState(null)
   const [currentMatchIdx,setCurrentMatchIdx]=React.useState(0)
   const [inputVal,setInputVal]=React.useState('')
-  const [scoreForm,setScoreForm]=React.useState({home:'',away:'',pen:''})
+  const [scoreForm,setScoreForm]=React.useState({home:'',away:'',pen:'',penHome:'',penAway:''})
   const [extraForm,setExtraForm]=React.useState({yellow:'',red:'',pen_count:'',g1h:'',g2h:'',mvp:''})
   const [autofilling,setAutofilling]=React.useState(false)
   const [autofillStep,setAutofillStep]=React.useState(0)
@@ -1425,7 +1432,14 @@ function ChatPage(){
     } else if(chatPhase==='score_input'||chatPhase==='stats'||chatPhase==='confirm'){
       const m=text.match(/(\d+)\s*[-–a]\s*(\d+)/i)
       if(m){
-        setScoreForm({home:m[1],away:m[2],pen:''})
+        const nextForm={home:m[1],away:m[2],pen:'',penHome:'',penAway:''}
+        setScoreForm(nextForm)
+        if(needsPenaltyPick(currentMatch,nextForm)){
+          addMsg('pele','Empate en eliminatoria. Elige quién gana por penales para completar el pronóstico.')
+          addMsg('pele','__CONFIRM__','confirm')
+          setChatPhase('confirm')
+          return
+        }
         setTimeout(async()=>{
           if(!currentMatch||!activeAvatar) return
           setSaving(true)
@@ -1435,7 +1449,7 @@ function ChatPage(){
               avatarId:activeAvatar.id,matchId:currentMatch.id,home:h,away:a,penaltyWinner:null
             })
             setPredictions(p=>({...p,[currentMatch.id]:{score_home:h,score_away:a,penalty_winner:null}}))
-            setScoreForm({home:'',away:'',pen:''})
+            setScoreForm({home:'',away:'',pen:'',penHome:'',penAway:''})
             goToNextMatch()
           }catch(e){ addMsg('pele','❌ Error: '+e.message) }
           setSaving(false)
@@ -1506,10 +1520,12 @@ function ChatPage(){
       setScoreForm({
         home: String(existingPred.score_home ?? ''),
         away: String(existingPred.score_away ?? ''),
-        pen: existingPred.penalty_winner || ''
+        pen: existingPred.penalty_winner || '',
+        penHome: existingPred.penalty_score_home ?? '',
+        penAway: existingPred.penalty_score_away ?? ''
       })
     } else {
-      setScoreForm({home:'',away:'',pen:''})
+      setScoreForm({home:'',away:'',pen:'',penHome:'',penAway:''})
     }
     addMsg('pele','__STATS__','stats')
     addMsg('pele',existingPred
@@ -1535,7 +1551,7 @@ function ChatPage(){
         group:currentMatch.group_name||''
       })
       const h=data.home??1, a=data.away??0
-      setScoreForm({home:String(h),away:String(a),pen:''})
+      setScoreForm({home:String(h),away:String(a),pen:'',penHome:'',penAway:''})
       addMsg('pele',`💡 Mi análisis: **${es(t1)} ${h} – ${a} ${es(t2)}**\n${data.reason||''}`)
     }catch(e){
       addMsg('pele','No pude conectarme al análisis 😅 Pon el marcador que creas.')
@@ -1555,10 +1571,16 @@ function ChatPage(){
       const h=parseInt(scoreForm.home)||0, a=parseInt(scoreForm.away)||0
       await api('/api/predictions','POST',{
         avatarId:activeAvatar.id,matchId:currentMatch.id,home:h,away:a,
-        penaltyWinner:scoreForm.pen||null
+        penaltyWinner:scoreForm.pen||null,
+        penaltyHome:scoreForm.penHome===''?null:+scoreForm.penHome,
+        penaltyAway:scoreForm.penAway===''?null:+scoreForm.penAway
       })
-      setPredictions(p=>({...p,[currentMatch.id]:{score_home:h,score_away:a,penalty_winner:scoreForm.pen||null}}))
-      setScoreForm({home:'',away:'',pen:''})
+      setPredictions(p=>({...p,[currentMatch.id]:{
+        score_home:h,score_away:a,penalty_winner:scoreForm.pen||null,
+        penalty_score_home:scoreForm.penHome===''?null:+scoreForm.penHome,
+        penalty_score_away:scoreForm.penAway===''?null:+scoreForm.penAway
+      }}))
+      setScoreForm({home:'',away:'',pen:'',penHome:'',penAway:''})
       // Immediately advance — no Extra Points blocking
       goToNextMatch()
     }catch(e){ addMsg('pele','❌ Error guardando: '+e.message) }
@@ -2064,7 +2086,6 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
   const s2=TEAM_STATS[t2]||{rank:'?',notes:'Datos en actualización'}
   const locked=isLocked(match)
   const mustPickPen=needsPenaltyPick(match,scoreForm)
-  const savedPen=pred?.penalty_winner
   return(
     <div className="stats-card" style={{marginBottom:'.25rem'}}>
       <div className="sc-head">
@@ -2090,7 +2111,7 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
         {locked?(<div className="chip" style={{fontSize:'10px',background:'var(--red)',color:'#fff'}}>🔒 Cerrado</div>)
         :scoreForm&&setScoreForm&&onSave?(
           <div style={{marginTop:'.5rem'}}>
-            {pred&&<div className="chip chip-g" style={{fontSize:'10px',marginBottom:'.5rem'}}>✓ Pronóstico guardado: {pred.score_home} – {pred.score_away}{savedPen?` · Penales: ${es(savedPen)}`:''}</div>}
+            {pred&&<div className="chip chip-g" style={{fontSize:'10px',marginBottom:'.5rem'}}>✓ Pronóstico guardado: {pred.score_home} – {pred.score_away}{penaltyText(pred)}</div>}
             <div style={{display:'flex',alignItems:'center',gap:'8px',justifyContent:'center',marginBottom:'.5rem'}}>
               <span style={{fontSize:'12px',fontWeight:600}}>{f(t1)}</span>
               <input type="number" min="0" max="20" value={scoreForm?.home||''} onChange={e=>setScoreForm(p=>({...p,home:e.target.value}))}
@@ -2123,7 +2144,7 @@ function MatchStatsCard({match,predictions,scoreForm,setScoreForm,onSave,onSugge
           </div>
         ):(
           pred
-            ?<div className="chip chip-g" style={{fontSize:'10px'}}>✓ Tu pronóstico: {pred.score_home} – {pred.score_away}{savedPen?` · Penales: ${es(savedPen)}`:''}</div>
+            ?<div className="chip chip-g" style={{fontSize:'10px'}}>✓ Tu pronóstico: {pred.score_home} – {pred.score_away}{penaltyText(pred)}</div>
             :null
         )}
       </div>
@@ -2164,6 +2185,13 @@ function ConfirmCard({match,home,away,onOk,onEdit,saving,scoreForm,setScoreForm}
               <option value={match.team1}>{f(match.team1)} {es(match.team1)}</option>
               <option value={match.team2}>{f(match.team2)} {es(match.team2)}</option>
             </select>
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:'6px',alignItems:'center',marginTop:'6px'}}>
+              <input type="number" min="0" max="20" value={scoreForm?.penHome||''} onChange={e=>setScoreForm(p=>({...p,penHome:e.target.value}))} placeholder="Pen."
+                style={{width:'100%',border:'1.5px solid rgba(247,244,238,.25)',borderRadius:'6px',background:'rgba(247,244,238,.08)',color:'var(--cream)',padding:'7px',fontFamily:'inherit',fontSize:'12px',fontWeight:700,textAlign:'center'}}/>
+              <span style={{fontFamily:'Bebas Neue',color:'rgba(247,244,238,.45)'}}>—</span>
+              <input type="number" min="0" max="20" value={scoreForm?.penAway||''} onChange={e=>setScoreForm(p=>({...p,penAway:e.target.value}))} placeholder="Pen."
+                style={{width:'100%',border:'1.5px solid rgba(247,244,238,.25)',borderRadius:'6px',background:'rgba(247,244,238,.08)',color:'var(--cream)',padding:'7px',fontFamily:'inherit',fontSize:'12px',fontWeight:700,textAlign:'center'}}/>
+            </div>
             <div style={{fontSize:'10px',color:'rgba(247,244,238,.55)',marginTop:'4px'}}>Bono: +2 pts si aciertas la definición.</div>
           </div>
         )}
@@ -2708,12 +2736,135 @@ function BracketViz({bracket,onUpdate,locked}){
 
 
 // ─── BOARD PAGE ───────────────────────────────────────────────────────────────
+function PredictionEditorModal({match,pred,onClose,onSaved}){
+  const [form,setForm]=React.useState(()=>({
+    home: pred?.score_home ?? '',
+    away: pred?.score_away ?? '',
+    pen: pred?.penalty_winner || '',
+    penHome: pred?.penalty_score_home ?? '',
+    penAway: pred?.penalty_score_away ?? ''
+  }))
+  const [saving,setSaving]=React.useState(false)
+  const [err,setErr]=React.useState('')
+  const {activeAvatar}=useApp()
+  const mustPickPen=needsPenaltyPick(match,form)
+  const locked=isLocked(match)
+  const setScore=k=>e=>{
+    const val=e.target.value
+    setForm(p=>{
+      const next={...p,[k]:val}
+      if(k==='home'||k==='away'){
+        const nextNeeds=needsPenaltyPick(match,next)
+        if(!nextNeeds) return {...next,pen:'',penHome:'',penAway:''}
+      }
+      return next
+    })
+  }
+  const setPenScore=k=>e=>{
+    const val=e.target.value
+    setForm(p=>{
+      const next={...p,[k]:val}
+      const ph=next.penHome===''?null:+next.penHome
+      const pa=next.penAway===''?null:+next.penAway
+      if(ph!=null&&pa!=null&&ph!==pa) next.pen=ph>pa?match.team1:match.team2
+      return next
+    })
+  }
+
+  async function save(){
+    setErr('')
+    if(!activeAvatar) return setErr('No hay avatar activo')
+    if(locked) return setErr('Este partido ya está bloqueado')
+    if(form.home===''||form.away==='') return setErr('Ingresa el marcador del partido')
+    if(mustPickPen&&!form.pen) return setErr('Selecciona ganador por penales')
+    if(mustPickPen&&form.penHome!==''&&form.penAway!==''){
+      const ph=+form.penHome, pa=+form.penAway
+      if(ph===pa) return setErr('La tanda de penales no puede empatar')
+      const scoreWinner=ph>pa?match.team1:match.team2
+      if(scoreWinner!==form.pen) return setErr('El marcador de penales no coincide con el ganador seleccionado')
+    }
+    setSaving(true)
+    try{
+      const h=+form.home, a=+form.away
+      const payload={
+        avatarId:activeAvatar.id,matchId:match.id,home:h,away:a,
+        penaltyWinner:mustPickPen?form.pen:null,
+        penaltyHome:mustPickPen&&form.penHome!==''?+form.penHome:null,
+        penaltyAway:mustPickPen&&form.penAway!==''?+form.penAway:null
+      }
+      const data=await api('/api/predictions','POST',payload)
+      const saved=data.prediction||{}
+      onSaved(match.id,{
+        score_home:saved.score_home??h,
+        score_away:saved.score_away??a,
+        penalty_winner:saved.penalty_winner||payload.penaltyWinner,
+        penalty_score_home:saved.penalty_score_home??payload.penaltyHome,
+        penalty_score_away:saved.penalty_score_away??payload.penaltyAway,
+        points_earned:saved.points_earned??pred?.points_earned??0,
+        points:saved.points_earned??pred?.points??0
+      })
+      onClose()
+    }catch(e){ setErr(e.message) }
+    setSaving(false)
+  }
+
+  if(!match) return null
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}} onClick={onClose}>
+      <div className="card" style={{width:'100%',maxWidth:460,borderRadius:8}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'1rem',marginBottom:'1rem'}}>
+          <div>
+            <div style={{fontFamily:'Bebas Neue',fontSize:'1.25rem',letterSpacing:1}}>{PHASE_LABELS[match.phase]}</div>
+            <div className="text-muted text-xs">{formatMatchDay(match.match_date)} · {formatMatchTime(match.match_date)} · {match.venue}</div>
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={onClose}>Cerrar</button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',alignItems:'center',gap:'.75rem',marginBottom:'1rem'}}>
+          <div style={{textAlign:'center',fontWeight:800}}>{f(match.team1)} {es(match.team1)}</div>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1rem',color:'var(--ink3)'}}>VS</div>
+          <div style={{textAlign:'center',fontWeight:800}}>{es(match.team2)} {f(match.team2)}</div>
+          <input type="number" min="0" max="20" value={form.home} onChange={setScore('home')}
+            style={{width:'100%',textAlign:'center',fontSize:'1.7rem',fontFamily:'Bebas Neue',border:'2px solid var(--gold)',borderRadius:6,padding:'.4rem',background:'var(--cream2)'}}/>
+          <div style={{fontFamily:'Bebas Neue',fontSize:'1.2rem',color:'var(--ink3)'}}>—</div>
+          <input type="number" min="0" max="20" value={form.away} onChange={setScore('away')}
+            style={{width:'100%',textAlign:'center',fontSize:'1.7rem',fontFamily:'Bebas Neue',border:'2px solid var(--gold)',borderRadius:6,padding:'.4rem',background:'var(--cream2)'}}/>
+        </div>
+        {mustPickPen&&(
+          <div style={{border:'1.5px solid var(--border)',borderRadius:8,padding:'.8rem',marginBottom:'1rem',background:'var(--cream2)'}}>
+            <div style={{fontWeight:800,fontSize:'12px',textTransform:'uppercase',letterSpacing:.4,marginBottom:'.5rem'}}>Definición por penales</div>
+            <select value={form.pen} onChange={e=>setForm(p=>({...p,pen:e.target.value}))}
+              style={{width:'100%',padding:'.65rem',border:'1.5px solid var(--border)',borderRadius:6,background:'#fff',fontWeight:700,marginBottom:'.65rem'}}>
+              <option value="">Ganador por penales</option>
+              <option value={match.team1}>{f(match.team1)} {es(match.team1)}</option>
+              <option value={match.team2}>{f(match.team2)} {es(match.team2)}</option>
+            </select>
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',alignItems:'center',gap:'.5rem'}}>
+              <input type="number" min="0" max="20" value={form.penHome} onChange={setPenScore('penHome')} placeholder="Pen."
+                style={{width:'100%',textAlign:'center',fontSize:'1.2rem',fontFamily:'Bebas Neue',border:'1.5px solid var(--border)',borderRadius:6,padding:'.4rem',background:'#fff'}}/>
+              <span style={{fontFamily:'Bebas Neue',color:'var(--ink3)'}}>—</span>
+              <input type="number" min="0" max="20" value={form.penAway} onChange={setPenScore('penAway')} placeholder="Pen."
+                style={{width:'100%',textAlign:'center',fontSize:'1.2rem',fontFamily:'Bebas Neue',border:'1.5px solid var(--border)',borderRadius:6,padding:'.4rem',background:'#fff'}}/>
+            </div>
+            <div className="text-muted text-xs" style={{marginTop:'.45rem'}}>El bono de +2 pts cuenta por acertar el ganador por penales.</div>
+          </div>
+        )}
+        {err&&<Alert>{err}</Alert>}
+        <button className="btn btn-gold" style={{width:'100%',marginTop:err?'.5rem':0}} onClick={save}
+          disabled={saving||locked||form.home===''||form.away===''||(mustPickPen&&!form.pen)}>
+          {saving?'Guardando...':'Guardar pronóstico'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function BoardPage(){
   const {user,matches,activeAvatar,setView}=useApp()
   const [predictions,setPredictions]=React.useState({})
   const [filterPhase,setFilterPhase]=React.useState('today')
   const [filterGroup,setFilterGroup]=React.useState('all')
   const [loading,setLoading]=React.useState(true)
+  const [editMatch,setEditMatch]=React.useState(null)
 
   React.useEffect(()=>{
     if(activeAvatar)
@@ -2724,6 +2875,10 @@ function BoardPage(){
   const phases=['today','group','round32','round16','quarters','semis','third','final']
   const phaseShort={today:'Hoy',group:'Grupos',round32:'R32',round16:'R16',quarters:'QF',semis:'SF',third:'3RD',final:'Final'}
   const groups=['A','B','C','D','E','F','G','H','I','J','K','L']
+  const openEditor=m=>{
+    if(!hasTeams(m)||isLocked(m)) return
+    setEditMatch(m)
+  }
 
   const filtered=(matches||[]).filter(m=>{
     if(filterPhase==='today'){
@@ -2783,9 +2938,10 @@ function BoardPage(){
                 const hasResult=m.r_home!=null
                 const locked=isLocked(m)
                 const pts=pred?.points_earned||0
+                const editable=hasTeams(m)&&!locked
                 return(
                   <div key={m.id} className={`match-row ${hasResult?'match-row-done':locked?'match-row-locked':''}`}
-                    onClick={()=>setView('chat')} style={{cursor:'pointer'}}>
+                    onClick={()=>openEditor(m)} style={{cursor:editable?'pointer':'default',opacity:hasTeams(m)?1:.65}}>
                     <div className="match-teams">
                       <span style={{flex:1,textAlign:'right'}}>{f(m.team1)} {es(m.team1)}</span>
                       {hasResult?<span className="match-score">{m.r_home}–{m.r_away}</span>
@@ -2795,12 +2951,13 @@ function BoardPage(){
                     <div className="match-meta">{formatMatchDay(m.match_date)} · {formatMatchTime(m.match_date)} · {m.venue}</div>
                     {pred&&(
                       <div className="match-pred">
-                        <span style={{color:'var(--ink3)'}}>Pronóstico: {pred.score_home}–{pred.score_away}{pred.penalty_winner?` · Penales: ${es(pred.penalty_winner)}`:''}</span>
+                        <span style={{color:'var(--ink3)'}}>Pronóstico: {pred.score_home}–{pred.score_away}{penaltyText(pred)}</span>
                         {hasResult&&<span className={('pts-badge '+(pts>=PHASE_PTS[ph]?.exact?'pts-exact':pts>0?'pts-win':'pts-miss'))}>{pts>0?`+${pts}pts`:'Sin pts'}</span>}
                         <span className={`chip ${locked?'chip-r':'chip-g'}`} style={{fontSize:'8px'}}>{locked?'🔒 Bloqueado':'✏️ Editable'}</span>
                       </div>
                     )}
-                    {!pred&&!locked&&<div className="match-pred text-xs" style={{color:'var(--gold)'}}>💬 Toca para pronosticar</div>}
+                    {!pred&&editable&&<div className="match-pred text-xs" style={{color:'var(--gold)'}}>✏️ Toca para pronosticar</div>}
+                    {!pred&&!hasTeams(m)&&<div className="match-pred text-xs" style={{color:'var(--ink3)'}}>Equipos por definir</div>}
                     {!pred&&locked&&<div className="match-pred text-xs" style={{color:'var(--red)'}}>⏰ Sin pronóstico — bloqueado</div>}
                   </div>
                 )
@@ -2808,6 +2965,14 @@ function BoardPage(){
             </div>
           )
         })}
+        {editMatch&&(
+          <PredictionEditorModal
+            match={editMatch}
+            pred={predictions[editMatch.id]}
+            onClose={()=>setEditMatch(null)}
+            onSaved={(id,next)=>setPredictions(p=>({...p,[id]:next}))}
+          />
+        )}
       </div>
     </div>
   )
@@ -3713,7 +3878,7 @@ function KnockoutMatchRow({match}){
 function AdminResults(){
   const {matches}=useApp()
   const [selectedId,setSelectedId]=React.useState(null)
-  const [form,setForm]=React.useState({home:'',away:'',hadPen:false,penWinner:'',
+  const [form,setForm]=React.useState({home:'',away:'',hadPen:false,penWinner:'',penHome:'',penAway:'',
     yellow:'',red:'',penCount:'',g1h:'',g2h:'',mvp:'',champWinner:'',surprise:'',
     balonDeOro:'',guanteDeOro:'',botaDeOro:''})
   const [loading,setLoading]=React.useState(false)
@@ -3725,12 +3890,14 @@ function AdminResults(){
 
   // When a match is selected, pre-fill the form with its existing values (so edits aren't lost)
   React.useEffect(()=>{
-    if(!selectedMatch){setForm({home:'',away:'',hadPen:false,penWinner:'',yellow:'',red:'',penCount:'',g1h:'',g2h:'',mvp:'',champWinner:'',surprise:'',balonDeOro:'',guanteDeOro:'',botaDeOro:''});return}
+    if(!selectedMatch){setForm({home:'',away:'',hadPen:false,penWinner:'',penHome:'',penAway:'',yellow:'',red:'',penCount:'',g1h:'',g2h:'',mvp:'',champWinner:'',surprise:'',balonDeOro:'',guanteDeOro:'',botaDeOro:''});return}
     setForm({
       home:selectedMatch.r_home!=null?String(selectedMatch.r_home):'',
       away:selectedMatch.r_away!=null?String(selectedMatch.r_away):'',
       hadPen:!!selectedMatch.had_penalties,
       penWinner:selectedMatch.penalty_winner||'',
+      penHome:selectedMatch.penalty_score_home!=null?String(selectedMatch.penalty_score_home):'',
+      penAway:selectedMatch.penalty_score_away!=null?String(selectedMatch.penalty_score_away):'',
       yellow:selectedMatch.yellow_cards!=null?String(selectedMatch.yellow_cards):'',
       red:selectedMatch.red_cards!=null?String(selectedMatch.red_cards):'',
       penCount:selectedMatch.penalties_count!=null?String(selectedMatch.penalties_count):'',
@@ -3747,6 +3914,8 @@ function AdminResults(){
       const data=await api('/api/admin/results','POST',{
         matchId:+selectedId,home:+form.home,away:+form.away,
         hadPenalties:form.hadPen,penaltyWinner:form.penWinner||null,
+        penaltyHome:form.penHome!==''?+form.penHome:null,
+        penaltyAway:form.penAway!==''?+form.penAway:null,
         yellowCards:form.yellow?+form.yellow:null,redCards:form.red?+form.red:null,
         penaltiesCount:form.penCount?+form.penCount:null,
         goalsFirstHalf:form.g1h?+form.g1h:null,goalsSecondHalf:form.g2h?+form.g2h:null,
@@ -3793,14 +3962,20 @@ function AdminResults(){
               <span>¿Hubo definición por penales?</span>
             </div>
             {form.hadPen&&(
-              <div className="form-group mt1">
-                <label>Ganador en penales</label>
-                <select className="inp" value={form.penWinner} onChange={upd('penWinner')}>
-                  <option value="">— Selecciona —</option>
-                  {[selectedMatch.team1,selectedMatch.team2].filter(Boolean).map(t=>(
-                    <option key={t} value={t}>{f(t)} {es(t)}</option>
-                  ))}
-                </select>
+              <div className="mt1">
+                <div className="form-group">
+                  <label>Ganador en penales</label>
+                  <select className="inp" value={form.penWinner} onChange={upd('penWinner')}>
+                    <option value="">— Selecciona —</option>
+                    {[selectedMatch.team1,selectedMatch.team2].filter(Boolean).map(t=>(
+                      <option key={t} value={t}>{f(t)} {es(t)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.65rem'}}>
+                  <div className="form-group"><label>Penales {es(selectedMatch.team1)}</label><input className="inp" type="number" min="0" value={form.penHome} onChange={upd('penHome')}/></div>
+                  <div className="form-group"><label>Penales {es(selectedMatch.team2)}</label><input className="inp" type="number" min="0" value={form.penAway} onChange={upd('penAway')}/></div>
+                </div>
               </div>
             )}
             <div className="divider"/>
