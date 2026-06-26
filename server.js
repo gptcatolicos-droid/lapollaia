@@ -243,6 +243,7 @@ async function initDb() {
         avatar_id TEXT NOT NULL REFERENCES avatars(id) ON DELETE CASCADE,
         match_id INTEGER NOT NULL REFERENCES matches(id),
         score_home INTEGER, score_away INTEGER, penalty_winner TEXT,
+        penalty_score_home INTEGER, penalty_score_away INTEGER,
         points_earned INTEGER DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(avatar_id, match_id)
@@ -262,6 +263,7 @@ async function initDb() {
         match_id INTEGER PRIMARY KEY REFERENCES matches(id),
         score_home INTEGER NOT NULL, score_away INTEGER NOT NULL,
         had_penalties BOOLEAN DEFAULT FALSE, penalty_winner TEXT,
+        penalty_score_home INTEGER, penalty_score_away INTEGER,
         yellow_cards INTEGER, red_cards INTEGER, penalties_count INTEGER,
         goals_first_half INTEGER, goals_second_half INTEGER, mvp_player TEXT,
         entered_at TIMESTAMPTZ DEFAULT NOW()
@@ -330,6 +332,12 @@ async function initDb() {
       -- Manual points adjustment per avatar (admin can add/subtract points for corrections)
       ALTER TABLE avatars ADD COLUMN IF NOT EXISTS points_adjustment INTEGER DEFAULT 0;
       ALTER TABLE avatars ADD COLUMN IF NOT EXISTS adjustment_reason TEXT;
+
+      -- Knockout penalty shootout scores. Safe migration: keeps every existing row intact.
+      ALTER TABLE predictions ADD COLUMN IF NOT EXISTS penalty_score_home INTEGER;
+      ALTER TABLE predictions ADD COLUMN IF NOT EXISTS penalty_score_away INTEGER;
+      ALTER TABLE match_results ADD COLUMN IF NOT EXISTS penalty_score_home INTEGER;
+      ALTER TABLE match_results ADD COLUMN IF NOT EXISTS penalty_score_away INTEGER;
     `)
 
     const {rows:[{count}]} = await c.query('SELECT COUNT(*) FROM matches')
@@ -495,6 +503,17 @@ function normalizePenaltyWinner(match, home, away, penaltyWinner, requireForTie=
   if(requireForTie&&!valid) throw new Error('Debes seleccionar el ganador por penales')
   if(winner&&!valid) throw new Error('Ganador por penales inválido')
   return winner||null
+}
+function normalizePenaltyScores(match, home, away, penaltyHome, penaltyAway){
+  if(!isKnockoutPhase(match?.phase)||+home!==+away) return {home:null,away:null}
+  const homeBlank=penaltyHome===''||penaltyHome==null
+  const awayBlank=penaltyAway===''||penaltyAway==null
+  if(homeBlank&&awayBlank) return {home:null,away:null}
+  if(homeBlank||awayBlank) throw new Error('Completa ambos marcadores de la tanda de penales')
+  const ph=+penaltyHome, pa=+penaltyAway
+  if(!Number.isInteger(ph)||!Number.isInteger(pa)||ph<0||pa<0) throw new Error('Marcador de penales inválido')
+  if(ph===pa) throw new Error('La tanda de penales no puede quedar empatada')
+  return {home:ph,away:pa}
 }
 
 const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -1048,7 +1067,8 @@ app.get('/api/matches', async(req,res)=>{
     const tournamentId=req.query.tournamentId||null
     const {rows}=await pool.query(`
       SELECT m.*, r.score_home as r_home, r.score_away as r_away,
-        r.had_penalties, r.penalty_winner, r.yellow_cards, r.red_cards,
+        r.had_penalties, r.penalty_winner, r.penalty_score_home, r.penalty_score_away,
+        r.yellow_cards, r.red_cards,
         r.penalties_count, r.goals_first_half, r.goals_second_half, r.mvp_player,
         COALESCE(pl.is_locked,FALSE) as phase_locked,
         COALESCE(pl.auto_lock_hours,2) as auto_lock_hours
@@ -1073,14 +1093,19 @@ app.get('/api/predictions/:avatarId', auth, async(req,res)=>{
     const {rows:preds}=await pool.query('SELECT * FROM predictions WHERE avatar_id=$1',[req.params.avatarId])
     const {rows:extras}=await pool.query('SELECT * FROM extra_predictions WHERE avatar_id=$1',[req.params.avatarId])
     const predictions={},exts={}
-    preds.forEach(p=>predictions[p.match_id]={score_home:p.score_home,score_away:p.score_away,penalty_winner:p.penalty_winner,points:p.points_earned,points_earned:p.points_earned})
+    preds.forEach(p=>predictions[p.match_id]={
+      score_home:p.score_home,score_away:p.score_away,
+      penalty_winner:p.penalty_winner,
+      penalty_score_home:p.penalty_score_home,penalty_score_away:p.penalty_score_away,
+      points:p.points_earned,points_earned:p.points_earned
+    })
     extras.forEach(e=>exts[e.match_id]=e)
     res.json({predictions,extras:exts})
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
 
 app.post('/api/predictions', auth, async(req,res)=>{
-  const {avatarId,matchId,home,away,penaltyWinner}=req.body
+  const {avatarId,matchId,home,away,penaltyWinner,penaltyHome,penaltyAway}=req.body
   if(home==null||away==null||+home<0||+away<0) return res.status(400).json({error:'Marcador inválido'})
   try{
     const {rows:[av]}=await pool.query('SELECT * FROM avatars WHERE id=$1',[avatarId])
@@ -1091,18 +1116,21 @@ app.post('/api/predictions', auth, async(req,res)=>{
     if(!match) return res.status(404).json({error:'Partido no encontrado'})
     if(!match.team1||!match.team2) return res.status(400).json({error:'Este partido aún no tiene equipos definidos'})
     if(isMatchLocked(match,match.auto_lock_hours||2,match.is_locked)) return res.status(403).json({error:'Este partido ya no admite cambios'})
-    let cleanPenaltyWinner
+    let cleanPenaltyWinner, cleanPenaltyScores
     try{
-      cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true)
+      const requiresPenalty=isKnockoutPhase(match.phase)&&+home===+away
+      cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,requiresPenalty)
+      cleanPenaltyScores=normalizePenaltyScores(match,+home,+away,penaltyHome,penaltyAway)
     }catch(e){
       return res.status(400).json({error:e.message})
     }
     const id='pr-'+crypto.randomBytes(12).toString('hex')
     const {rows:[pred]}=await pool.query(`
-      INSERT INTO predictions(id,avatar_id,match_id,score_home,score_away,penalty_winner)
-      VALUES($1,$2,$3,$4,$5,$6)
-      ON CONFLICT(avatar_id,match_id) DO UPDATE SET score_home=$4,score_away=$5,penalty_winner=$6,updated_at=NOW()
-      RETURNING *`,[id,avatarId,matchId,+home,+away,cleanPenaltyWinner])
+      INSERT INTO predictions(id,avatar_id,match_id,score_home,score_away,penalty_winner,penalty_score_home,penalty_score_away)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT(avatar_id,match_id) DO UPDATE SET
+        score_home=$4,score_away=$5,penalty_winner=$6,penalty_score_home=$7,penalty_score_away=$8,updated_at=NOW()
+      RETURNING *`,[id,avatarId,matchId,+home,+away,cleanPenaltyWinner,cleanPenaltyScores.home,cleanPenaltyScores.away])
     res.json({prediction:pred})
   }catch(e){ console.error(e); res.status(500).json({error:'Error del servidor'}) }
 })
@@ -1922,26 +1950,30 @@ app.put('/api/admin/tournament', auth, tournamentAdmin, async(req,res)=>{
 
 // Admin: enter match results
 app.post('/api/admin/results', auth, tournamentAdmin, async(req,res)=>{
-  const {matchId,home,away,hadPenalties,penaltyWinner,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
+  const {matchId,home,away,hadPenalties,penaltyWinner,penaltyHome,penaltyAway,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
   try{
     const {rows:[match]}=await pool.query('SELECT phase,team1,team2 FROM matches WHERE id=$1',[matchId])
     if(!match) return res.status(404).json({error:'Partido no encontrado'})
-    let cleanPenaltyWinner=null
+    let cleanPenaltyWinner=null, cleanPenaltyScores={home:null,away:null}
     if(hadPenalties){
       if(+home!==+away) return res.status(400).json({error:'La definición por penales solo aplica si el marcador queda empatado'})
-      try{ cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true) }
+      try{
+        cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true)
+        cleanPenaltyScores=normalizePenaltyScores(match,+home,+away,penaltyHome,penaltyAway)
+      }
       catch(e){ return res.status(400).json({error:e.message}) }
     }
     await pool.query(`
-      INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,yellow_cards=$6,red_cards=$7,penalties_count=$8,goals_first_half=$9,goals_second_half=$10,mvp_player=$11,entered_at=NOW()`,
-      [matchId,+home,+away,!!hadPenalties,cleanPenaltyWinner,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
+      INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,penalty_score_home,penalty_score_away,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,penalty_score_home=$6,penalty_score_away=$7,yellow_cards=$8,red_cards=$9,penalties_count=$10,goals_first_half=$11,goals_second_half=$12,mvp_player=$13,entered_at=NOW()`,
+      [matchId,+home,+away,!!hadPenalties,cleanPenaltyWinner,cleanPenaltyScores.home,cleanPenaltyScores.away,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
     // Recalculate points for all predictions of this match in this tournament
     const {rows:preds}=await pool.query(`
       SELECT p.*,m.phase FROM predictions p JOIN matches m ON m.id=p.match_id
       JOIN avatars av ON av.id=p.avatar_id WHERE p.match_id=$1 AND av.tournament_id=$2`,[matchId,req.user.tournamentId])
     const result={match_id:matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:cleanPenaltyWinner,
+      penalty_score_home:cleanPenaltyScores.home,penalty_score_away:cleanPenaltyScores.away,
       yellow_cards:yellowCards??null,red_cards:redCards??null,penalties_count:penaltiesCount??null,
       goals_first_half:goalsFirstHalf??null,goals_second_half:goalsSecondHalf??null,mvp_player:mvpPlayer||null}
     for(const p of preds){
@@ -2214,6 +2246,7 @@ app.get('/superadmin/matches', superAdmin, async(req,res)=>{
     const {rows}=await pool.query(`
       SELECT m.id, m.match_num, m.phase, m.team1, m.team2, m.label, m.match_date,
         r.score_home, r.score_away, r.had_penalties, r.penalty_winner,
+        r.penalty_score_home, r.penalty_score_away,
         r.yellow_cards, r.red_cards, r.penalties_count,
         r.goals_first_half, r.goals_second_half, r.mvp_player
       FROM matches m LEFT JOIN match_results r ON r.match_id=m.id
@@ -2274,24 +2307,28 @@ app.put('/superadmin/phase-locks/:phase', superAdmin, async(req,res)=>{
 
 // SUPERADMIN: guardar resultado OFICIAL de un partido y recalcular puntos en TODAS las pollas
 app.post('/superadmin/results', superAdmin, async(req,res)=>{
-  const {matchId,home,away,hadPenalties,penaltyWinner,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
+  const {matchId,home,away,hadPenalties,penaltyWinner,penaltyHome,penaltyAway,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
   if(matchId==null||home==null||away==null) return res.status(400).json({error:'matchId, home y away son requeridos'})
   try{
     const {rows:[match]}=await pool.query('SELECT phase,team1,team2 FROM matches WHERE id=$1',[matchId])
     if(!match) return res.status(404).json({error:'Partido no encontrado'})
-    let cleanPenaltyWinner=null
+    let cleanPenaltyWinner=null, cleanPenaltyScores={home:null,away:null}
     if(hadPenalties){
       if(+home!==+away) return res.status(400).json({error:'La definición por penales solo aplica si el marcador queda empatado'})
-      try{ cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true) }
+      try{
+        cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true)
+        cleanPenaltyScores=normalizePenaltyScores(match,+home,+away,penaltyHome,penaltyAway)
+      }
       catch(e){ return res.status(400).json({error:e.message}) }
     }
     await pool.query(`
-      INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-      ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,yellow_cards=$6,red_cards=$7,penalties_count=$8,goals_first_half=$9,goals_second_half=$10,mvp_player=$11,entered_at=NOW()`,
-      [matchId,+home,+away,!!hadPenalties,cleanPenaltyWinner,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
+      INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,penalty_score_home,penalty_score_away,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,penalty_score_home=$6,penalty_score_away=$7,yellow_cards=$8,red_cards=$9,penalties_count=$10,goals_first_half=$11,goals_second_half=$12,mvp_player=$13,entered_at=NOW()`,
+      [matchId,+home,+away,!!hadPenalties,cleanPenaltyWinner,cleanPenaltyScores.home,cleanPenaltyScores.away,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
 
     const result={match_id:matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:cleanPenaltyWinner,
+      penalty_score_home:cleanPenaltyScores.home,penalty_score_away:cleanPenaltyScores.away,
       yellow_cards:yellowCards??null,red_cards:redCards??null,penalties_count:penaltiesCount??null,
       goals_first_half:goalsFirstHalf??null,goals_second_half:goalsSecondHalf??null,mvp_player:mvpPlayer||null}
 
@@ -2559,6 +2596,10 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
         <select id="sa-penwin" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff;font-family:inherit">
           <option value="">— Ganador en penales —</option>
         </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <input id="sa-penhome" type="number" min="0" placeholder="Penales local" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
+          <input id="sa-penaway" type="number" min="0" placeholder="Penales visitante" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
         <input id="sa-yellow" type="number" min="0" placeholder="🟨 Amar." style="padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:11px;font-family:inherit">
@@ -2922,6 +2963,8 @@ function saMatchSelected(){
   document.getElementById('sa-away').value=m.score_away!=null?m.score_away:''
   document.getElementById('sa-pen').checked=!!m.had_penalties
   document.getElementById('sa-penwin-wrap').style.display=m.had_penalties?'block':'none'
+  document.getElementById('sa-penhome').value=m.penalty_score_home!=null?m.penalty_score_home:''
+  document.getElementById('sa-penaway').value=m.penalty_score_away!=null?m.penalty_score_away:''
   var pw=document.getElementById('sa-penwin')
   pw.innerHTML='<option value="">— Ganador en penales —</option>'
   ;[m.team1,m.team2].filter(Boolean).forEach(function(t){
@@ -2953,6 +2996,8 @@ async function saSaveResult(){
       matchId:matchId, home:+home, away:+away,
       hadPenalties:document.getElementById('sa-pen').checked,
       penaltyWinner:document.getElementById('sa-penwin').value||null,
+      penaltyHome:document.getElementById('sa-penhome').value!==''?+document.getElementById('sa-penhome').value:null,
+      penaltyAway:document.getElementById('sa-penaway').value!==''?+document.getElementById('sa-penaway').value:null,
       yellowCards:document.getElementById('sa-yellow').value!==''?+document.getElementById('sa-yellow').value:null,
       redCards:document.getElementById('sa-red').value!==''?+document.getElementById('sa-red').value:null,
       penaltiesCount:document.getElementById('sa-pencount').value!==''?+document.getElementById('sa-pencount').value:null,
@@ -2995,6 +3040,8 @@ async function saResetResult(){
       document.getElementById('sa-away').value=''
       document.getElementById('sa-pen').checked=false
       document.getElementById('sa-penwin-wrap').style.display='none'
+      document.getElementById('sa-penhome').value=''
+      document.getElementById('sa-penaway').value=''
       document.getElementById('sa-yellow').value=''
       document.getElementById('sa-red').value=''
       document.getElementById('sa-pencount').value=''
