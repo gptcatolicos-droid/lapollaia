@@ -11,6 +11,7 @@ const PHASE_PTS = {
 }
 
 function getWinner(h,a){ return +h>+a?'home':+h<+a?'away':'draw' }
+function isKnockout(phase){ return phase && phase!=='group' }
 
 function calcPoints(pred, result, phase){
   if(!result||pred.score_home==null||pred.score_away==null) return 0
@@ -19,6 +20,13 @@ function calcPoints(pred, result, phase){
   const exact = +pred.score_home===+result.score_home && +pred.score_away===+result.score_away
   const winnerOk = getWinner(pred.score_home,pred.score_away)===getWinner(result.score_home,result.score_away)
   let total = exact ? pts.exact : winnerOk ? pts.winner : 0
+  if(
+    isKnockout(phase) &&
+    result.had_penalties &&
+    result.penalty_winner &&
+    pred.penalty_winner &&
+    pred.penalty_winner===result.penalty_winner
+  ) total += 2
   return total
 }
 

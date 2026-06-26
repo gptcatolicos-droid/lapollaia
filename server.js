@@ -10,6 +10,7 @@ const Anthropic = require('@anthropic-ai/sdk')
 const { MercadoPagoConfig, Preference, Payment } = require('mercadopago')
 const nodemailer = require('nodemailer')
 const { calcPoints, calcExtraPoints } = require('./scoring')
+const THIRD_PLACE_COMBINATIONS = require('./third-place-combinations.json')
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -230,6 +231,13 @@ async function initDb() {
         UNIQUE(tournament_id, phase)
       );
 
+      CREATE TABLE IF NOT EXISTS platform_phase_locks(
+        phase TEXT PRIMARY KEY,
+        is_locked BOOLEAN DEFAULT FALSE,
+        auto_lock_hours INTEGER DEFAULT 2,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS predictions(
         id TEXT PRIMARY KEY,
         avatar_id TEXT NOT NULL REFERENCES avatars(id) ON DELETE CASCADE,
@@ -327,6 +335,10 @@ async function initDb() {
     const {rows:[{count}]} = await c.query('SELECT COUNT(*) FROM matches')
     if(+count===0) await seedMatches(c)
 
+    const phases=['group','round32','round16','quarters','semis','third','final']
+    for(const ph of phases)
+      await c.query('INSERT INTO platform_phase_locks(phase,is_locked,auto_lock_hours) VALUES($1,FALSE,2) ON CONFLICT DO NOTHING',[ph])
+
     // Auto-create demo tournament if not exists
     const {rows:[demo]}=await c.query("SELECT id FROM tournaments WHERE slug='demo'")
     if(!demo){
@@ -335,14 +347,22 @@ async function initDb() {
         INSERT INTO tournaments(id,slug,name,owner_name,owner_email,primary_color,inscription_fee,currency,is_active,is_demo,predictions_open)
         VALUES($1,'demo','Demo — La Polla IA','La Polla IA','demo@lapollaia.com','#F6C90E',0,'USD',TRUE,TRUE,TRUE)
         ON CONFLICT(slug) DO NOTHING`,[demoId])
-      const phases=['group','round32','round16','quarters','semis','third','final']
       for(const ph of phases)
-        await c.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[demoId,ph])
+        await c.query(`
+          INSERT INTO phase_locks(tournament_id,phase,is_locked,auto_lock_hours)
+          SELECT $1,phase,is_locked,auto_lock_hours FROM platform_phase_locks WHERE phase=$2
+          ON CONFLICT DO NOTHING`,[demoId,ph])
       console.log('✅ Demo tournament created')
     }
 
     // Make sure demo is always active
     await c.query("UPDATE tournaments SET is_active=TRUE WHERE slug='demo'")
+    await c.query(`
+      INSERT INTO phase_locks(tournament_id,phase,is_locked,auto_lock_hours)
+      SELECT t.id,p.phase,p.is_locked,p.auto_lock_hours
+      FROM tournaments t CROSS JOIN platform_phase_locks p
+      ON CONFLICT DO NOTHING`)
+    await syncKnockoutBracket(c)
 
     console.log('✅ DB multi-tenant lista')
   } finally { c.release() }
@@ -463,6 +483,147 @@ function isMatchLocked(match,lockHours=2,phaseLocked=false){
   return Date.now()>=new Date(match.match_date).getTime()-lockHours*3600000
 }
 function getWinner(h,a){ return +h>+a?'home':+h<+a?'away':'draw' }
+function isKnockoutPhase(phase){ return phase && phase!=='group' }
+function normalizePenaltyWinner(match, home, away, penaltyWinner, requireForTie=false){
+  if(!isKnockoutPhase(match?.phase)){
+    if(requireForTie) throw new Error('Los penales solo aplican en fases eliminatorias')
+    return null
+  }
+  if(+home!==+away) return null
+  const winner=penaltyWinner||null
+  const valid=winner && (winner===match.team1||winner===match.team2)
+  if(requireForTie&&!valid) throw new Error('Debes seleccionar el ganador por penales')
+  if(winner&&!valid) throw new Error('Ganador por penales inválido')
+  return winner||null
+}
+
+const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
+const R32_SLOTS = [
+  ['2A','2B'],['1C','2F'],['1E','3'],['1F','2C'],
+  ['2E','2I'],['1I','3'],['1A','3'],['1L','3'],
+  ['1G','3'],['1D','3'],['1H','2J'],['2K','2L'],
+  ['1B','3'],['2D','2G'],['1J','2H'],['1K','3']
+]
+const THIRD_SLOT_BY_R32_INDEX = {2:'1E',5:'1I',6:'1A',7:'1L',8:'1G',9:'1D',12:'1B',15:'1K'}
+
+function resultWinnerTeam(match){
+  if(!match||match.score_home==null||match.score_away==null) return null
+  if(+match.score_home>+match.score_away) return match.team1||null
+  if(+match.score_away>+match.score_home) return match.team2||null
+  return match.penalty_winner||null
+}
+
+function addGroupStats(stats, team, gf, ga){
+  if(!team) return
+  if(!stats[team]) stats[team]={team,played:0,points:0,wins:0,gf:0,ga:0,gd:0}
+  const s=stats[team]
+  s.played++; s.gf+=gf; s.ga+=ga; s.gd=s.gf-s.ga
+  if(gf>ga){ s.points+=3; s.wins++ }
+  else if(gf===ga) s.points+=1
+}
+
+function sortStandingRows(a,b){
+  return (b.points-a.points)||(b.gd-a.gd)||(b.gf-a.gf)||(b.wins-a.wins)||a.team.localeCompare(b.team)
+}
+
+function buildGroupRankings(matches){
+  const groups={}
+  for(const g of GROUP_LETTERS) groups[g]={complete:false,ranking:[]}
+  for(const g of GROUP_LETTERS){
+    const ms=matches.filter(m=>m.phase==='group'&&m.group_name===g)
+    const stats={}
+    for(const m of ms){
+      if(m.score_home==null||m.score_away==null){ groups[g]={complete:false,ranking:[]}; continue }
+      addGroupStats(stats,m.team1,+m.score_home,+m.score_away)
+      addGroupStats(stats,m.team2,+m.score_away,+m.score_home)
+    }
+    if(ms.length===6&&ms.every(m=>m.score_home!=null&&m.score_away!=null))
+      groups[g]={complete:true,ranking:Object.values(stats).sort(sortStandingRows)}
+  }
+  return groups
+}
+
+function resolveQualifiedToken(token, groupRankings, thirdAssignments){
+  if(!token) return null
+  const m=String(token).match(/^([123])([A-L])$/)
+  if(!m) return null
+  const pos=+m[1], group=m[2]
+  const ranking=groupRankings[group]?.ranking
+  if(!ranking||ranking.length<pos) return null
+  if(pos===3&&thirdAssignments&&!thirdAssignments.includes(group)) return null
+  return ranking[pos-1]?.team||null
+}
+
+function getThirdAssignments(groupRankings){
+  const thirds=[]
+  for(const g of GROUP_LETTERS){
+    const ranking=groupRankings[g]?.ranking
+    if(!groupRankings[g]?.complete||!ranking?.[2]) return null
+    thirds.push({...ranking[2],group:g})
+  }
+  thirds.sort((a,b)=>sortStandingRows(a,b))
+  const best=thirds.slice(0,8).map(t=>t.group).sort().join('')
+  return THIRD_PLACE_COMBINATIONS[best] ? { key:best, slots:THIRD_PLACE_COMBINATIONS[best], groups:best.split('') } : null
+}
+
+async function setMatchTeams(db, match, team1, team2, changes){
+  if(!team1||!team2) return
+  const next1=team1, next2=team2
+  if((match.team1||null)===next1&&(match.team2||null)===next2) return
+  await db.query('UPDATE matches SET team1=$1, team2=$2 WHERE id=$3',[next1,next2,match.id])
+  changes.push({id:match.id,match_num:match.match_num,phase:match.phase,from:[match.team1,match.team2],to:[next1,next2]})
+  match.team1=next1; match.team2=next2
+}
+
+async function syncKnockoutBracket(db=pool){
+  const {rows:matches}=await db.query(`
+    SELECT m.*, r.score_home, r.score_away, r.had_penalties, r.penalty_winner
+    FROM matches m LEFT JOIN match_results r ON r.match_id=m.id
+    ORDER BY m.match_num`)
+  const changes=[]
+  const byPhase=phase=>matches.filter(m=>m.phase===phase).sort((a,b)=>a.match_num-b.match_num)
+  const groupRankings=buildGroupRankings(matches)
+  const thirdInfo=getThirdAssignments(groupRankings)
+
+  const r32=byPhase('round32')
+  for(let i=0;i<r32.length;i++){
+    const slots=R32_SLOTS[i]
+    const homeToken=slots[0]
+    const awayToken=slots[1]==='3' ? thirdInfo?.slots?.[THIRD_SLOT_BY_R32_INDEX[i]] : slots[1]
+    const home=resolveQualifiedToken(homeToken,groupRankings,thirdInfo?.groups)
+    const away=resolveQualifiedToken(awayToken,groupRankings,thirdInfo?.groups)
+    await setMatchTeams(db,r32[i],home,away,changes)
+  }
+
+  const r16=byPhase('round16')
+  for(let i=0;i<r16.length;i++)
+    await setMatchTeams(db,r16[i],resultWinnerTeam(r32[i*2]),resultWinnerTeam(r32[i*2+1]),changes)
+
+  const quarters=byPhase('quarters')
+  for(let i=0;i<quarters.length;i++)
+    await setMatchTeams(db,quarters[i],resultWinnerTeam(r16[i*2]),resultWinnerTeam(r16[i*2+1]),changes)
+
+  const semis=byPhase('semis')
+  for(let i=0;i<semis.length;i++)
+    await setMatchTeams(db,semis[i],resultWinnerTeam(quarters[i*2]),resultWinnerTeam(quarters[i*2+1]),changes)
+
+  const third=byPhase('third')[0], final=byPhase('final')[0]
+  const semiLoser=m=>{
+    const winner=resultWinnerTeam(m)
+    if(!winner) return null
+    return winner===m.team1 ? m.team2 : m.team1
+  }
+  if(third) await setMatchTeams(db,third,semiLoser(semis[0]),semiLoser(semis[1]),changes)
+  if(final) await setMatchTeams(db,final,resultWinnerTeam(semis[0]),resultWinnerTeam(semis[1]),changes)
+
+  return {
+    success:true,
+    changes,
+    changesCount:changes.length,
+    groupsComplete:GROUP_LETTERS.filter(g=>groupRankings[g]?.complete).length,
+    thirdPlaceCombination:thirdInfo?.key||null
+  }
+}
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 // Marketing home
@@ -540,9 +701,7 @@ app.post('/api/mp/webhook', async(req,res)=>{
       if(pd.status==='approved'){
         const tid=pd.external_reference
         await pool.query('UPDATE tournaments SET is_active=TRUE,mp_payment_id=$1 WHERE id=$2',[data.id,tid])
-        const phases=['group','round32','round16','quarters','semis','third','final']
-        for(const ph of phases)
-          await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tid,ph])
+        await ensurePhaseLocksForTournament(tid)
         // Send confirmation email
         const {rows:[t]}=await pool.query('SELECT name,slug,owner_email,owner_name FROM tournaments WHERE id=$1',[tid])
         if(t) await sendActivationEmail(t)
@@ -558,9 +717,7 @@ app.get('/payment/success', async(req,res)=>{
   if(collection_status==='approved'&&external_reference){
     try{
       await pool.query('UPDATE tournaments SET is_active=TRUE,mp_payment_id=$1 WHERE id=$2',[payment_id||'redirect',external_reference])
-      const phases=['group','round32','round16','quarters','semis','third','final']
-      for(const ph of phases)
-        await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[external_reference,ph])
+      await ensurePhaseLocksForTournament(external_reference)
       const {rows:[t]}=await pool.query('SELECT slug,name,owner_email,owner_name FROM tournaments WHERE id=$1',[external_reference])
       if(t){
         await sendActivationEmail(t)
@@ -635,9 +792,7 @@ app.post('/api/paypal/activate-pending', async(req,res)=>{
     if(!fallback) return res.status(400).json({error:'No encontramos un pago pendiente reciente. Contacta soporte.'})
 
     await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[fallback.id])
-    const phases=['group','round32','round16','quarters','semis','third','final']
-    for(const ph of phases)
-      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[fallback.id,ph])
+    await ensurePhaseLocksForTournament(fallback.id)
     await sendActivationEmail(fallback)
     // Clear cookie
     res.setHeader('Set-Cookie','pp_tid=; Path=/; Max-Age=0')
@@ -649,9 +804,7 @@ app.post('/api/paypal/activate-pending', async(req,res)=>{
     if(!t) return res.status(404).json({error:'Torneo no encontrado'})
     if(!t.is_active){
       await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[tid])
-      const phases=['group','round32','round16','quarters','semis','third','final']
-      for(const ph of phases)
-        await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tid,ph])
+      await ensurePhaseLocksForTournament(tid)
       await sendActivationEmail(t)
     }
     // Clear cookie
@@ -892,13 +1045,17 @@ app.post('/api/avatars', auth, async(req,res)=>{
 // ─── MATCHES ──────────────────────────────────────────────────────────────────
 app.get('/api/matches', async(req,res)=>{
   try{
+    const tournamentId=req.query.tournamentId||null
     const {rows}=await pool.query(`
       SELECT m.*, r.score_home as r_home, r.score_away as r_away,
         r.had_penalties, r.penalty_winner, r.yellow_cards, r.red_cards,
-        r.penalties_count, r.goals_first_half, r.goals_second_half, r.mvp_player
+        r.penalties_count, r.goals_first_half, r.goals_second_half, r.mvp_player,
+        COALESCE(pl.is_locked,FALSE) as phase_locked,
+        COALESCE(pl.auto_lock_hours,2) as auto_lock_hours
       FROM matches m
       LEFT JOIN match_results r ON r.match_id=m.id
-      ORDER BY m.match_num`)
+      LEFT JOIN phase_locks pl ON pl.phase=m.phase AND pl.tournament_id=$1
+      ORDER BY m.match_num`,[tournamentId])
     res.json(rows)
   }catch(e){ res.status(500).json({error:'Error'}) }
 })
@@ -916,7 +1073,7 @@ app.get('/api/predictions/:avatarId', auth, async(req,res)=>{
     const {rows:preds}=await pool.query('SELECT * FROM predictions WHERE avatar_id=$1',[req.params.avatarId])
     const {rows:extras}=await pool.query('SELECT * FROM extra_predictions WHERE avatar_id=$1',[req.params.avatarId])
     const predictions={},exts={}
-    preds.forEach(p=>predictions[p.match_id]={score_home:p.score_home,score_away:p.score_away,penalty_winner:p.penalty_winner,points:p.points_earned})
+    preds.forEach(p=>predictions[p.match_id]={score_home:p.score_home,score_away:p.score_away,penalty_winner:p.penalty_winner,points:p.points_earned,points_earned:p.points_earned})
     extras.forEach(e=>exts[e.match_id]=e)
     res.json({predictions,extras:exts})
   }catch(e){ res.status(500).json({error:'Error'}) }
@@ -932,13 +1089,20 @@ app.post('/api/predictions', auth, async(req,res)=>{
     if(!t?.predictions_open) return res.status(403).json({error:'Los pronósticos están cerrados'})
     const {rows:[match]}=await pool.query(`SELECT m.*,pl.is_locked,pl.auto_lock_hours FROM matches m LEFT JOIN phase_locks pl ON m.phase=pl.phase AND pl.tournament_id=$1 WHERE m.id=$2`,[req.user.tournamentId,matchId])
     if(!match) return res.status(404).json({error:'Partido no encontrado'})
+    if(!match.team1||!match.team2) return res.status(400).json({error:'Este partido aún no tiene equipos definidos'})
     if(isMatchLocked(match,match.auto_lock_hours||2,match.is_locked)) return res.status(403).json({error:'Este partido ya no admite cambios'})
+    let cleanPenaltyWinner
+    try{
+      cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true)
+    }catch(e){
+      return res.status(400).json({error:e.message})
+    }
     const id='pr-'+crypto.randomBytes(12).toString('hex')
     const {rows:[pred]}=await pool.query(`
       INSERT INTO predictions(id,avatar_id,match_id,score_home,score_away,penalty_winner)
       VALUES($1,$2,$3,$4,$5,$6)
       ON CONFLICT(avatar_id,match_id) DO UPDATE SET score_home=$4,score_away=$5,penalty_winner=$6,updated_at=NOW()
-      RETURNING *`,[id,avatarId,matchId,+home,+away,penaltyWinner||null])
+      RETURNING *`,[id,avatarId,matchId,+home,+away,cleanPenaltyWinner])
     res.json({prediction:pred})
   }catch(e){ console.error(e); res.status(500).json({error:'Error del servidor'}) }
 })
@@ -1281,6 +1445,7 @@ app.post('/api/autofill', auth, async(req,res)=>{
 
     const pending = matchesToFill.filter(m=>{
       if(existingIds.has(m.id)) return false
+      if(!m.team1||!m.team2) return false
       const lock = lockMap[m.phase]||{isLocked:false,hours:2}
       if(lock.isLocked) return false
       if(!m.match_date) return false
@@ -1709,6 +1874,15 @@ app.post('/api/admin/recalc', auth, tournamentAdmin, async(req,res)=>{
   }catch(e){console.error('admin recalc:',e);res.status(500).json({error:e.message})}
 })
 
+// Admin: sincronizar llaves eliminatorias desde los resultados oficiales guardados.
+// Solo actualiza equipos en matches; no borra usuarios, pollas, pronósticos, puntos ni resultados.
+app.post('/api/admin/bracket/sync', auth, tournamentAdmin, async(req,res)=>{
+  try{
+    const result=await syncKnockoutBracket()
+    res.json(result)
+  }catch(e){console.error('admin bracket sync:',e);res.status(500).json({error:e.message})}
+})
+
 app.delete('/api/admin/users/:id', auth, tournamentAdmin, async(req,res)=>{
   try{
     const uid=req.params.id
@@ -1728,14 +1902,7 @@ app.get('/api/admin/phase-locks', auth, tournamentAdmin, async(req,res)=>{
 })
 
 app.put('/api/admin/phase-locks/:phase', auth, tournamentAdmin, async(req,res)=>{
-  const {isLocked,autoLockHours}=req.body
-  try{
-    await pool.query(`
-      INSERT INTO phase_locks(tournament_id,phase,is_locked,auto_lock_hours) VALUES($1,$2,$3,$4)
-      ON CONFLICT(tournament_id,phase) DO UPDATE SET is_locked=$3,auto_lock_hours=COALESCE($4,phase_locks.auto_lock_hours)`,
-      [req.user.tournamentId,req.params.phase,!!isLocked,autoLockHours||null])
-    res.json({success:true})
-  }catch(e){ res.status(500).json({error:'Error'}) }
+  res.status(403).json({error:'Los bloqueos de fases ahora los controla el superadmin'})
 })
 
 // Admin: update tournament branding
@@ -1757,16 +1924,24 @@ app.put('/api/admin/tournament', auth, tournamentAdmin, async(req,res)=>{
 app.post('/api/admin/results', auth, tournamentAdmin, async(req,res)=>{
   const {matchId,home,away,hadPenalties,penaltyWinner,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
   try{
+    const {rows:[match]}=await pool.query('SELECT phase,team1,team2 FROM matches WHERE id=$1',[matchId])
+    if(!match) return res.status(404).json({error:'Partido no encontrado'})
+    let cleanPenaltyWinner=null
+    if(hadPenalties){
+      if(+home!==+away) return res.status(400).json({error:'La definición por penales solo aplica si el marcador queda empatado'})
+      try{ cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true) }
+      catch(e){ return res.status(400).json({error:e.message}) }
+    }
     await pool.query(`
       INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,yellow_cards=$6,red_cards=$7,penalties_count=$8,goals_first_half=$9,goals_second_half=$10,mvp_player=$11,entered_at=NOW()`,
-      [matchId,+home,+away,!!hadPenalties,penaltyWinner||null,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
+      [matchId,+home,+away,!!hadPenalties,cleanPenaltyWinner,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
     // Recalculate points for all predictions of this match in this tournament
     const {rows:preds}=await pool.query(`
       SELECT p.*,m.phase FROM predictions p JOIN matches m ON m.id=p.match_id
       JOIN avatars av ON av.id=p.avatar_id WHERE p.match_id=$1 AND av.tournament_id=$2`,[matchId,req.user.tournamentId])
-    const result={match_id:matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:penaltyWinner||null,
+    const result={match_id:matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:cleanPenaltyWinner,
       yellow_cards:yellowCards??null,red_cards:redCards??null,penalties_count:penaltiesCount??null,
       goals_first_half:goalsFirstHalf??null,goals_second_half:goalsSecondHalf??null,mvp_player:mvpPlayer||null}
     for(const p of preds){
@@ -1781,7 +1956,8 @@ app.post('/api/admin/results', auth, tournamentAdmin, async(req,res)=>{
       const epts=calcExtraPoints(ep,result)
       await pool.query('UPDATE extra_predictions SET points_earned=$1 WHERE id=$2',[epts,ep.id])
     }
-    res.json({success:true,updated:preds.length,extras_updated:extras.length})
+    const bracketSync=await syncKnockoutBracket()
+    res.json({success:true,updated:preds.length,extras_updated:extras.length,bracketSync})
   }catch(e){ console.error(e); res.status(500).json({error:'Error'}) }
 })
 
@@ -1905,6 +2081,12 @@ function superAdmin(req,res,next){
   if(key!==process.env.SUPER_ADMIN_KEY) return res.status(403).json({error:'Acceso denegado'})
   next()
 }
+async function ensurePhaseLocksForTournament(tournamentId){
+  await pool.query(`
+    INSERT INTO phase_locks(tournament_id,phase,is_locked,auto_lock_hours)
+    SELECT $1,phase,is_locked,auto_lock_hours FROM platform_phase_locks
+    ON CONFLICT DO NOTHING`,[tournamentId])
+}
 
 // Ver todas las pollas
 app.get('/superadmin/tournaments', superAdmin, async(req,res)=>{
@@ -1926,9 +2108,7 @@ app.post('/superadmin/activate/:id', superAdmin, async(req,res)=>{
   try{
     const {rowCount}=await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[req.params.id])
     if(rowCount===0) return res.status(404).json({error:'Torneo no encontrado'})
-    const phases=['group','round32','round16','quarters','semis','third','final']
-    for(const ph of phases)
-      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[req.params.id,ph])
+    await ensurePhaseLocksForTournament(req.params.id)
     res.json({success:true})
   }catch(e){res.status(500).json({error:e.message})}
 })
@@ -1939,9 +2119,7 @@ app.post('/superadmin/activate-slug/:slug', superAdmin, async(req,res)=>{
     const {rows:[t]}=await pool.query('SELECT id FROM tournaments WHERE slug=$1',[req.params.slug])
     if(!t) return res.status(404).json({error:'Torneo no encontrado'})
     await pool.query('UPDATE tournaments SET is_active=TRUE WHERE id=$1',[t.id])
-    const phases=['group','round32','round16','quarters','semis','third','final']
-    for(const ph of phases)
-      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[t.id,ph])
+    await ensurePhaseLocksForTournament(t.id)
     res.json({success:true, tournamentId:t.id})
   }catch(e){res.status(500).json({error:e.message})}
 })
@@ -2006,9 +2184,7 @@ app.post('/superadmin/courtesy', superAdmin, async(req,res)=>{
     await pool.query(`INSERT INTO tournaments(id,slug,name,owner_name,owner_email,primary_color,inscription_fee,currency,is_active,is_courtesy)
       VALUES($1,$2,$3,$4,$5,'#F6C90E',0,'USD',TRUE,TRUE)`,[tid,finalSlug,name,ownerName,ownerEmail])
 
-    const phases=['group','round32','round16','quarters','semis','third','final']
-    for(const ph of phases)
-      await pool.query('INSERT INTO phase_locks(tournament_id,phase) VALUES($1,$2) ON CONFLICT DO NOTHING',[tid,ph])
+    await ensurePhaseLocksForTournament(tid)
 
     // Create admin user for the tournament
     await pool.query('INSERT INTO users(id,tournament_id,name,email,password_hash,is_admin,terms_accepted) VALUES($1,$2,$3,$4,$5,TRUE,TRUE)',
@@ -2046,19 +2222,76 @@ app.get('/superadmin/matches', superAdmin, async(req,res)=>{
   }catch(e){res.status(500).json({error:e.message})}
 })
 
+// SUPERADMIN: sincronizar llaves eliminatorias desde resultados ya guardados.
+// No borra ni recalcula nada; solo completa equipos en los partidos de eliminación cuando ya son determinables.
+app.post('/superadmin/bracket/sync', superAdmin, async(req,res)=>{
+  try{
+    const result=await syncKnockoutBracket()
+    res.json(result)
+  }catch(e){console.error('superadmin bracket sync:',e);res.status(500).json({error:e.message})}
+})
+
+// SUPERADMIN: bloqueo global de fases y horas de cierre para pronósticos
+app.get('/superadmin/phase-locks', superAdmin, async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT p.phase,p.is_locked,p.auto_lock_hours,
+        COUNT(pl.id) as tournaments_configured
+      FROM platform_phase_locks p
+      LEFT JOIN phase_locks pl ON pl.phase=p.phase
+      GROUP BY p.phase,p.is_locked,p.auto_lock_hours
+      ORDER BY CASE p.phase
+        WHEN 'group' THEN 1 WHEN 'round32' THEN 2 WHEN 'round16' THEN 3
+        WHEN 'quarters' THEN 4 WHEN 'semis' THEN 5 WHEN 'third' THEN 6 WHEN 'final' THEN 7 ELSE 99 END`)
+    res.json(rows)
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
+app.put('/superadmin/phase-locks/:phase', superAdmin, async(req,res)=>{
+  const phase=req.params.phase
+  const {isLocked,autoLockHours}=req.body
+  const valid=['group','round32','round16','quarters','semis','third','final']
+  if(!valid.includes(phase)) return res.status(400).json({error:'Fase inválida'})
+  const hours=autoLockHours==null?null:Math.max(0,Math.min(168,parseInt(autoLockHours)||0))
+  try{
+    await pool.query(`
+      INSERT INTO platform_phase_locks(phase,is_locked,auto_lock_hours,updated_at)
+      VALUES($1,$2,COALESCE($3,2),NOW())
+      ON CONFLICT(phase) DO UPDATE SET
+        is_locked=$2,
+        auto_lock_hours=COALESCE($3,platform_phase_locks.auto_lock_hours),
+        updated_at=NOW()`,[phase,!!isLocked,hours])
+
+    await pool.query(`
+      INSERT INTO phase_locks(tournament_id,phase,is_locked,auto_lock_hours)
+      SELECT id,$1,$2,COALESCE($3,2) FROM tournaments
+      ON CONFLICT(tournament_id,phase) DO UPDATE SET
+        is_locked=$2,
+        auto_lock_hours=COALESCE($3,phase_locks.auto_lock_hours)`,[phase,!!isLocked,hours])
+    res.json({success:true,phase,is_locked:!!isLocked,auto_lock_hours:hours})
+  }catch(e){res.status(500).json({error:e.message})}
+})
+
 // SUPERADMIN: guardar resultado OFICIAL de un partido y recalcular puntos en TODAS las pollas
 app.post('/superadmin/results', superAdmin, async(req,res)=>{
   const {matchId,home,away,hadPenalties,penaltyWinner,yellowCards,redCards,penaltiesCount,goalsFirstHalf,goalsSecondHalf,mvpPlayer}=req.body
   if(matchId==null||home==null||away==null) return res.status(400).json({error:'matchId, home y away son requeridos'})
   try{
+    const {rows:[match]}=await pool.query('SELECT phase,team1,team2 FROM matches WHERE id=$1',[matchId])
+    if(!match) return res.status(404).json({error:'Partido no encontrado'})
+    let cleanPenaltyWinner=null
+    if(hadPenalties){
+      if(+home!==+away) return res.status(400).json({error:'La definición por penales solo aplica si el marcador queda empatado'})
+      try{ cleanPenaltyWinner=normalizePenaltyWinner(match,+home,+away,penaltyWinner,true) }
+      catch(e){ return res.status(400).json({error:e.message}) }
+    }
     await pool.query(`
       INSERT INTO match_results(match_id,score_home,score_away,had_penalties,penalty_winner,yellow_cards,red_cards,penalties_count,goals_first_half,goals_second_half,mvp_player)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       ON CONFLICT(match_id) DO UPDATE SET score_home=$2,score_away=$3,had_penalties=$4,penalty_winner=$5,yellow_cards=$6,red_cards=$7,penalties_count=$8,goals_first_half=$9,goals_second_half=$10,mvp_player=$11,entered_at=NOW()`,
-      [matchId,+home,+away,!!hadPenalties,penaltyWinner||null,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
+      [matchId,+home,+away,!!hadPenalties,cleanPenaltyWinner,yellowCards??null,redCards??null,penaltiesCount??null,goalsFirstHalf??null,goalsSecondHalf??null,mvpPlayer||null])
 
-    const {rows:[match]}=await pool.query('SELECT phase FROM matches WHERE id=$1',[matchId])
-    const result={match_id:matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:penaltyWinner||null,
+    const result={match_id:matchId,score_home:+home,score_away:+away,had_penalties:!!hadPenalties,penalty_winner:cleanPenaltyWinner,
       yellow_cards:yellowCards??null,red_cards:redCards??null,penalties_count:penaltiesCount??null,
       goals_first_half:goalsFirstHalf??null,goals_second_half:goalsSecondHalf??null,mvp_player:mvpPlayer||null}
 
@@ -2074,7 +2307,8 @@ app.post('/superadmin/results', superAdmin, async(req,res)=>{
       const epts=calcExtraPoints(ep,result)
       await pool.query('UPDATE extra_predictions SET points_earned=$1 WHERE id=$2',[epts,ep.id])
     }
-    res.json({success:true,predictionsUpdated:preds.length,extrasUpdated:extras.length})
+    const bracketSync=await syncKnockoutBracket()
+    res.json({success:true,predictionsUpdated:preds.length,extrasUpdated:extras.length,bracketSync})
   }catch(e){console.error('superadmin results:',e);res.status(500).json({error:e.message})}
 })
 
@@ -2298,6 +2532,14 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
   </div>
   <div id="recalc-result" style="margin-bottom:1rem"></div>
 
+  <!-- BLOQUEOS GLOBALES -->
+  <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:var(--ink);margin-bottom:4px">🔒 BLOQUEO GLOBAL DE FASES</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:12px">Controla desde superadmin qué fases están abiertas y cuántas horas antes del partido se cierran los pronósticos. No modifica marcadores, puntos ni pronósticos existentes.</div>
+    <div id="sa-locks-msg" style="margin-bottom:10px"></div>
+    <div id="sa-locks-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px"></div>
+  </div>
+
   <!-- RESULTADOS OFICIALES -->
   <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.25rem">
     <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:var(--ink);margin-bottom:4px">📊 RESULTADOS OFICIALES (TODAS LAS POLLAS)</div>
@@ -2330,6 +2572,19 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#EFEBE3;color:#1A1814
       <button onclick="saResetResult()" id="sa-reset-btn" style="display:none;background:transparent;color:var(--red);border:1.5px solid var(--red-border);border-radius:8px;padding:10px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Resetear resultado (partido aún no jugado) — borra el marcador y pone los puntos de este partido en 0</button>
       <div id="sa-result-msg"></div>
     </div>
+  </div>
+
+  <!-- LLAVES AUTOMATICAS -->
+  <div style="margin-bottom:1.5rem;background:var(--cream);border:1.5px solid var(--gold-border);border-radius:var(--r-lg);padding:1.25rem">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1;min-width:220px">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:1px;color:var(--ink)">🏆 LLAVES AUTOMÁTICAS</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:2px">Se completan desde los resultados oficiales ya guardados. No borra resultados, pronósticos, puntos, usuarios ni pollas.</div>
+      </div>
+      <button onclick="saSyncBracket()" id="sa-sync-bracket-btn" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔄 Sincronizar llaves</button>
+    </div>
+    <div id="sa-bracket-msg" style="margin-bottom:10px"></div>
+    <div id="sa-bracket-view" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px"></div>
   </div>
 
   <!-- COURTESY SECTION -->
@@ -2472,6 +2727,51 @@ function backToList(){
   document.getElementById('detail-view').classList.remove('on')
 }
 
+// ── Bloqueos globales de fase ───────────────────────────────────────────────
+var saLocks=[]
+var SA_PHASE_LABELS={group:'Grupos',round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er puesto',final:'Final'}
+async function saLoadLocks(){
+  var el=document.getElementById('sa-locks-list')
+  if(!el) return
+  el.innerHTML='<div style="font-size:12px;color:var(--ink3)">Cargando bloqueos...</div>'
+  try{
+    var r=await fetch('/superadmin/phase-locks',{headers:{'x-super-key':KEY}})
+    saLocks=await r.json()
+    el.innerHTML=saLocks.map(function(l){
+      return '<div style="background:var(--cream2);border:1px solid var(--border);border-radius:10px;padding:10px 12px">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">'+
+          '<div style="font-weight:800;font-size:13px;color:var(--ink)">'+(SA_PHASE_LABELS[l.phase]||l.phase)+'</div>'+
+          '<span class="badge '+(l.is_locked?'badge-red':'badge-green')+'" style="font-size:9px">'+(l.is_locked?'Bloqueada':'Abierta')+'</span>'+
+        '</div>'+
+        '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--ink2);margin-bottom:8px">Bloquear fase'+
+          '<input type="checkbox" '+(l.is_locked?'checked':'')+' onchange="saSaveLock(\\''+l.phase+'\\',{isLocked:this.checked})">'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--ink2)">Cerrar pronósticos'+
+          '<span><input type="number" min="0" max="168" value="'+(l.auto_lock_hours||2)+'" onchange="saSaveLock(\\''+l.phase+'\\',{autoLockHours:this.value,isLocked:'+!!l.is_locked+'})" style="width:56px;padding:5px 7px;border:1px solid var(--border2);border-radius:6px;font-size:12px"> h antes</span>'+
+        '</label>'+
+      '</div>'
+    }).join('')
+  }catch(e){ el.innerHTML='<div style="font-size:12px;color:var(--red)">Error: '+e.message+'</div>' }
+}
+async function saSaveLock(phase,patch){
+  var current=saLocks.find(function(l){return l.phase===phase})||{}
+  var body={isLocked:patch.isLocked!==undefined?patch.isLocked:!!current.is_locked}
+  if(patch.autoLockHours!==undefined) body.autoLockHours=+patch.autoLockHours
+  else body.autoLockHours=current.auto_lock_hours||2
+  var msg=document.getElementById('sa-locks-msg')
+  try{
+    var r=await fetch('/superadmin/phase-locks/'+phase,{method:'PUT',headers:{'Content-Type':'application/json','x-super-key':KEY},body:JSON.stringify(body)})
+    var d=await r.json()
+    if(!r.ok) throw new Error(d.error||'Error')
+    msg.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:8px;padding:.55rem .8rem;font-size:12px;font-weight:700">✅ '+(SA_PHASE_LABELS[phase]||phase)+' actualizada. No se tocaron resultados ni pronósticos.</div>'
+    await saLoadLocks()
+    await saLoadMatches()
+  }catch(e){
+    msg.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.55rem .8rem;font-size:12px;font-weight:700">Error: '+e.message+'</div>'
+    await saLoadLocks()
+  }
+}
+
 // ── Courtesy tournaments ─────────────────────────────────────────────────────
 async function loadCourtesy(){
   try{
@@ -2565,9 +2865,52 @@ async function saLoadMatches(){
       opt.textContent='#'+m.match_num+' · '+teams+' · '+m.phase+res
       sel.appendChild(opt)
     })
+    saRenderBracket()
   }catch(e){
     document.getElementById('sa-match').innerHTML='<option value="">Error cargando partidos</option>'
   }
+}
+function saRenderBracket(){
+  var el=document.getElementById('sa-bracket-view')
+  if(!el) return
+  var labels={round32:'Ronda de 32',round16:'Octavos',quarters:'Cuartos',semis:'Semifinales',third:'3er Puesto',final:'Final'}
+  var phases=['round32','round16','quarters','semis','third','final']
+  el.innerHTML=phases.map(function(ph){
+    var rows=saMatches.filter(function(m){return m.phase===ph}).map(function(m){
+      var teams=(m.team1&&m.team2)?(m.team1+' vs '+m.team2):(m.label||'Por definir')
+      var score=m.score_home!=null?('<span style="font-family:\\'Bebas Neue\\';font-size:16px;color:var(--green)">'+m.score_home+'-'+m.score_away+'</span>'):'<span style="font-size:10px;color:var(--ink3)">sin resultado</span>'
+      var ready=(m.team1&&m.team2)
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'+
+        '<div style="font-size:10px;color:var(--ink3)">#'+m.match_num+' · '+(m.label||ph)+'</div>'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+          '<div style="font-size:12px;font-weight:700;color:'+(ready?'var(--ink)':'var(--ink3)')+'">'+teams+'</div>'+score+
+        '</div>'+
+      '</div>'
+    }).join('')
+    return '<div style="background:var(--cream2);border:1px solid var(--border);border-radius:10px;padding:10px 12px">'+
+      '<div style="font-family:\\'Bebas Neue\\';font-size:15px;letter-spacing:.8px;color:var(--ink);margin-bottom:4px">'+labels[ph]+'</div>'+
+      (rows||'<div style="font-size:12px;color:var(--ink3)">Sin partidos</div>')+
+    '</div>'
+  }).join('')
+}
+async function saSyncBracket(){
+  var btn=document.getElementById('sa-sync-bracket-btn')
+  var msg=document.getElementById('sa-bracket-msg')
+  btn.disabled=true; btn.textContent='Sincronizando...'
+  msg.innerHTML=''
+  try{
+    var r=await fetch('/superadmin/bracket/sync',{method:'POST',headers:{'x-super-key':KEY}})
+    var d=await r.json()
+    if(!r.ok){
+      msg.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Error: '+(d.error||'desconocido')+'</div>'
+    }else{
+      msg.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">✅ Llaves sincronizadas · '+(d.changesCount||0)+' partidos actualizados'+(d.thirdPlaceCombination?' · terceros: '+d.thirdPlaceCombination:'')+'</div>'
+      await saLoadMatches()
+    }
+  }catch(e){
+    msg.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Error: '+e.message+'</div>'
+  }
+  btn.disabled=false; btn.textContent='🔄 Sincronizar llaves'
 }
 function saMatchSelected(){
   var id=+document.getElementById('sa-match').value
@@ -2622,7 +2965,8 @@ async function saSaveResult(){
     if(!r.ok){
       msgEl.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">Error: '+(d.error||'desconocido')+'</div>'
     }else{
-      msgEl.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">✅ Resultado oficial guardado · '+d.predictionsUpdated+' pronósticos y '+d.extrasUpdated+' extras recalculados en todas las pollas</div>'
+      var synced=d.bracketSync?(' · llaves: '+(d.bracketSync.changesCount||0)+' actualizadas'):''
+      msgEl.innerHTML='<div style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:8px;padding:.6rem .9rem;font-size:12px;font-weight:700">✅ Resultado oficial guardado · '+d.predictionsUpdated+' pronósticos y '+d.extrasUpdated+' extras recalculados en todas las pollas'+synced+'</div>'
       saLoadMatches()
     }
   }catch(e){
@@ -2691,6 +3035,7 @@ function bindRowHandlers(){
 }
 
 bindRowHandlers()
+saLoadLocks()
 loadCourtesy()
 saLoadMatches()
 </script>
